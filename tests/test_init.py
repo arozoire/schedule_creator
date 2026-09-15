@@ -29,3 +29,34 @@ async def test_unload_releases_runtime(hass: HomeAssistant) -> None:
     assert not any(
         state.entity_id.startswith(f"{DOMAIN}.") for state in hass.states.async_all()
     )
+
+
+async def test_reload_replaces_runtime_after_shutdown(hass: HomeAssistant) -> None:
+    """Reload shuts down the old runtime before creating a replacement."""
+
+    entry = await _create_entry(hass)
+    previous_runtime = entry.runtime_data
+
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert previous_runtime.loaded is False
+    assert entry.runtime_data is not previous_runtime
+    assert entry.runtime_data.loaded is True
+
+
+async def test_remove_unloads_entry_without_owned_objects(hass: HomeAssistant) -> None:
+    """Removing the entry shuts down runtime and leaves no owned HA object."""
+
+    entry = await _create_entry(hass)
+    runtime = entry.runtime_data
+
+    await hass.config_entries.async_remove(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert runtime.loaded is False
+    assert hass.config_entries.async_entries(DOMAIN) == []
+    assert DOMAIN not in hass.services.async_services()
+    assert not any(
+        state.entity_id.startswith(f"{DOMAIN}.") for state in hass.states.async_all()
+    )
