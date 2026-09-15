@@ -1,4 +1,5 @@
 {
+  "homeassistant": "2026.9.2",
   "name": "Schedule Creator",
   "render_readme": true
 }
