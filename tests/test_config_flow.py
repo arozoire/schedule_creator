@@ -2,6 +2,7 @@
 
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.schedule_creator.const import CONFIG_ENTRY_TITLE, DOMAIN
 
@@ -12,12 +13,12 @@ async def test_user_flow_creates_and_loads_entry(hass: HomeAssistant) -> None:
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
-    assert result["type"] is config_entries.ConfigFlowResultType.FORM
+    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "user"
     assert result["errors"] == {}
 
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
-    assert result["type"] is config_entries.ConfigFlowResultType.CREATE_ENTRY
+    assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == CONFIG_ENTRY_TITLE
     assert result["data"] == {}
 
@@ -41,5 +42,5 @@ async def test_second_entry_is_rejected(hass: HomeAssistant) -> None:
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
     result = await hass.config_entries.flow.async_configure(second["flow_id"], {})
-    assert result["type"] is config_entries.ConfigFlowResultType.ABORT
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
