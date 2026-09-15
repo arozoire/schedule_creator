@@ -1,0 +1,11 @@
+{
+  "domain": "schedule_creator",
+  "name": "Schedule Creator",
+  "codeowners": ["@arozoire"],
+  "config_flow": true,
+  "documentation": "https://github.com/arozoire/schedule_creator",
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/arozoire/schedule_creator/issues",
+  "version": "0.0.1"
+}
