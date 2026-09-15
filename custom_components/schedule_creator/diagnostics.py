@@ -4,8 +4,8 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
 from . import ScheduleCreatorConfigEntry
+from .const import DOMAIN
 
 
 async def async_get_config_entry_diagnostics(

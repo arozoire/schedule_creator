@@ -16,6 +16,7 @@ jobs:
         with:
           category: integration
           comment: false
+          ignore: topics description
 
   scaffold:
     runs-on: ubuntu-latest
