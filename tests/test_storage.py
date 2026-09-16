@@ -275,8 +275,8 @@ async def test_retry_keeps_snapshot_and_operation_evidence(
     [
         (OperationState.PREPARED, None, RecoveryDecision.RETRY_PREPARED),
         (OperationState.SENT, None, RecoveryDecision.RECONCILE_SENT),
-        (OperationState.RETRY_WAIT, -1, RecoveryDecision.RETRY_DUE),
-        (OperationState.RETRY_WAIT, 60, RecoveryDecision.WAIT_FOR_RETRY),
+        (OperationState.RETRY_WAIT, 30, RecoveryDecision.RETRY_DUE),
+        (OperationState.RETRY_WAIT, 120, RecoveryDecision.WAIT_FOR_RETRY),
     ],
 )
 def test_unfinished_operation_recovery_is_deterministic(
@@ -289,7 +289,7 @@ def test_unfinished_operation_recovery_is_deterministic(
 
     operation = PendingOperation.from_dict(model_data["pending_operation"])
     retry_at = None if retry_offset is None else NOW + timedelta(seconds=retry_offset)
-    updated_at = NOW - timedelta(seconds=2) if retry_at is not None else NOW
+    updated_at = NOW + timedelta(seconds=5) if retry_at is not None else NOW
     operation = replace(
         operation,
         state=state,
@@ -301,7 +301,9 @@ def test_unfinished_operation_recovery_is_deterministic(
         pending_operations=(operation,),
     )
 
-    assert build_recovery_plan(runtime, NOW)[0].decision is decision
+    assert build_recovery_plan(runtime, NOW + timedelta(seconds=60))[0].decision is (
+        decision
+    )
 
 
 @pytest.mark.parametrize(

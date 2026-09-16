@@ -157,7 +157,7 @@ def test_direct_models_reject_noncanonical_uuid(model_data: dict) -> None:
     """Direct construction cannot retain an uppercase UUID spelling."""
 
     action = deepcopy(model_data["config"]["schedules"][0]["start_action"])
-    action["id"] = action["id"].upper()
+    action["id"] = "abcdefab-cdef-4abc-8def-abcdefabcdef".upper()
 
     with pytest.raises(ModelValidationError, match="canonical UUID form"):
         TargetAction(

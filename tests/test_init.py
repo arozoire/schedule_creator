@@ -1,14 +1,12 @@
 """Test Schedule Creator config-entry lifecycle."""
 
-from pathlib import Path
-
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 
 from custom_components.schedule_creator.const import DOMAIN
 from custom_components.schedule_creator.storage import (
-    CONFIG_STORE_KEY,
-    RUNTIME_STORE_KEY,
+    ConfigRepository,
+    RuntimeRepository,
 )
 
 
@@ -56,10 +54,8 @@ async def test_remove_unloads_entry_without_owned_objects(hass: HomeAssistant) -
 
     entry = await _create_entry(hass)
     runtime = entry.runtime_data
-    config_path = Path(hass.config.path(".storage", CONFIG_STORE_KEY))
-    runtime_path = Path(hass.config.path(".storage", RUNTIME_STORE_KEY))
-    assert config_path.exists()
-    assert runtime_path.exists()
+    expected_config = runtime.storage.config.data
+    expected_runtime = runtime.storage.runtime.data
 
     await hass.config_entries.async_remove(entry.entry_id)
     await hass.async_block_till_done()
@@ -70,5 +66,7 @@ async def test_remove_unloads_entry_without_owned_objects(hass: HomeAssistant) -
     assert not any(
         state.entity_id.startswith(f"{DOMAIN}.") for state in hass.states.async_all()
     )
-    assert config_path.exists()
-    assert runtime_path.exists()
+    preserved_config = ConfigRepository(hass)
+    preserved_runtime = RuntimeRepository(hass)
+    assert await preserved_config.async_load() == expected_config
+    assert await preserved_runtime.async_load() == expected_runtime
