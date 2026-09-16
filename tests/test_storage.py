@@ -129,6 +129,21 @@ def test_runtime_store_rejects_orphan_snapshot(model_data: dict) -> None:
         )
 
 
+def test_runtime_rejects_snapshot_outside_occurrence_targets(
+    model_data: dict,
+) -> None:
+    """An occurrence cannot retain state for an entity outside its target set."""
+
+    base = _runtime_bundle(model_data)
+    snapshot = replace(
+        base.snapshots[0],
+        entity_id="light.unrelated",
+    )
+
+    with pytest.raises(ValueError, match="outside its controller"):
+        replace(base, snapshots=(snapshot,))
+
+
 def test_runtime_allows_suspended_controller_below_active_timer(
     model_data: dict,
 ) -> None:
@@ -199,6 +214,43 @@ async def test_journal_rejects_operation_outside_controller_targets(
 
     assert store.saves == []
     assert repository.data == base
+
+
+async def test_journal_attaches_prepared_snapshot_to_quick_timer(
+    hass: HomeAssistant, model_data: dict
+) -> None:
+    """Timer snapshot ownership and PREPARED intent commit atomically."""
+
+    base = _runtime_bundle(model_data)
+    timer = replace(
+        QuickTimer.from_dict(model_data["quick_timer"]),
+        snapshot_id=None,
+    )
+    base = replace(base, quick_timers=(timer,))
+    store = MemoryJsonStore(base.to_dict())
+    repository = RuntimeRepository(hass, store)
+    assert await repository.async_load() == base
+    journal = JournalCoordinator(repository)
+    snapshot = replace(
+        base.snapshots[0],
+        id="12121212-1212-4212-8212-121212121212",
+        occurrence_id=timer.controller_id,
+    )
+
+    operation = await journal.async_prepare(
+        kind=OperationKind.TARGET_ACTION,
+        payload={"domain": "light", "action": "on", "data": {}},
+        now=NOW,
+        occurrence_id=timer.controller_id,
+        entity_id=timer.entity_id,
+        snapshots=(snapshot,),
+        operation_id="13131313-1313-4313-8313-131313131313",
+    )
+
+    assert operation.state is OperationState.PREPARED
+    assert repository.data.quick_timers[0].snapshot_id == snapshot.id
+    assert repository.data.snapshots[-1] == snapshot
+    assert len(store.saves) == 1
 
 
 def test_runtime_rejects_orphan_quick_timer_lease(model_data: dict) -> None:

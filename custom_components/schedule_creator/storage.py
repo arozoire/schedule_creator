@@ -301,6 +301,20 @@ class RuntimeStoreData:
                     "runtime.snapshots",
                     f"snapshot {snapshot.id} references an unknown controller",
                 )
+            occurrence_controller = occurrence_by_id.get(snapshot.occurrence_id)
+            timer_controller = timer_by_controller_id.get(snapshot.occurrence_id)
+            if (
+                occurrence_controller is not None
+                and snapshot.entity_id
+                not in occurrence_controller.frozen_schedule.target_entity_ids
+            ) or (
+                timer_controller is not None
+                and snapshot.entity_id != timer_controller.entity_id
+            ):
+                _fail(
+                    "runtime.snapshots",
+                    f"snapshot {snapshot.id} belongs outside its controller",
+                )
         snapshot_owners = tuple(
             (snapshot.occurrence_id, snapshot.entity_id) for snapshot in snapshots
         )

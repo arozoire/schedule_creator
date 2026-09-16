@@ -159,11 +159,20 @@ class JournalCoordinator:
                 occurrences.append(occurrence)
                 matching_index = len(occurrences) - 1
             if occurrence_id is not None and matching_index is None:
-                timer_ids = {timer.controller_id for timer in current.quick_timers}
-                if occurrence_id not in timer_ids:
+                timer_index = next(
+                    (
+                        index
+                        for index, timer in enumerate(current.quick_timers)
+                        if timer.controller_id == occurrence_id
+                    ),
+                    None,
+                )
+                if timer_index is None:
                     raise InvalidOperationTransitionError(
                         f"controller {occurrence_id} does not exist"
                     )
+            else:
+                timer_index = None
             if matching_index is not None:
                 current_occurrence = occurrences[matching_index]
                 snapshot_ids = (
@@ -184,6 +193,22 @@ class JournalCoordinator:
                     last_operation_id=operation.id,
                 )
 
+            timers = list(current.quick_timers)
+            if timer_index is not None and snapshots:
+                timer = timers[timer_index]
+                if len(snapshots) != 1:
+                    raise InvalidOperationTransitionError(
+                        "a Quick Timer requires exactly one snapshot"
+                    )
+                if timer.snapshot_id is not None:
+                    raise InvalidOperationTransitionError(
+                        "a Quick Timer snapshot cannot be overwritten"
+                    )
+                timers[timer_index] = replace(
+                    timer,
+                    snapshot_id=snapshots[0].id,
+                )
+
             return RuntimeStoreData(
                 schema_version=current.schema_version,
                 revision=current.revision + 1,
@@ -192,7 +217,7 @@ class JournalCoordinator:
                 snapshots=(*current.snapshots, *snapshots),
                 leases=current.leases,
                 pending_operations=(*current.pending_operations, operation),
-                quick_timers=current.quick_timers,
+                quick_timers=tuple(timers),
                 notification_deduplication_keys=(
                     current.notification_deduplication_keys
                 ),
