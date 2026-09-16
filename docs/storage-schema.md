@@ -75,6 +75,11 @@ for the write. A successful mutation advances the revision exactly once. Runtime
 mutations follow the same single-write rule and never depend on the audit Store.
 Runtime validation permits one active lease per entity plus suspended controller
 leases, which is required to resume a conditional controller after a Quick Timer.
+Every lease must also match an existing controller, the controller's expected type
+and one of its frozen target entities. Target and restore operations are rejected
+unless their entity belongs to the referenced schedule occurrence or Quick Timer.
+A Quick Timer snapshot must belong to the same timer controller and entity; it can
+never reuse another occurrence's starting state.
 
 The audit Store retains at most 30 days and 10,000 records. Load, validation,
 buffering or flush failure is logged and cannot prevent authoritative Stores from
