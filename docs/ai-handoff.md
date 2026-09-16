@@ -6,12 +6,12 @@
 - Current phase: 2.2 — storage nativo e journal delle operazioni
 - Repository: arozoire/schedule_creator
 - Branch: codex/phase-2-storage
-- Pull request: #4 (DRAFT)
-- Remote head: 04ecf731dd5a669612a9da983541ef5fe708e194
-- Base commit: 176d440844b26d68c27e66f710a0637cadf5ba6b
+- Pull request: #4 (ready for merge)
+- Remote head: documentation-only handoff commit on top of `232b2db`
+- Base commit: 9aa79ae844b26d68c27e66f710a0637cadf5ba6b
 - Working tree: clean after fix for Store compatibility
-- CI status: Local tests pass (66 pytest, mypy strict, ruff)
-- Last verified commit: 04ecf731dd5a669612a9da983541ef5fe708e194 (after fix)
+- CI status: GitHub Actions run #45 green on `232b2db` (66 pytest, HACS, JSON, Ruff, mypy strict)
+- Last verified code commit: 232b2db8fe72b3be13198ba9ff81c081d4f5f12f
 
 ## What currently works
 
@@ -33,7 +33,7 @@
 
 ## Changes made in this session
 
-- Commit: 04ecf731dd5a669612a9da983541ef5fe708e194 (esistente)
+- Commit: 232b2db8fe72b3be13198ba9ff81c081d4f5f12f
 - Files: custom_components/schedule_creator/storage.py
 - Behaviour: Rimosso parametro `serialize_in_event_loop` non supportato da Home Assistant Store
 - Reason: Fix di compatibilità con l'API corrente di Home Assistant Store
@@ -52,11 +52,11 @@
 
 | Command/check | Environment | Result | Commit covered |
 |---|---|---|---|
-| `pytest tests/test_storage.py` | local | 27 passed | 04ecf73 |
-| `pytest tests/` | local | 66 passed | 04ecf73 (after fix) |
-| `mypy custom_components/schedule_creator --strict` | local | no issues | 04ecf73 (after fix) |
-| `ruff check custom_components/schedule_creator` | local | all checks passed | 04ecf73 (after fix) |
-| Test specifici clock rollback | local | 3 passed | 04ecf73 |
+| `pytest tests/test_storage.py` | local | 27 passed | 232b2db |
+| `pytest tests/` | local | 66 passed | 232b2db |
+| `mypy custom_components/schedule_creator --strict` | local | no issues | 232b2db |
+| `ruff check custom_components/schedule_creator` | local | all checks passed | 232b2db |
+| Test specifici clock rollback | local | 3 passed | 232b2db |
 
 ## Known limitations
 
@@ -84,12 +84,12 @@ Tutti i thread della review precedente risultano risolti:
 
 ## Next exact task
 
-1. Attendere conferma esplicita del proprietario per il merge della PR #4
+1. Merge della PR #4 autorizzato dal proprietario dopo verifica indipendente
 2. Dopo il merge, procedere con la Fase 2.3 (API native)
 
 ## Actions requiring owner confirmation
 
-- Merge: **SÌ** - La fase 2.2 è completa e validata. Richiesto merge esplicito della PR #4
+- Merge: **AUTORIZZATO** - verifica indipendente e CI #45 completate
 - Version bump: NO - Non richiesto fino al completamento della Fase 2.3
 - Release: NO - Non richiesto fino al completamento di tutte le fasi
 - Destructive maintenance: NO
@@ -99,5 +99,5 @@ Tutti i thread della review precedente risultano risolti:
 ### 2026-09-16 — Vibe Code
 
 - Summary: Verifica e validazione della Fase 2.2 (storage nativo e journal). Fix di compatibilità con Home Assistant Store (rimozione parametro `serialize_in_event_loop`). Tutti i test locali passano (66 pytest, mypy strict, ruff).
-- Final commit: 04ecf731dd5a669612a9da983541ef5fe708e194 (con fix di compatibilità)
-- Remaining work: Attesa conferma merge PR #4 per procedere con Fase 2.3
+- Final code commit: 232b2db8fe72b3be13198ba9ff81c081d4f5f12f
+- Remaining work: merge PR #4, quindi Fase 2.3
