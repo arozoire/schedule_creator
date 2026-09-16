@@ -73,6 +73,8 @@ than being interpreted as version 1.
 Configuration writes compare `expected_revision` while holding the same lock used
 for the write. A successful mutation advances the revision exactly once. Runtime
 mutations follow the same single-write rule and never depend on the audit Store.
+Runtime validation permits one active lease per entity plus suspended controller
+leases, which is required to resume a conditional controller after a Quick Timer.
 
 The audit Store retains at most 30 days and 10,000 records. Load, validation,
 buffering or flush failure is logged and cannot prevent authoritative Stores from

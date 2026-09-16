@@ -11,13 +11,17 @@ import pytest
 from homeassistant.core import HomeAssistant
 
 from custom_components.schedule_creator.journal import (
+    InvalidOperationTransitionError,
     JournalCoordinator,
     RecoveryDecision,
     build_recovery_plan,
 )
 from custom_components.schedule_creator.models import (
     AuditRecord,
+    ControllerType,
+    EntityLease,
     IntegrationConfig,
+    LeaseState,
     Occurrence,
     OperationKind,
     OperationState,
@@ -122,6 +126,31 @@ def test_runtime_store_rejects_orphan_snapshot(model_data: dict) -> None:
             notification_deduplication_keys=(),
             updated_at=NOW,
         )
+
+
+def test_runtime_allows_suspended_controller_below_active_timer(
+    model_data: dict,
+) -> None:
+    """A Quick Timer lease can coexist with the controller it suspends."""
+
+    suspended = replace(
+        EntityLease.from_dict(model_data["lease"]),
+        state=LeaseState.SUSPENDED,
+    )
+    timer = replace(
+        suspended,
+        id="14141414-1414-4414-8414-141414141414",
+        controller_id="quick:dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        controller_type=ControllerType.QUICK_TIMER,
+        occurrence_id=None,
+        generation=2,
+        state=LeaseState.ACTIVE,
+    )
+    base = _runtime_bundle(model_data)
+
+    runtime = replace(base, leases=(suspended, timer))
+
+    assert runtime.leases == (suspended, timer)
 
 
 async def test_config_mutation_is_locked_and_optimistic(
@@ -247,6 +276,11 @@ async def test_retry_keeps_snapshot_and_operation_evidence(
     assert build_recovery_plan(repository.data, NOW)[0].decision is (
         RecoveryDecision.WAIT_FOR_RETRY
     )
+
+    saves_before_early_retry = len(store.saves)
+    with pytest.raises(InvalidOperationTransitionError, match="not due for retry"):
+        await journal.async_mark_sent(operation_id, NOW + timedelta(seconds=10))
+    assert len(store.saves) == saves_before_early_retry
 
     replacement_snapshot = replace(
         snapshot,

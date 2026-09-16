@@ -1387,6 +1387,9 @@ class PendingOperation(VersionedModel):
         )
         kind = _enum(OperationKind, self.kind, "operation.kind")
         state = _enum(OperationState, self.state, "operation.state")
+        if kind in {OperationKind.TARGET_ACTION, OperationKind.RESTORE}:
+            if entity_id is None:
+                _fail("operation.entity_id", f"{kind} requires an entity ID")
         payload = _json_object(self.payload, "operation.payload")
         attempt_count = _integer(
             self.attempt_count, "operation.attempt_count", minimum=0

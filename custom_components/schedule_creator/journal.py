@@ -215,6 +215,14 @@ class JournalCoordinator:
                 {OperationState.PREPARED, OperationState.RETRY_WAIT},
                 OperationState.SENT,
             )
+            if (
+                operation.state is OperationState.RETRY_WAIT
+                and operation.next_retry_at is not None
+                and operation.next_retry_at > timestamp
+            ):
+                raise InvalidOperationTransitionError(
+                    f"operation {operation.id} is not due for retry"
+                )
             return replace(
                 operation,
                 state=OperationState.SENT,

@@ -18,6 +18,7 @@ from .models import (
     AuditRecord,
     EntityLease,
     IntegrationConfig,
+    LeaseState,
     ModelValidationError,
     Occurrence,
     PendingOperation,
@@ -342,8 +343,14 @@ class RuntimeStoreData:
                     "runtime.occurrences",
                     f"occurrence {occurrence.id} has an invalid last operation",
                 )
-        lease_entities = tuple(lease.entity_id for lease in leases)
-        _unique(lease_entities, "runtime.leases.entity_id")
+        lease_controllers = tuple(
+            f"{lease.entity_id}\0{lease.controller_id}" for lease in leases
+        )
+        _unique(lease_controllers, "runtime.leases.controller")
+        active_lease_entities = tuple(
+            lease.entity_id for lease in leases if lease.state is LeaseState.ACTIVE
+        )
+        _unique(active_lease_entities, "runtime.leases.active_entity_id")
         for lease in leases:
             if (
                 lease.occurrence_id is not None
