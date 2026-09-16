@@ -868,10 +868,15 @@ def _prune_audit(data: AuditStoreData, now: datetime) -> AuditStoreData:
     retained = tuple(record for record in data.records if record.recorded_at >= cutoff)
     if len(retained) > AUDIT_MAX_RECORDS:
         retained = retained[-AUDIT_MAX_RECORDS:]
+    envelope_timestamp = max(
+        timestamp,
+        data.updated_at,
+        retained[-1].recorded_at if retained else timestamp,
+    )
     return AuditStoreData(
         schema_version=MODEL_SCHEMA_VERSION,
         records=retained,
-        updated_at=timestamp,
+        updated_at=envelope_timestamp,
     )
 
 

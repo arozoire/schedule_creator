@@ -585,6 +585,28 @@ async def test_audit_load_failure_never_overwrites_unknown_data(
     assert audit_store.saves == []
 
 
+async def test_audit_load_survives_clock_moving_backwards(
+    hass: HomeAssistant, model_data: dict
+) -> None:
+    """Retention uses current time without moving the Store timestamp backwards."""
+
+    record = AuditRecord.from_dict(model_data["audit"])
+    persisted_at = record.recorded_at + timedelta(seconds=10)
+    audit_store = MemoryJsonStore(
+        {
+            "schema_version": 1,
+            "records": [record.to_dict()],
+            "updated_at": persisted_at.isoformat().replace("+00:00", "Z"),
+        }
+    )
+    audit = AuditRepository(hass, audit_store)
+
+    loaded = await audit.async_load(NOW)
+
+    assert loaded.records == (record,)
+    assert loaded.updated_at == persisted_at
+
+
 def test_migration_dispatch_rejects_unknown_major_version() -> None:
     """A future Store schema is never interpreted as version one."""
 
