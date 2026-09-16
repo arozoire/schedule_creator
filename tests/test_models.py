@@ -16,6 +16,7 @@ from custom_components.schedule_creator.models import (
     PendingOperation,
     QuickTimer,
     Snapshot,
+    TargetAction,
 )
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "models_v1.json"
@@ -152,6 +153,53 @@ def test_nested_record_ids_are_globally_unique(model_data: dict) -> None:
         IntegrationConfig.from_dict(data)
 
 
+def test_direct_models_reject_noncanonical_uuid(model_data: dict) -> None:
+    """Direct construction cannot retain an uppercase UUID spelling."""
+
+    action = deepcopy(model_data["config"]["schedules"][0]["start_action"])
+    action["id"] = action["id"].upper()
+
+    with pytest.raises(ModelValidationError, match="canonical UUID form"):
+        TargetAction(
+            id=action["id"],
+            domain=action["domain"],
+            action=action["action"],
+            data=action["data"],
+        )
+
+
+@pytest.mark.parametrize(
+    "entity_id",
+    ["Bad Domain.foo", "light.two.dots", "light.foo bar", "light._hidden"],
+)
+def test_invalid_home_assistant_entity_ids_are_rejected(
+    model_data: dict, entity_id: str
+) -> None:
+    """Persisted targets use the same slug shape as Home Assistant entity IDs."""
+
+    data = deepcopy(model_data["config"])
+    data["groups"][0]["entity_ids"] = [entity_id]
+    data["schedules"][0]["target_entity_ids"] = [entity_id]
+
+    with pytest.raises(ModelValidationError, match="Home Assistant entity ID"):
+        IntegrationConfig.from_dict(data)
+
+
+@pytest.mark.parametrize(
+    "selector", ["entity_id", "device_id", "area_id", "floor_id", "label_id", "target"]
+)
+def test_target_action_data_rejects_target_selectors(
+    model_data: dict, selector: str
+) -> None:
+    """Action parameters cannot escape the validated schedule target set."""
+
+    action = deepcopy(model_data["config"]["schedules"][0]["start_action"])
+    action["data"][selector] = "light.outside_group"
+
+    with pytest.raises(ModelValidationError, match="target selectors"):
+        TargetAction.from_dict(action)
+
+
 def test_condition_tree_has_total_node_limit(model_data: dict) -> None:
     """A broad tree cannot bypass the condition depth and fan-out limits."""
 
@@ -174,4 +222,17 @@ def test_condition_tree_has_total_node_limit(model_data: dict) -> None:
     original["children"] = branches
 
     with pytest.raises(ModelValidationError, match="64 total nodes"):
+        IntegrationConfig.from_dict(data)
+
+
+def test_condition_breadth_is_rejected_before_decoding_children(
+    model_data: dict,
+) -> None:
+    """Oversized child arrays fail before malformed children are traversed."""
+
+    data = deepcopy(model_data["config"])
+    condition = data["schedules"][0]["condition"]
+    condition["children"] = [None] * 17
+
+    with pytest.raises(ModelValidationError, match="at most 16 nodes"):
         IntegrationConfig.from_dict(data)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, fields
 from datetime import UTC, date, datetime, time
@@ -15,6 +16,15 @@ MODEL_SCHEMA_VERSION = 1
 MAX_CONDITION_DEPTH = 8
 MAX_CONDITION_CHILDREN = 16
 MAX_CONDITION_NODES = 64
+TARGET_SELECTOR_KEYS = frozenset(
+    {"area_id", "device_id", "entity_id", "floor_id", "label_id", "target"}
+)
+
+_OBJECT_ID_PATTERN = r"(?!_)[\da-z_]+(?<!_)"
+_DOMAIN_PATTERN = r"(?!.+__)" + _OBJECT_ID_PATTERN
+_ENTITY_ID_PATTERN = re.compile(
+    r"^" + _DOMAIN_PATTERN + r"\." + _OBJECT_ID_PATTERN + r"$"
+)
 
 type FrozenJsonValue = (
     None
@@ -217,15 +227,14 @@ def _uuid(value: object, path: str) -> str:
         parsed = UUID(text)
     except ValueError as err:
         raise ModelValidationError(path, "must be a UUID") from err
-    if str(parsed) != text.lower():
+    if str(parsed) != text:
         _fail(path, "must use canonical UUID form")
     return str(parsed)
 
 
 def _entity_id(value: object, path: str) -> str:
     text = _string(value, path)
-    domain, separator, object_id = text.partition(".")
-    if separator != "." or not domain or not object_id:
+    if _ENTITY_ID_PATTERN.fullmatch(text) is None:
         _fail(path, "must be a Home Assistant entity ID")
     return text
 
@@ -354,6 +363,7 @@ class VersionedModel:
     schema_version: int = MODEL_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
+        _integer(self.schema_version, "schema_version", minimum=1)
         if self.schema_version != MODEL_SCHEMA_VERSION:
             _fail("schema_version", f"must equal {MODEL_SCHEMA_VERSION}")
 
@@ -543,12 +553,19 @@ class TargetAction(VersionedModel):
         VersionedModel.__post_init__(self)
         _uuid(self.id, "target_action.id")
         domain = _string(self.domain, "target_action.domain")
-        if "." in domain:
-            _fail("target_action.domain", "must not contain a service name")
-        _string(self.action, "target_action.action")
-        object.__setattr__(
-            self, "data", _json_object(self.data, "target_action.data")
-        )
+        if re.fullmatch(_DOMAIN_PATTERN, domain) is None:
+            _fail("target_action.domain", "must be a Home Assistant domain")
+        action = _string(self.action, "target_action.action")
+        if re.fullmatch(_OBJECT_ID_PATTERN, action) is None:
+            _fail("target_action.action", "must be a Home Assistant action name")
+        data = _json_object(self.data, "target_action.data")
+        forbidden = sorted(TARGET_SELECTOR_KEYS.intersection(data))
+        if forbidden:
+            _fail(
+                "target_action.data",
+                f"must not contain target selectors: {', '.join(forbidden)}",
+            )
+        object.__setattr__(self, "data", data)
 
     @classmethod
     def from_dict(cls, data: object) -> Self:
@@ -676,14 +693,24 @@ class ConditionNode(VersionedModel):
     def from_dict(cls, data: object) -> Self:
         """Decode and validate a bounded condition tree."""
 
-        return cls._from_dict(data, "condition", 1)
+        return cls._from_dict(data, "condition", 1, [MAX_CONDITION_NODES])
 
     @classmethod
-    def _from_dict(cls, data: object, path: str, depth: int) -> Self:
+    def _from_dict(
+        cls, data: object, path: str, depth: int, remaining_nodes: list[int]
+    ) -> Self:
         if depth > MAX_CONDITION_DEPTH:
             _fail(path, f"depth must not exceed {MAX_CONDITION_DEPTH}")
+        if remaining_nodes[0] == 0:
+            _fail("condition", f"must not exceed {MAX_CONDITION_NODES} total nodes")
+        remaining_nodes[0] -= 1
         item = _strict_record(data, cls, path)
         children_data = _tuple(item["children"], f"{path}.children")
+        if len(children_data) > MAX_CONDITION_CHILDREN:
+            _fail(
+                f"{path}.children",
+                f"must contain at most {MAX_CONDITION_CHILDREN} nodes",
+            )
         return cls(
             schema_version=_integer(item["schema_version"], f"{path}.schema_version"),
             id=_uuid(item["id"], f"{path}.id"),
@@ -697,7 +724,12 @@ class ConditionNode(VersionedModel):
             lower=_optional_number(item["lower"], f"{path}.lower"),
             upper=_optional_number(item["upper"], f"{path}.upper"),
             children=tuple(
-                cls._from_dict(child, f"{path}.children[{index}]", depth + 1)
+                cls._from_dict(
+                    child,
+                    f"{path}.children[{index}]",
+                    depth + 1,
+                    remaining_nodes,
+                )
                 for index, child in enumerate(children_data)
             ),
             minimum_duration_seconds=_optional_number(
@@ -1329,6 +1361,7 @@ class PendingOperation(VersionedModel):
     """A durable idempotent operation in the runtime journal."""
 
     id: str
+    sequence: int
     occurrence_id: str | None
     entity_id: str | None
     kind: OperationKind
@@ -1343,6 +1376,7 @@ class PendingOperation(VersionedModel):
     def __post_init__(self) -> None:
         VersionedModel.__post_init__(self)
         _uuid(self.id, "operation.id")
+        sequence = _integer(self.sequence, "operation.sequence", minimum=1)
         occurrence_id = _optional_string(
             self.occurrence_id, "operation.occurrence_id"
         )
@@ -1372,6 +1406,7 @@ class PendingOperation(VersionedModel):
         if next_retry_at is not None and next_retry_at < updated_at:
             _fail("operation.next_retry_at", "must not precede updated_at")
         object.__setattr__(self, "occurrence_id", occurrence_id)
+        object.__setattr__(self, "sequence", sequence)
         object.__setattr__(self, "entity_id", entity_id)
         object.__setattr__(self, "kind", kind)
         object.__setattr__(self, "state", state)
@@ -1392,6 +1427,7 @@ class PendingOperation(VersionedModel):
                 item["schema_version"], "operation.schema_version"
             ),
             id=_uuid(item["id"], "operation.id"),
+            sequence=_integer(item["sequence"], "operation.sequence", minimum=1),
             occurrence_id=_optional_string(
                 item["occurrence_id"], "operation.occurrence_id"
             ),
