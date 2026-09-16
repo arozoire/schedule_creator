@@ -124,7 +124,6 @@ def _native_store(hass: HomeAssistant, key: str) -> ScheduleCreatorStore:
         private=True,
         atomic_writes=True,
         minor_version=STORAGE_MINOR_VERSION,
-        serialize_in_event_loop=False,
     )
 
 
