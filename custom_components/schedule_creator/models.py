@@ -8,7 +8,7 @@ from datetime import UTC, date, datetime, time
 from enum import StrEnum
 from math import isfinite
 from types import MappingProxyType
-from typing import Any, Self
+from typing import Any, Never, Self
 from uuid import UUID
 
 MODEL_SCHEMA_VERSION = 1
@@ -144,7 +144,7 @@ class AuditLevel(StrEnum):
     ERROR = "error"
 
 
-def _fail(path: str, message: str) -> None:
+def _fail(path: str, message: str) -> Never:
     raise ModelValidationError(path, message)
 
 
@@ -950,30 +950,30 @@ class IntegrationConfig(VersionedModel):
             active_profile_ids
         ):
             _fail("config.active_profile_ids", "must match profile active flags")
-        for index, group in enumerate(groups):
-            if group.profile_id not in profile_ids:
+        for index, candidate_group in enumerate(groups):
+            if candidate_group.profile_id not in profile_ids:
                 _fail(
                     f"config.groups[{index}].profile_id",
                     "references unknown profile",
                 )
         for index, schedule in enumerate(schedules):
-            group = group_by_id.get(schedule.group_id)
+            owning_group = group_by_id.get(schedule.group_id)
             if schedule.profile_id not in profile_ids:
                 _fail(
                     f"config.schedules[{index}].profile_id",
                     "references unknown profile",
                 )
-            if group is None:
+            if owning_group is None:
                 _fail(
                     f"config.schedules[{index}].group_id", "references unknown group"
                 )
-            if group is not None and group.profile_id != schedule.profile_id:
+            if owning_group.profile_id != schedule.profile_id:
                 _fail(
                     f"config.schedules[{index}]",
                     "profile and group ownership do not match",
                 )
-            if group is not None and not set(schedule.target_entity_ids) <= set(
-                group.entity_ids
+            if not set(schedule.target_entity_ids) <= set(
+                owning_group.entity_ids
             ):
                 _fail(
                     f"config.schedules[{index}].target_entity_ids",
