@@ -107,10 +107,11 @@ class JournalCoordinator:
     ) -> PendingOperation:
         """Persist an intent and required immutable snapshots in one write."""
 
-        timestamp = _utc(now)
+        wall_clock = _utc(now)
         allocated_id = str(uuid4()) if operation_id is None else operation_id
 
         def prepare(current: RuntimeStoreData) -> RuntimeStoreData:
+            persisted_at = max(wall_clock, current.updated_at)
             if any(item.id == allocated_id for item in current.pending_operations):
                 raise InvalidOperationTransitionError(
                     f"operation {allocated_id} already exists"
@@ -137,8 +138,8 @@ class JournalCoordinator:
                 state=OperationState.PREPARED,
                 payload=payload,
                 attempt_count=0,
-                created_at=timestamp,
-                updated_at=timestamp,
+                created_at=persisted_at,
+                updated_at=persisted_at,
                 next_retry_at=None,
                 error_code=None,
             )
@@ -221,7 +222,7 @@ class JournalCoordinator:
                 notification_deduplication_keys=(
                     current.notification_deduplication_keys
                 ),
-                updated_at=timestamp,
+                updated_at=persisted_at,
             )
 
         updated = await self._runtime.async_update(prepare)
@@ -232,9 +233,11 @@ class JournalCoordinator:
     ) -> PendingOperation:
         """Persist SENT before the caller is allowed to invoke a service."""
 
-        timestamp = _utc(now)
+        wall_clock = _utc(now)
 
-        def mark(operation: PendingOperation) -> PendingOperation:
+        def mark(
+            operation: PendingOperation, persisted_at: datetime
+        ) -> PendingOperation:
             _require_state(
                 operation,
                 {OperationState.PREPARED, OperationState.RETRY_WAIT},
@@ -243,7 +246,7 @@ class JournalCoordinator:
             if (
                 operation.state is OperationState.RETRY_WAIT
                 and operation.next_retry_at is not None
-                and operation.next_retry_at > timestamp
+                and operation.next_retry_at > wall_clock
             ):
                 raise InvalidOperationTransitionError(
                     f"operation {operation.id} is not due for retry"
@@ -252,32 +255,34 @@ class JournalCoordinator:
                 operation,
                 state=OperationState.SENT,
                 attempt_count=operation.attempt_count + 1,
-                updated_at=timestamp,
+                updated_at=persisted_at,
                 next_retry_at=None,
                 error_code=None,
             )
 
-        return await self._async_transition(operation_id, timestamp, mark)
+        return await self._async_transition(operation_id, wall_clock, mark)
 
     async def async_mark_succeeded(
         self, operation_id: str, now: datetime
     ) -> PendingOperation:
         """Persist a confirmed service result."""
 
-        timestamp = _utc(now)
+        wall_clock = _utc(now)
 
-        def mark(operation: PendingOperation) -> PendingOperation:
+        def mark(
+            operation: PendingOperation, persisted_at: datetime
+        ) -> PendingOperation:
             _require_state(
                 operation, {OperationState.SENT}, OperationState.SUCCEEDED
             )
             return replace(
                 operation,
                 state=OperationState.SUCCEEDED,
-                updated_at=timestamp,
+                updated_at=persisted_at,
                 error_code=None,
             )
 
-        return await self._async_transition(operation_id, timestamp, mark)
+        return await self._async_transition(operation_id, wall_clock, mark)
 
     async def async_schedule_retry(
         self,
@@ -289,24 +294,26 @@ class JournalCoordinator:
     ) -> PendingOperation:
         """Retain an unsuccessful SENT operation for a later retry."""
 
-        timestamp = _utc(now)
+        wall_clock = _utc(now)
         next_retry = _utc(retry_at)
-        if next_retry < timestamp:
+        if next_retry < wall_clock:
             raise InvalidOperationTransitionError("retry_at cannot precede now")
 
-        def mark(operation: PendingOperation) -> PendingOperation:
+        def mark(
+            operation: PendingOperation, persisted_at: datetime
+        ) -> PendingOperation:
             _require_state(
                 operation, {OperationState.SENT}, OperationState.RETRY_WAIT
             )
             return replace(
                 operation,
                 state=OperationState.RETRY_WAIT,
-                updated_at=timestamp,
+                updated_at=persisted_at,
                 next_retry_at=next_retry,
                 error_code=error_code,
             )
 
-        return await self._async_transition(operation_id, timestamp, mark)
+        return await self._async_transition(operation_id, wall_clock, mark)
 
     async def async_fail_final(
         self, operation_id: str, *, now: datetime, error_code: str
@@ -333,9 +340,11 @@ class JournalCoordinator:
         target: OperationState,
         error_code: str,
     ) -> PendingOperation:
-        timestamp = _utc(now)
+        wall_clock = _utc(now)
 
-        def mark(operation: PendingOperation) -> PendingOperation:
+        def mark(
+            operation: PendingOperation, persisted_at: datetime
+        ) -> PendingOperation:
             _require_state(
                 operation,
                 {
@@ -348,25 +357,26 @@ class JournalCoordinator:
             return replace(
                 operation,
                 state=target,
-                updated_at=timestamp,
+                updated_at=persisted_at,
                 next_retry_at=None,
                 error_code=error_code,
             )
 
-        return await self._async_transition(operation_id, timestamp, mark)
+        return await self._async_transition(operation_id, wall_clock, mark)
 
     async def _async_transition(
         self,
         operation_id: str,
-        timestamp: datetime,
-        transition: Callable[[PendingOperation], PendingOperation],
+        wall_clock: datetime,
+        transition: Callable[[PendingOperation, datetime], PendingOperation],
     ) -> PendingOperation:
         def update(current: RuntimeStoreData) -> RuntimeStoreData:
+            persisted_at = max(wall_clock, current.updated_at)
             found = False
             operations: list[PendingOperation] = []
             for operation in current.pending_operations:
                 if operation.id == operation_id:
-                    operation = transition(operation)
+                    operation = transition(operation, persisted_at)
                     found = True
                 operations.append(operation)
             if not found:
@@ -375,7 +385,7 @@ class JournalCoordinator:
                 current,
                 revision=current.revision + 1,
                 pending_operations=tuple(operations),
-                updated_at=timestamp,
+                updated_at=persisted_at,
             )
 
         updated = await self._runtime.async_update(update)

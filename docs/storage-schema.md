@@ -52,7 +52,8 @@ The pending-operation state values are `prepared`, `sent`, `succeeded`,
 `retry_wait`, `failed_final` and `superseded`. A `retry_wait` record is invalid
 without `next_retry_at`; other states cannot retain a retry timestamp.
 Every operation also has a unique monotonically increasing `sequence` allocated
-inside the runtime Store lock.
+inside the runtime Store lock. Persisted journal metadata never moves backwards if
+the host clock is corrected, while retry deadlines retain actual wall-clock time.
 
 An occurrence embeds a full frozen `Schedule`. A later configuration revision
 therefore cannot replace its action, condition, fallback or notification rules.

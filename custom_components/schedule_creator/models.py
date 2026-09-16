@@ -1409,8 +1409,6 @@ class PendingOperation(VersionedModel):
             _fail("operation.next_retry_at", "retry_wait requires a retry time")
         if state is not OperationState.RETRY_WAIT and next_retry_at is not None:
             _fail("operation.next_retry_at", "is only valid for retry_wait")
-        if next_retry_at is not None and next_retry_at < updated_at:
-            _fail("operation.next_retry_at", "must not precede updated_at")
         object.__setattr__(self, "occurrence_id", occurrence_id)
         object.__setattr__(self, "sequence", sequence)
         object.__setattr__(self, "entity_id", entity_id)

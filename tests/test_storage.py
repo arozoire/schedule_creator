@@ -607,6 +607,76 @@ async def test_audit_load_survives_clock_moving_backwards(
     assert loaded.updated_at == persisted_at
 
 
+async def test_audit_append_prunes_from_actual_time_after_clock_rollback(
+    hass: HomeAssistant, model_data: dict
+) -> None:
+    """A future Store timestamp cannot move the audit retention window."""
+
+    record = AuditRecord.from_dict(model_data["audit"])
+    persisted_at = NOW + timedelta(days=60)
+    audit_store = MemoryJsonStore(
+        {
+            "schema_version": 1,
+            "records": [record.to_dict()],
+            "updated_at": persisted_at.isoformat().replace("+00:00", "Z"),
+        }
+    )
+    audit = AuditRepository(hass, audit_store)
+    await audit.async_load(NOW)
+    appended = replace(
+        record,
+        id="15151515-1515-4515-8515-151515151515",
+        recorded_at=NOW + timedelta(seconds=15),
+    )
+
+    updated = await audit.async_append(appended, NOW)
+
+    assert updated.records == (record, appended)
+    assert updated.updated_at == persisted_at
+
+
+async def test_journal_survives_clock_rollback(
+    hass: HomeAssistant, model_data: dict
+) -> None:
+    """Persisted metadata stays monotonic while retry deadlines use wall time."""
+
+    persisted_at = NOW + timedelta(days=60)
+    base = replace(_runtime_bundle(model_data), updated_at=persisted_at)
+    store = MemoryJsonStore(base.to_dict())
+    repository = RuntimeRepository(hass, store)
+    assert await repository.async_load() == base
+    journal = JournalCoordinator(repository)
+    operation_id = "16161616-1616-4616-8616-161616161616"
+
+    prepared = await journal.async_prepare(
+        kind=OperationKind.TARGET_ACTION,
+        payload={"domain": "light", "action": "on", "data": {}},
+        now=NOW,
+        occurrence_id=base.occurrences[0].id,
+        entity_id="light.living_room",
+        operation_id=operation_id,
+    )
+    assert prepared.created_at == persisted_at
+
+    sent = await journal.async_mark_sent(operation_id, NOW + timedelta(seconds=1))
+    assert sent.updated_at == persisted_at
+    retry = await journal.async_schedule_retry(
+        operation_id,
+        now=NOW + timedelta(seconds=2),
+        retry_at=NOW + timedelta(seconds=30),
+        error_code="target_unavailable",
+    )
+    assert retry.updated_at == persisted_at
+    assert retry.next_retry_at == NOW + timedelta(seconds=30)
+
+    with pytest.raises(InvalidOperationTransitionError, match="not due for retry"):
+        await journal.async_mark_sent(operation_id, NOW + timedelta(seconds=10))
+    resumed = await journal.async_mark_sent(
+        operation_id, NOW + timedelta(seconds=30)
+    )
+    assert resumed.updated_at == persisted_at
+
+
 def test_migration_dispatch_rejects_unknown_major_version() -> None:
     """A future Store schema is never interpreted as version one."""
 

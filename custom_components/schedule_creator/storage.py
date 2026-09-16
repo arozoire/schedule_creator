@@ -833,7 +833,7 @@ class AuditRepository:
                         records=(*current.records, record),
                         updated_at=timestamp,
                     ),
-                    timestamp,
+                    now,
                 )
             except Exception:  # noqa: BLE001 - runtime must continue without audit
                 _LOGGER.exception("Unable to append Schedule Creator audit record")
