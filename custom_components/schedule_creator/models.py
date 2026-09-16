@@ -8,7 +8,7 @@ from datetime import UTC, date, datetime, time
 from enum import StrEnum
 from math import isfinite
 from types import MappingProxyType
-from typing import Any, Self, TypeVar
+from typing import Any, Self
 from uuid import UUID
 
 MODEL_SCHEMA_VERSION = 1
@@ -144,9 +144,6 @@ class AuditLevel(StrEnum):
     ERROR = "error"
 
 
-EnumType = TypeVar("EnumType", bound=StrEnum)
-
-
 def _fail(path: str, message: str) -> None:
     raise ModelValidationError(path, message)
 
@@ -232,7 +229,9 @@ def _entity_id(value: object, path: str) -> str:
     return text
 
 
-def _enum(enum_type: type[EnumType], value: object, path: str) -> EnumType:
+def _enum[EnumType: StrEnum](
+    enum_type: type[EnumType], value: object, path: str
+) -> EnumType:
     text = _string(value, path)
     try:
         return enum_type(text)
