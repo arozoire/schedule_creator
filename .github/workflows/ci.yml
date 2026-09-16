@@ -28,7 +28,7 @@ jobs:
       - name: Install checks
         run: >-
           python -m pip install --disable-pip-version-check
-          pytest-homeassistant-custom-component==0.13.365 ruff
+          pytest-homeassistant-custom-component==0.13.365 mypy ruff
       - name: Validate Python and JSON
         run: |
           python -m compileall -q custom_components
@@ -40,5 +40,7 @@ jobs:
           done
       - name: Lint
         run: ruff check custom_components tests
+      - name: Type check models
+        run: mypy custom_components/schedule_creator/models.py
       - name: Test
         run: pytest -q
