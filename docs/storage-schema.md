@@ -78,7 +78,8 @@ leases, which is required to resume a conditional controller after a Quick Timer
 
 The audit Store retains at most 30 days and 10,000 records. Load, validation,
 buffering or flush failure is logged and cannot prevent authoritative Stores from
-loading or changing.
+loading or changing. If audit loading fails, audit remains in-memory and read-only
+for that session so an unreadable or future-version payload is never overwritten.
 
 ## Journal ordering and recovery
 

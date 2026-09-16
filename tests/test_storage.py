@@ -392,6 +392,27 @@ async def test_audit_failure_does_not_touch_authoritative_state(
     assert runtime_store.data == runtime_before
 
 
+async def test_audit_load_failure_never_overwrites_unknown_data(
+    hass: HomeAssistant, model_data: dict
+) -> None:
+    """An unreadable or future audit payload stays untouched for this session."""
+
+    audit_store = MemoryJsonStore({"future": "payload"})
+    audit_store.fail_load = True
+    audit = AuditRepository(hass, audit_store)
+
+    await audit.async_load(NOW)
+    await audit.async_append(
+        AuditRecord.from_dict(model_data["audit"]),
+        NOW + timedelta(seconds=5),
+    )
+    await audit.async_flush()
+
+    assert audit_store.data == {"future": "payload"}
+    assert audit_store.delayed_saves == []
+    assert audit_store.saves == []
+
+
 def test_migration_dispatch_rejects_unknown_major_version() -> None:
     """A future Store schema is never interpreted as version one."""
 

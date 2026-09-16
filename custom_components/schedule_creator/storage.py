@@ -697,6 +697,7 @@ class AuditRepository:
         self._lock = asyncio.Lock()
         self._loaded = False
         self._data: AuditStoreData | None = None
+        self._write_enabled = True
 
     @property
     def data(self) -> AuditStoreData:
@@ -718,9 +719,11 @@ class AuditRepository:
                     else AuditStoreData.from_dict(raw)
                 )
                 self._data = _prune_audit(loaded, now)
+                self._write_enabled = True
             except Exception:  # noqa: BLE001 - audit is deliberately non-authoritative
                 _LOGGER.exception("Unable to load Schedule Creator audit Store")
                 self._data = empty_audit(now)
+                self._write_enabled = False
             self._loaded = True
             result = self._data
             assert result is not None
@@ -751,6 +754,8 @@ class AuditRepository:
                 _LOGGER.exception("Unable to append Schedule Creator audit record")
                 return current
             self._data = updated
+            if not self._write_enabled:
+                return updated
             try:
                 def data_to_save() -> JsonObject:
                     return updated.to_dict()
@@ -764,7 +769,7 @@ class AuditRepository:
         """Attempt an immediate audit write without propagating failure."""
 
         async with self._lock:
-            if not self._loaded or self._data is None:
+            if not self._loaded or self._data is None or not self._write_enabled:
                 return
             try:
                 await self._store.async_save(self._data.to_dict())

@@ -705,12 +705,15 @@ class ConditionNode(VersionedModel):
             _fail("condition", f"must not exceed {MAX_CONDITION_NODES} total nodes")
         remaining_nodes[0] -= 1
         item = _strict_record(data, cls, path)
-        children_data = _tuple(item["children"], f"{path}.children")
-        if len(children_data) > MAX_CONDITION_CHILDREN:
+        raw_children = item["children"]
+        if not isinstance(raw_children, list | tuple):
+            _fail(f"{path}.children", "must be an array")
+        if len(raw_children) > MAX_CONDITION_CHILDREN:
             _fail(
                 f"{path}.children",
                 f"must contain at most {MAX_CONDITION_CHILDREN} nodes",
             )
+        children_data = tuple(raw_children)
         return cls(
             schema_version=_integer(item["schema_version"], f"{path}.schema_version"),
             id=_uuid(item["id"], f"{path}.id"),
