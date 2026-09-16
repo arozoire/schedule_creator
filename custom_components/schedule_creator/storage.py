@@ -306,15 +306,21 @@ class RuntimeStoreData:
                 )
         for occurrence in occurrences:
             for snapshot_id in occurrence.snapshot_ids:
-                snapshot = snapshot_by_id.get(snapshot_id)
-                if snapshot is None or snapshot.occurrence_id != occurrence.id:
+                referenced_snapshot = snapshot_by_id.get(snapshot_id)
+                if (
+                    referenced_snapshot is None
+                    or referenced_snapshot.occurrence_id != occurrence.id
+                ):
                     _fail(
                         "runtime.occurrences",
                         f"occurrence {occurrence.id} has an invalid snapshot reference",
                     )
             for operation_id in occurrence.pending_operation_ids:
-                operation = operation_by_id.get(operation_id)
-                if operation is None or operation.occurrence_id != occurrence.id:
+                referenced_operation = operation_by_id.get(operation_id)
+                if (
+                    referenced_operation is None
+                    or referenced_operation.occurrence_id != occurrence.id
+                ):
                     _fail(
                         "runtime.occurrences",
                         (
@@ -349,8 +355,8 @@ class RuntimeStoreData:
                 )
         for timer in timers:
             if timer.snapshot_id is not None:
-                snapshot = snapshot_by_id.get(timer.snapshot_id)
-                if snapshot is None:
+                timer_snapshot = snapshot_by_id.get(timer.snapshot_id)
+                if timer_snapshot is None:
                     _fail(
                         "runtime.quick_timers",
                         f"timer {timer.id} has an invalid snapshot reference",
@@ -739,9 +745,10 @@ class AuditRepository:
                 return current
             self._data = updated
             try:
-                self._store.async_delay_save(
-                    lambda state=updated: state.to_dict(), AUDIT_SAVE_DELAY
-                )
+                def data_to_save() -> JsonObject:
+                    return updated.to_dict()
+
+                self._store.async_delay_save(data_to_save, AUDIT_SAVE_DELAY)
             except Exception:  # noqa: BLE001 - runtime must continue without audit
                 _LOGGER.exception("Unable to schedule Schedule Creator audit save")
             return updated
