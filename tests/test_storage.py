@@ -26,6 +26,7 @@ from custom_components.schedule_creator.models import (
     OperationKind,
     OperationState,
     PendingOperation,
+    QuickTimer,
     Snapshot,
 )
 from custom_components.schedule_creator.storage import (
@@ -147,10 +148,129 @@ def test_runtime_allows_suspended_controller_below_active_timer(
         state=LeaseState.ACTIVE,
     )
     base = _runtime_bundle(model_data)
+    quick_timer = replace(
+        QuickTimer.from_dict(model_data["quick_timer"]),
+        snapshot_id=None,
+    )
 
-    runtime = replace(base, leases=(suspended, timer))
+    runtime = replace(
+        base,
+        leases=(suspended, timer),
+        quick_timers=(quick_timer,),
+    )
 
     assert runtime.leases == (suspended, timer)
+
+
+def test_runtime_rejects_operation_outside_controller_targets(
+    model_data: dict,
+) -> None:
+    """Recovery cannot target an entity outside the frozen controller scope."""
+
+    base = _runtime_bundle(model_data)
+    operation = replace(
+        base.pending_operations[0],
+        entity_id="light.unrelated",
+    )
+
+    with pytest.raises(ValueError, match="outside its controller"):
+        replace(base, pending_operations=(operation,))
+
+
+async def test_journal_rejects_operation_outside_controller_targets(
+    hass: HomeAssistant, model_data: dict
+) -> None:
+    """Journal validation fails before an out-of-scope intent is persisted."""
+
+    base = _runtime_bundle(model_data)
+    store = MemoryJsonStore(base.to_dict())
+    repository = RuntimeRepository(hass, store)
+    assert await repository.async_load() == base
+    journal = JournalCoordinator(repository)
+
+    with pytest.raises(ValueError, match="outside its controller"):
+        await journal.async_prepare(
+            kind=OperationKind.TARGET_ACTION,
+            payload={"domain": "light", "action": "on", "data": {}},
+            now=NOW,
+            occurrence_id=base.occurrences[0].id,
+            entity_id="light.unrelated",
+        )
+
+    assert store.saves == []
+    assert repository.data == base
+
+
+def test_runtime_rejects_orphan_quick_timer_lease(model_data: dict) -> None:
+    """A timer lease cannot retain ownership after its controller disappeared."""
+
+    base = _runtime_bundle(model_data)
+    lease = replace(
+        EntityLease.from_dict(model_data["lease"]),
+        controller_id="quick:dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        controller_type=ControllerType.QUICK_TIMER,
+        occurrence_id=None,
+    )
+
+    with pytest.raises(ValueError, match="invalid Quick Timer controller"):
+        replace(base, leases=(lease,))
+
+
+def test_runtime_rejects_schedule_lease_with_wrong_controller(
+    model_data: dict,
+) -> None:
+    """A schedule lease must match its occurrence and controller type."""
+
+    base = _runtime_bundle(model_data)
+    lease = replace(
+        EntityLease.from_dict(model_data["lease"]),
+        controller_id="quick:dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    )
+
+    with pytest.raises(ValueError, match="invalid schedule controller"):
+        replace(base, leases=(lease,))
+
+
+def test_runtime_rejects_timer_operation_for_another_entity(
+    model_data: dict,
+) -> None:
+    """A Quick Timer operation cannot escape its single-entity scope."""
+
+    base = _runtime_bundle(model_data)
+    timer = replace(
+        QuickTimer.from_dict(model_data["quick_timer"]),
+        snapshot_id=None,
+    )
+    operation = replace(
+        base.pending_operations[0],
+        occurrence_id=timer.controller_id,
+        entity_id="light.unrelated",
+    )
+    occurrence = replace(
+        base.occurrences[0],
+        pending_operation_ids=(),
+        last_operation_id=None,
+    )
+
+    with pytest.raises(ValueError, match="outside its controller"):
+        replace(
+            base,
+            occurrences=(occurrence,),
+            pending_operations=(operation,),
+            quick_timers=(timer,),
+        )
+
+
+def test_runtime_rejects_timer_snapshot_from_another_controller(
+    model_data: dict,
+) -> None:
+    """A Quick Timer cannot restore a schedule occurrence's snapshot."""
+
+    base = _runtime_bundle(model_data)
+    timer = QuickTimer.from_dict(model_data["quick_timer"])
+
+    with pytest.raises(ValueError, match="invalid snapshot reference"):
+        replace(base, quick_timers=(timer,))
 
 
 async def test_config_mutation_is_locked_and_optimistic(

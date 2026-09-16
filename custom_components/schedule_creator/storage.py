@@ -16,11 +16,13 @@ from .const import DOMAIN
 from .models import (
     MODEL_SCHEMA_VERSION,
     AuditRecord,
+    ControllerType,
     EntityLease,
     IntegrationConfig,
     LeaseState,
     ModelValidationError,
     Occurrence,
+    OperationKind,
     PendingOperation,
     QuickTimer,
     Snapshot,
@@ -279,8 +281,18 @@ class RuntimeStoreData:
                 "must be ordered by sequence",
             )
 
-        occurrence_id_set = set(occurrence_ids)
-        controller_ids = occurrence_id_set | {timer.controller_id for timer in timers}
+        occurrence_by_id = {occurrence.id: occurrence for occurrence in occurrences}
+        occurrence_id_set = set(occurrence_by_id)
+        timer_controller_ids = tuple(timer.controller_id for timer in timers)
+        _unique(timer_controller_ids, "runtime.quick_timers.controller_id")
+        _unique(
+            (*occurrence_ids, *timer_controller_ids),
+            "runtime.controller_ids",
+        )
+        timer_by_controller_id = {
+            timer.controller_id: timer for timer in timers
+        }
+        controller_ids = occurrence_id_set | set(timer_controller_ids)
         snapshot_by_id = {snapshot.id: snapshot for snapshot in snapshots}
         operation_by_id = {operation.id: operation for operation in operations}
         for snapshot in snapshots:
@@ -305,6 +317,34 @@ class RuntimeStoreData:
                     "runtime.pending_operations",
                     f"operation {operation.id} references an unknown controller",
                 )
+            if operation.kind in {
+                OperationKind.TARGET_ACTION,
+                OperationKind.RESTORE,
+            }:
+                controller_id = operation.occurrence_id
+                entity_id = operation.entity_id
+                if controller_id is None or entity_id is None:
+                    _fail(
+                        "runtime.pending_operations",
+                        f"operation {operation.id} has no target controller",
+                    )
+                occurrence_controller = occurrence_by_id.get(controller_id)
+                timer_controller = timer_by_controller_id.get(controller_id)
+                if (
+                    occurrence_controller is not None
+                    and entity_id
+                    not in occurrence_controller.frozen_schedule.target_entity_ids
+                ) or (
+                    timer_controller is not None
+                    and entity_id != timer_controller.entity_id
+                ):
+                    _fail(
+                        "runtime.pending_operations",
+                        (
+                            f"operation {operation.id} targets an entity "
+                            "outside its controller"
+                        ),
+                    )
         for occurrence in occurrences:
             for snapshot_id in occurrence.snapshot_ids:
                 referenced_snapshot = snapshot_by_id.get(snapshot_id)
@@ -352,18 +392,49 @@ class RuntimeStoreData:
         )
         _unique(active_lease_entities, "runtime.leases.active_entity_id")
         for lease in leases:
+            if lease.controller_type is ControllerType.QUICK_TIMER:
+                timer = timer_by_controller_id.get(lease.controller_id)
+                if (
+                    lease.occurrence_id is not None
+                    or timer is None
+                    or lease.entity_id != timer.entity_id
+                ):
+                    _fail(
+                        "runtime.leases",
+                        f"lease {lease.id} has an invalid Quick Timer controller",
+                    )
+                continue
+
+            schedule_occurrence = (
+                None
+                if lease.occurrence_id is None
+                else occurrence_by_id.get(lease.occurrence_id)
+            )
+            expected_type = (
+                ControllerType.CONDITIONAL_SCHEDULE
+                if schedule_occurrence is not None
+                and schedule_occurrence.frozen_schedule.condition is not None
+                else ControllerType.NORMAL_SCHEDULE
+            )
             if (
-                lease.occurrence_id is not None
-                and lease.occurrence_id not in occurrence_id_set
+                schedule_occurrence is None
+                or lease.controller_id != schedule_occurrence.id
+                or lease.controller_type is not expected_type
+                or lease.entity_id
+                not in schedule_occurrence.frozen_schedule.target_entity_ids
             ):
                 _fail(
                     "runtime.leases",
-                    f"lease {lease.id} references an unknown occurrence",
+                    f"lease {lease.id} has an invalid schedule controller",
                 )
         for timer in timers:
             if timer.snapshot_id is not None:
                 timer_snapshot = snapshot_by_id.get(timer.snapshot_id)
-                if timer_snapshot is None:
+                if (
+                    timer_snapshot is None
+                    or timer_snapshot.occurrence_id != timer.controller_id
+                    or timer_snapshot.entity_id != timer.entity_id
+                ):
                     _fail(
                         "runtime.quick_timers",
                         f"timer {timer.id} has an invalid snapshot reference",
