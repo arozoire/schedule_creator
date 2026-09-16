@@ -40,7 +40,11 @@ jobs:
           done
       - name: Lint
         run: ruff check custom_components tests
-      - name: Type check models
-        run: mypy custom_components/schedule_creator/models.py
+      - name: Type check core
+        run: >-
+          mypy custom_components/schedule_creator/models.py
+          custom_components/schedule_creator/storage.py
+          custom_components/schedule_creator/journal.py
+          custom_components/schedule_creator/__init__.py
       - name: Test
         run: pytest -q

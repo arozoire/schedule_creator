@@ -4,6 +4,10 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 
 from custom_components.schedule_creator.const import DOMAIN
+from custom_components.schedule_creator.storage import (
+    ConfigRepository,
+    RuntimeRepository,
+)
 
 
 async def _create_entry(hass: HomeAssistant):
@@ -46,10 +50,12 @@ async def test_reload_replaces_runtime_after_shutdown(hass: HomeAssistant) -> No
 
 
 async def test_remove_unloads_entry_without_owned_objects(hass: HomeAssistant) -> None:
-    """Removing the entry shuts down runtime and leaves no owned HA object."""
+    """Removing the entry preserves native data for a later reinstall."""
 
     entry = await _create_entry(hass)
     runtime = entry.runtime_data
+    expected_config = runtime.storage.config.data
+    expected_runtime = runtime.storage.runtime.data
 
     await hass.config_entries.async_remove(entry.entry_id)
     await hass.async_block_till_done()
@@ -60,3 +66,7 @@ async def test_remove_unloads_entry_without_owned_objects(hass: HomeAssistant) -
     assert not any(
         state.entity_id.startswith(f"{DOMAIN}.") for state in hass.states.async_all()
     )
+    preserved_config = ConfigRepository(hass)
+    preserved_runtime = RuntimeRepository(hass)
+    assert await preserved_config.async_load() == expected_config
+    assert await preserved_runtime.async_load() == expected_runtime

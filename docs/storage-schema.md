@@ -1,7 +1,8 @@
 # Schedule Creator persisted model schema
 
-**Status:** Phase 2.1 schema version 1. Store containers and migrations are added
-in Phase 2.2.
+**Status:** Phase 2.2 schema version 1. Native Store containers and the
+side-effect-free restart recovery plan are implemented; the scheduling engine and
+entity actions remain deferred.
 
 ## Contract rules
 
@@ -43,24 +44,87 @@ behaviour.
 | `Occurrence` | Embeds the frozen schedule revision and stable slot occurrence ID |
 | `Snapshot` | Immutable per-entity starting state, domain and checksum |
 | `EntityLease` | Entity owner, controller type, comparison key and generation |
-| `PendingOperation` | Write-ahead intent, state, retry evidence and immutable payload |
+| `PendingOperation` | Monotonic sequence, write-ahead intent, state, retry evidence and immutable payload |
 | `QuickTimer` | Persistent one-shot action, expiry and optional snapshot link |
 | `AuditRecord` | Redacted, non-authoritative diagnostic event |
 
 The pending-operation state values are `prepared`, `sent`, `succeeded`,
 `retry_wait`, `failed_final` and `superseded`. A `retry_wait` record is invalid
 without `next_retry_at`; other states cannot retain a retry timestamp.
+Every operation also has a unique monotonically increasing `sequence` allocated
+inside the runtime Store lock. Persisted journal metadata never moves backwards if
+the host clock is corrected, while retry deadlines retain actual wall-clock time.
 
 An occurrence embeds a full frozen `Schedule`. A later configuration revision
 therefore cannot replace its action, condition, fallback or notification rules.
 No model method reads Home Assistant state, writes a Store or calls a service.
 
-## Deferred to Phase 2.2
+## Native Store envelopes
 
-- `schedule_creator.config`, `schedule_creator.runtime` and
-  `schedule_creator.audit` Store envelope schemas;
-- atomic config mutation under one lock;
-- runtime operation counter and journal recovery ordering;
-- audit retention and buffered-save policy;
-- explicit config-entry removal retention behaviour;
-- schema migration dispatch.
+All three files use Home Assistant `Store` version 1 with private, atomic file
+writes. Unknown envelope fields and future unsupported schema versions fail rather
+than being interpreted as version 1.
+
+| Store | Authority | Save path |
+|---|---|---|
+| `schedule_creator.config` | Authoritative profiles, groups, schedules and settings | Immediate complete commit under one config lock |
+| `schedule_creator.runtime` | Authoritative occurrences, snapshots, leases, operations, timers and notification deduplication keys | Immediate complete commit under one runtime lock |
+| `schedule_creator.audit` | Derived diagnostic records only | Buffered by 5 seconds, immediate best-effort flush on unload |
+
+Configuration writes compare `expected_revision` while holding the same lock used
+for the write. A successful mutation advances the revision exactly once. Runtime
+mutations follow the same single-write rule and never depend on the audit Store.
+Runtime validation permits one active lease per entity plus suspended controller
+leases, which is required to resume a conditional controller after a Quick Timer.
+Every lease must also match an existing controller, the controller's expected type
+and one of its frozen target entities. Target and restore operations are rejected
+unless their entity belongs to the referenced schedule occurrence or Quick Timer.
+A Quick Timer snapshot must belong to the same timer controller and entity; it can
+never reuse another occurrence's starting state.
+
+The audit Store retains at most 30 days and 10,000 records. Load, validation,
+buffering or flush failure is logged and cannot prevent authoritative Stores from
+loading or changing. If audit loading fails, audit remains in-memory and read-only
+for that session so an unreadable or future-version payload is never overwritten.
+
+## Journal ordering and recovery
+
+The journal API persists these boundaries separately:
+
+1. `prepared`: intent plus any immutable snapshot is durable;
+2. `sent`: durable before a future caller may invoke a Home Assistant service;
+3. `succeeded`, `retry_wait`, `failed_final` or `superseded`: durable result.
+
+Phase 2.2 does not invoke a service. On startup it creates a deterministic recovery
+plan, ordered by operation sequence:
+
+| Persisted state | Recovery instruction |
+|---|---|
+| `prepared` | retry the prepared operation |
+| `sent` | reconcile the possibly-applied command before retry |
+| due `retry_wait` | retry now |
+| future `retry_wait` | wait until the persisted instant |
+| terminal state | no recovery instruction |
+
+The integration builds this plan before it marks its runtime loaded. Later engine
+phases will consume the plan only after lease validation; this PR cannot command an
+entity.
+
+## Removal and migration behaviour
+
+Removing the config entry preserves all native Store files. Data deletion will be
+available only through the future explicit **RESET** flow with strong confirmation.
+This also means uninstalling and reinstalling the integration does not implicitly
+erase schedules.
+
+The Store subclass has a migration dispatcher. Version 1 minor revisions are
+accepted; unknown major versions are rejected until an explicit migration is
+implemented.
+
+## Deferred to later phases
+
+- WebSocket CRUD and external optimistic-concurrency errors;
+- scheduling callbacks and recurrence;
+- condition evaluation, leases and target actions;
+- notification dispatch and deduplication execution;
+- the confirmed RESET/backup/restore maintenance API.
