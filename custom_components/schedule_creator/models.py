@@ -14,6 +14,7 @@ from uuid import UUID
 MODEL_SCHEMA_VERSION = 1
 MAX_CONDITION_DEPTH = 8
 MAX_CONDITION_CHILDREN = 16
+MAX_CONDITION_NODES = 64
 
 type FrozenJsonValue = (
     None
@@ -659,6 +660,8 @@ class ConditionNode(VersionedModel):
             _fail("condition.hysteresis", "is only valid for numeric conditions")
         if _condition_depth(self) > MAX_CONDITION_DEPTH:
             _fail("condition", f"depth must not exceed {MAX_CONDITION_DEPTH}")
+        if _condition_node_count(self) > MAX_CONDITION_NODES:
+            _fail("condition", f"must not exceed {MAX_CONDITION_NODES} total nodes")
 
         object.__setattr__(self, "operator", operator)
         object.__setattr__(self, "entity_id", entity_id)
@@ -709,6 +712,17 @@ def _condition_depth(node: ConditionNode) -> int:
     if not node.children:
         return 1
     return 1 + max(_condition_depth(child) for child in node.children)
+
+
+def _condition_node_count(node: ConditionNode) -> int:
+    return 1 + sum(_condition_node_count(child) for child in node.children)
+
+
+def _condition_ids(node: ConditionNode) -> tuple[str, ...]:
+    return (
+        node.id,
+        *(item for child in node.children for item in _condition_ids(child)),
+    )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -797,6 +811,10 @@ class Schedule(VersionedModel):
             _fail("schedule.end_action", "must be a target action or null")
         if self.condition is not None and not isinstance(self.condition, ConditionNode):
             _fail("schedule.condition", "must be a condition or null")
+        if self.condition is not None:
+            condition_ids = _condition_ids(self.condition)
+            if len(set(condition_ids)) != len(condition_ids):
+                _fail("schedule.condition", "condition IDs must be unique")
         policy = _enum(
             OverridePolicy, self.override_policy, "schedule.override_policy"
         )
@@ -938,6 +956,38 @@ class IntegrationConfig(VersionedModel):
             _fail("config.groups", "group IDs must be unique")
         if len({schedule.id for schedule in schedules}) != len(schedules):
             _fail("config.schedules", "schedule IDs must be unique")
+        nested_ids = [
+            nested_id
+            for schedule in schedules
+            for nested_id in (
+                *(slot.id for slot in schedule.time_slots),
+                schedule.start_action.id,
+                *(() if schedule.end_action is None else (schedule.end_action.id,)),
+                *(
+                    ()
+                    if schedule.condition is None
+                    else _condition_ids(schedule.condition)
+                ),
+                *(
+                    ()
+                    if schedule.start_notification is None
+                    else (schedule.start_notification.id,)
+                ),
+                *(
+                    ()
+                    if schedule.end_notification is None
+                    else (schedule.end_notification.id,)
+                ),
+            )
+        ]
+        all_record_ids = [
+            *(profile.id for profile in profiles),
+            *(group.id for group in groups),
+            *(schedule.id for schedule in schedules),
+            *nested_ids,
+        ]
+        if len(set(all_record_ids)) != len(all_record_ids):
+            _fail("config", "all persisted record IDs must be globally unique")
         active_profile_ids = tuple(
             _uuid(value, f"config.active_profile_ids[{index}]")
             for index, value in enumerate(self.active_profile_ids)
@@ -1108,6 +1158,10 @@ class Occurrence(VersionedModel):
             self.local_start, "occurrence.local_start"
         )
         local_end = _local_datetime_text(self.local_end, "occurrence.local_end")
+        if datetime.fromisoformat(local_start).astimezone(UTC) != start:
+            _fail("occurrence.local_start", "must represent start_utc")
+        if datetime.fromisoformat(local_end).astimezone(UTC) != end:
+            _fail("occurrence.local_end", "must represent end_utc")
         state = _enum(OccurrenceState, self.state, "occurrence.state")
         branch = _enum(
             ConditionBranch, self.condition_branch, "occurrence.condition_branch"

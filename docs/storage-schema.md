@@ -27,13 +27,14 @@ The executable canonical bundle is
 | `Schedule` | UUID, revision | Targets, time slots, actions, conditions and notification rules |
 | `TimeSlot` | UUID | Sorted weekdays and a half-open local start/end interval |
 | `TargetAction` | Versioned nested record | Domain action plus immutable JSON parameters, without target IDs |
-| `ConditionNode` | UUID | Bounded structured AST node; maximum depth 8 and 16 direct children |
+| `ConditionNode` | UUID | Bounded AST node; maximum depth 8, 16 direct children and 64 total nodes |
 | `NotificationRule` | UUID | Explicit notification action, title and non-templated message |
 | `IntegrationConfig` | Global revision | Complete cross-validated configuration commit |
 
-`IntegrationConfig` rejects duplicate IDs, broken profile/group links, active-ID
-disagreement and schedule targets outside their owning group. Exclusive/shared
-activation transactions and overlap policy remain Phase 2.4 behaviour.
+`IntegrationConfig` rejects duplicate IDs globally, broken profile/group links,
+active-ID disagreement and schedule targets outside their owning group.
+Exclusive/shared activation transactions and overlap policy remain Phase 2.4
+behaviour.
 
 ## Runtime records
 

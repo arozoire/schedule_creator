@@ -130,3 +130,48 @@ def test_occurrence_keeps_frozen_schedule_revision(model_data: dict) -> None:
     assert occurrence.frozen_schedule.revision == 3
     assert occurrence.frozen_schedule is not config.schedules[0]
     assert occurrence.frozen_schedule.to_dict() == config.schedules[0].to_dict()
+
+
+def test_occurrence_local_time_must_match_utc(model_data: dict) -> None:
+    """Local boundaries cannot describe a different instant than UTC fields."""
+
+    data = deepcopy(model_data["occurrence"])
+    data["local_start"] = "2026-09-15T19:30:00+02:00"
+
+    with pytest.raises(ModelValidationError, match="must represent start_utc"):
+        Occurrence.from_dict(data)
+
+
+def test_nested_record_ids_are_globally_unique(model_data: dict) -> None:
+    """Imported nested records cannot alias another persisted record."""
+
+    data = deepcopy(model_data["config"])
+    data["schedules"][0]["start_action"]["id"] = data["groups"][0]["id"]
+
+    with pytest.raises(ModelValidationError, match="globally unique"):
+        IntegrationConfig.from_dict(data)
+
+
+def test_condition_tree_has_total_node_limit(model_data: dict) -> None:
+    """A broad tree cannot bypass the condition depth and fan-out limits."""
+
+    data = deepcopy(model_data["config"])
+    original = data["schedules"][0]["condition"]
+    leaf_template = original["children"][0]
+    branches = []
+    sequence = 1
+    for _ in range(4):
+        branch = deepcopy(original)
+        branch["id"] = f"{sequence:08x}-0000-4000-8000-{sequence:012x}"
+        sequence += 1
+        branch["children"] = []
+        for _ in range(16):
+            leaf = deepcopy(leaf_template)
+            leaf["id"] = f"{sequence:08x}-0000-4000-8000-{sequence:012x}"
+            sequence += 1
+            branch["children"].append(leaf)
+        branches.append(branch)
+    original["children"] = branches
+
+    with pytest.raises(ModelValidationError, match="64 total nodes"):
+        IntegrationConfig.from_dict(data)
