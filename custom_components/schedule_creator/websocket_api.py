@@ -13,6 +13,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.util.hass_dict import HassKey
 
 from .const import DOMAIN
+from .group_api import GROUP_COMMANDS
 from .models import LeaseState
 from .profile_api import PROFILE_COMMANDS
 from .storage import StorageNotLoadedError
@@ -32,6 +33,8 @@ def async_register_commands(hass: HomeAssistant) -> None:
         return
     websocket_api.async_register_command(hass, websocket_get_state)
     for command in PROFILE_COMMANDS:
+        websocket_api.async_register_command(hass, command)
+    for command in GROUP_COMMANDS:
         websocket_api.async_register_command(hass, command)
     hass.data[_REGISTERED] = True
 

@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 from dataclasses import replace
-from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, cast
+from datetime import datetime
+from typing import Any
 from uuid import uuid4
 
 import voluptuous as vol
@@ -16,17 +15,11 @@ from homeassistant.components.websocket_api.decorators import (
     require_admin,
     websocket_command,
 )
-from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
-from .models import IntegrationConfig, ModelValidationError, Profile, ProfileType
-from .storage import RevisionConflictError, StorageNotLoadedError
+from .models import IntegrationConfig, Profile, ProfileType
+from .mutation_api import MutationClientError, async_mutate_config
 
-if TYPE_CHECKING:
-    from . import ScheduleCreatorConfigEntry, ScheduleCreatorRuntimeData
-
-_LOGGER = logging.getLogger(__name__)
 _REVISION = vol.All(int, vol.Range(min=0))
 _PROFILE_ID = vol.All(str, vol.Length(min=1))
 _NAME = vol.All(str, vol.Length(min=1))
@@ -35,24 +28,11 @@ _OPTIONAL_TEXT = vol.Any(None, str)
 _ORDER = vol.All(int, vol.Range(min=0))
 
 
-def _loaded_runtime(hass: HomeAssistant) -> ScheduleCreatorRuntimeData | None:
-    entry = next(iter(hass.config_entries.async_entries(DOMAIN)), None)
-    if entry is None or entry.state is not ConfigEntryState.LOADED:
-        return None
-    loaded_entry = cast("ScheduleCreatorConfigEntry", entry)
-    if (
-        not hasattr(loaded_entry, "runtime_data")
-        or not loaded_entry.runtime_data.loaded
-    ):
-        return None
-    return loaded_entry.runtime_data
-
-
 def _profile(config: IntegrationConfig, profile_id: str) -> Profile:
     try:
         return next(item for item in config.profiles if item.id == profile_id)
     except StopIteration as err:
-        raise LookupError(profile_id) from err
+        raise MutationClientError("not_found", "Profile was not found.") from err
 
 
 def _replace_profile(
@@ -94,59 +74,15 @@ async def _mutate(
     mutation: Callable[[IntegrationConfig, datetime], IntegrationConfig],
     response: Callable[[IntegrationConfig], dict[str, Any]],
 ) -> None:
-    from . import lifecycle_lock
-
-    try:
-        async with lifecycle_lock(hass):
-            runtime = _loaded_runtime(hass)
-            if runtime is None:
-                connection.send_error(
-                    msg["id"], "not_loaded", "Schedule Creator is not loaded."
-                )
-                return
-            updated = await runtime.storage.config.async_update(
-                msg["expected_revision"],
-                lambda config: mutation(
-                    _require_config(config), datetime.now(UTC)
-                ),
-            )
-        connection.send_result(msg["id"], response(updated))
-    except RevisionConflictError as err:
-        connection.send_error(
-            msg["id"],
-            "revision_conflict",
-            f"Configuration changed; current revision is {err.actual}.",
-        )
-    except LookupError:
-        connection.send_error(msg["id"], "not_found", "Profile was not found.")
-    except ProfileInUseError:
-        connection.send_error(
-            msg["id"], "profile_in_use", "Profile still owns groups or schedules."
-        )
-    except (ModelValidationError, ValueError):
-        connection.send_error(
-            msg["id"], "invalid_payload", "Profile data is invalid."
-        )
-    except (StorageNotLoadedError, OSError):
-        _LOGGER.exception("Unable to write Schedule Creator configuration")
-        connection.send_error(
-            msg["id"], "storage_unavailable", "Schedule Creator storage is unavailable."
-        )
-    except Exception:
-        _LOGGER.exception("Unexpected Schedule Creator profile mutation failure")
-        connection.send_error(
-            msg["id"], "internal_error", "Unable to update Schedule Creator profiles."
-        )
-
-
-def _require_config(config: IntegrationConfig | None) -> IntegrationConfig:
-    if config is None:
-        raise StorageNotLoadedError("configuration is unavailable")
-    return config
-
-
-class ProfileInUseError(RuntimeError):
-    """A profile with owned records cannot be deleted."""
+    await async_mutate_config(
+        hass,
+        connection,
+        msg,
+        mutation,
+        response,
+        invalid_message="Profile data is invalid.",
+        internal_message="Unable to update Schedule Creator profiles.",
+    )
 
 
 @require_admin
@@ -269,7 +205,9 @@ async def websocket_delete_profile(
         if any(item.profile_id == profile_id for item in config.groups) or any(
             item.profile_id == profile_id for item in config.schedules
         ):
-            raise ProfileInUseError(profile_id)
+            raise MutationClientError(
+                "profile_in_use", "Profile still owns groups or schedules."
+            )
         return replace(
             config,
             revision=config.revision + 1,
