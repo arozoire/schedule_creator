@@ -1,15 +1,20 @@
 """Schedule Creator integration."""
 
+import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.util.hass_dict import HassKey
 
+from .const import DOMAIN
 from .journal import RecoveryInstruction, build_recovery_plan
 from .storage import ScheduleCreatorStorage
 from .websocket_api import async_register_commands
+
+LIFECYCLE_LOCK: HassKey[asyncio.Lock] = HassKey(f"{DOMAIN}.lifecycle_lock")
 
 
 @dataclass(slots=True)
@@ -30,9 +35,19 @@ class ScheduleCreatorRuntimeData:
 type ScheduleCreatorConfigEntry = ConfigEntry[ScheduleCreatorRuntimeData]
 
 
+def lifecycle_lock(hass: HomeAssistant) -> asyncio.Lock:
+    """Return the integration-wide lock shared by lifecycle and mutations."""
+
+    lock = hass.data.get(LIFECYCLE_LOCK)
+    if lock is None:
+        lock = hass.data[LIFECYCLE_LOCK] = asyncio.Lock()
+    return lock
+
+
 async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
     """Register the global read API independently of config-entry reloads."""
 
+    lifecycle_lock(hass)
     async_register_commands(hass)
     return True
 
@@ -42,13 +57,14 @@ async def async_setup_entry(
 ) -> bool:
     """Set up Schedule Creator from a config entry."""
 
-    storage = ScheduleCreatorStorage(hass)
-    await storage.async_load(datetime.now(UTC))
-    recovery_plan = build_recovery_plan(storage.runtime.data, datetime.now(UTC))
-    entry.runtime_data = ScheduleCreatorRuntimeData(
-        storage=storage,
-        recovery_plan=recovery_plan,
-    )
+    async with lifecycle_lock(hass):
+        storage = ScheduleCreatorStorage(hass)
+        await storage.async_load(datetime.now(UTC))
+        recovery_plan = build_recovery_plan(storage.runtime.data, datetime.now(UTC))
+        entry.runtime_data = ScheduleCreatorRuntimeData(
+            storage=storage,
+            recovery_plan=recovery_plan,
+        )
     return True
 
 
@@ -57,7 +73,8 @@ async def async_unload_entry(
 ) -> bool:
     """Unload Schedule Creator."""
 
-    await entry.runtime_data.async_shutdown()
+    async with lifecycle_lock(hass):
+        await entry.runtime_data.async_shutdown()
     return True
 
 
