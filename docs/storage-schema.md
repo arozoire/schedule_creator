@@ -1,8 +1,8 @@
 # Schedule Creator persisted model schema
 
-**Status:** Phase 2.4C schema version 1. Native Store containers, restart recovery,
-occurrence projection, reconciliation and bounded-horizon wiring are implemented;
-runtime callbacks and entity actions remain deferred.
+**Status:** Phase 2.4D schema version 1. Native Store containers, restart recovery,
+occurrence projection, bounded-horizon reconciliation and safe future replanning
+are implemented; runtime callbacks and entity actions remain deferred.
 
 ## Contract rules
 
@@ -104,6 +104,21 @@ configuration as failed would cause unsafe client retries. The next setup heals
 missing occurrences. There is not yet a periodic refresh, so a continuously loaded
 instance does not extend the horizon until a later mutation or reload.
 
+## Safe future replanning
+
+Horizon refresh now removes or replaces an existing occurrence only when all of
+the following hold: its start is inside the future UTC window, its state is
+`pending`, and it owns no snapshot, operation, last-operation or lease reference.
+The newly projected record replaces a safe stable-ID collision, allowing edits to
+refresh the frozen schedule revision. A safe ID absent from the projection is
+removed, covering schedule deletion, disablement, profile deactivation, date
+exceptions and time-slot changes.
+
+Occurrences which already started, left `pending`, or acquired any operational
+reference always win and remain byte-for-byte intact. Historical records and
+records outside the bounded horizon are not compacted. The additive 2.4B
+reconciliation API remains available; lifecycle wiring uses safe replanning.
+
 ## Native Store envelopes
 
 All three files use Home Assistant `Store` version 1 with private, atomic file
@@ -168,7 +183,7 @@ implemented.
 
 ## Deferred to later phases
 
-- rolling-horizon refresh, scheduling callbacks and retention policy;
+- periodic rolling-horizon refresh, scheduling callbacks and retention policy;
 - condition evaluation, leases and target actions;
 - notification dispatch and deduplication execution;
 - the confirmed RESET/backup/restore maintenance API.

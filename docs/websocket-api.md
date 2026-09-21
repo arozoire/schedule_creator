@@ -229,6 +229,9 @@ After a configuration commit, the shared boundary reconciles the current 14-day
 occurrence horizon. This second Store is deliberately post-commit: a Runtime Store
 failure is logged but cannot convert an already-persisted configuration mutation
 into a client error. Config-entry setup retries the idempotent reconciliation.
+Within that horizon, only future `pending` occurrences with no snapshot, operation
+or lease reference may be removed or replaced. Started and operational records
+retain their frozen schedule even after later configuration changes.
 
 ## Administrative schedule commands
 
