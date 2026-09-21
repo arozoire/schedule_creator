@@ -155,7 +155,7 @@ The no-await callback sees immutable config/runtime values without yielding to a
 reload or another update while constructing its response. Existing startup
 initialization and unload audit flushing are separate lifecycle operations.
 
-There are no group or schedule mutations, subscriptions, scheduler engine,
+There are no schedule mutations, subscriptions, scheduler engine,
 condition execution, operational snapshots/restores, Quick Timer execution or frontend.
 Five focused tests cover empty/non-admin/read-only access, populated state and
 journal semantics, unloaded state, reload/idempotent registration, and sanitized
@@ -199,3 +199,28 @@ They do not introduce another serializer or persistent schema. An integration-wi
 lock serializes profile writes with config-entry setup and unload, so a reload
 cannot move a write onto an obsolete runtime. These commands do not read entity
 state, call entity services, modify runtime state or append audit records.
+
+## Administrative group commands
+
+These commands also require a Home Assistant administrator:
+
+| Command | Required fields | Result |
+|---|---|---|
+| `schedule_creator/group/create` | `expected_revision`, existing `profile_id`, `name`, `entity_ids`; optional `icon`, `color`, `order` | New configuration `revision` and server-created `group` |
+| `schedule_creator/group/update` | `expected_revision`, `group_id`, at least one editable field | New configuration `revision` and updated `group` |
+| `schedule_creator/group/delete` | `expected_revision`, `group_id` | New configuration `revision` and `deleted_group_id` |
+
+Editable group fields are `name`, `entity_ids`, `icon`, `color` and `order`.
+Group identity and profile ownership cannot be changed by update. A move between
+profiles can be added later as a dedicated atomic operation if needed.
+
+Create rejects an unknown profile with `not_found`. Delete returns `group_in_use`
+while any schedule references the group. Updating `entity_ids` runs the complete
+existing `IntegrationConfig` validation, so it cannot remove an entity still
+targeted by a schedule; that request returns `invalid_payload` without a Store
+write. Stale revisions and other lifecycle/storage errors follow the profile API.
+
+Profile and group commands share `async_mutate_config()`, which owns lifecycle
+locking, optimistic revision handling, Store availability mapping and sanitized
+unexpected errors. Resource-specific modules retain their schemas, ownership
+rules and response contracts.

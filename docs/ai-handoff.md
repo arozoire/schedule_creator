@@ -3,91 +3,70 @@
 ## Current checkpoint
 
 - Date: 2026-09-21
-- Completed phase: **2.3B – administrative profile mutation API**
+- Completed phase: **2.3C – administrative group mutation API**
 - Repository: `arozoire/schedule_creator`
-- Exact base: `2543a2d633c0dbd77629b062d6ed7c0d958cfed5`
-  (merged PR #5, Phase 2.3A)
-- Branch: `codex/phase-2-3b-profile-api`
-- Pull request: https://github.com/arozoire/schedule_creator/pull/6 — **DRAFT**
-- Implementation commit: `b4b08b80d7dd94c11be74e1a83282f7b30703503`
-- Verified CI: [run #53](https://github.com/arozoire/schedule_creator/actions/runs/35571372011)
-  succeeded on temporary PR merge ref
-  `20a84f79a4d43a68e572f3b7c46ff424da8f968f`. HACS, compile/JSON,
-  Ruff, strict mypy over 10 source files and all **76 pytest tests** passed.
-- No Phase 2.3B merge, version bump, tag or release. Manifest remains `0.0.1`.
+- Exact base: `4755d4b50aabe2d293637cb405b39a0f06e5aaf5`
+  (merged PR #6, Phase 2.3B)
+- Branch: `codex/phase-2-3c-group-api`
+- Pull request and final CI: pending publication
+- No Phase 2.3C merge, version bump, tag or release. Manifest remains `0.0.1`.
 
 ## Implemented state
 
-Phases 2.1 and 2.2 provide immutable version-one models, native configuration,
-runtime and audit Stores, optimistic configuration revisions, the operation
-journal and deterministic recovery planning. Phase 2.3A added the authenticated,
-read-only `schedule_creator/get_state` command and was merged through PR #5.
+The integration has immutable version-one models; native configuration, runtime
+and audit Stores; optimistic configuration revisions; an operation journal and a
+deterministic recovery plan. Phase 2.3A added read-only `get_state`. Phase 2.3B
+added admin-only profile CRUD/activation and was merged through PR #6.
 
-Phase 2.3B adds four admin-only WebSocket commands:
+Phase 2.3C adds three admin-only commands:
 
-- `schedule_creator/profile/create`
-- `schedule_creator/profile/update`
-- `schedule_creator/profile/delete`
-- `schedule_creator/profile/set_active`
+- `schedule_creator/group/create`
+- `schedule_creator/group/update`
+- `schedule_creator/group/delete`
 
-All mutations require `expected_revision`, call the existing
-`ConfigRepository.async_update()` and rely on existing immutable model validation.
-No persistent schema or serializer was added. Profile IDs and timestamps are
-created server-side. The API returns the new configuration revision and the
-affected profile data.
+Create requires an existing profile and generates group ID/timestamps server-side.
+Update permits `name`, `entity_ids`, `icon`, `color` and `order`; group identity
+and profile ownership remain fixed. Delete is rejected while a schedule references
+the group. Existing full-config validation prevents entity removal from orphaning
+a schedule target. Every successful mutation advances both configuration revision
+and the affected group record revision as applicable.
 
-## Mutation rules
+## Shared mutation boundary
 
-- Create accepts name, profile type, optional icon/color/order and creates an
-  inactive profile at record revision 1.
-- Update accepts at least one editable field: name, profile type, icon, color or
-  order. It advances the affected profile revision once.
-- Delete succeeds only when no group or schedule references the profile.
-- Shared profiles may be active together.
-- Activating an exclusive profile atomically deactivates other active exclusive
-  profiles while preserving active shared profiles.
-- Changing an active shared profile to exclusive applies the same exclusivity rule.
-- Deactivation does not change other profiles.
-- Every successful command advances the configuration revision exactly once.
-- A stale `expected_revision` fails without writing.
+Phase 2.3C extracts the lifecycle and error mechanics from the profile module into
+`mutation_api.py`. Both APIs call `async_mutate_config()` and therefore share:
 
-Stable mutation errors are `revision_conflict`, `not_found`, `profile_in_use` and
-`invalid_payload`. Existing errors remain `not_loaded`, `storage_unavailable` and
-`internal_error`; Home Assistant returns `unauthorized` for non-admin clients.
-Client errors contain no raw exceptions or filesystem paths.
+- the integration-wide lifecycle lock used by setup and unload;
+- lookup of the currently loaded runtime after lock acquisition;
+- `ConfigRepository.async_update()` with `expected_revision`;
+- stable `revision_conflict`, `not_loaded`, `storage_unavailable` and
+  `internal_error` mapping;
+- model-validation mapping to resource-specific `invalid_payload` messages;
+- `MutationClientError` for stable resource errors such as `not_found`,
+  `profile_in_use` and `group_in_use`.
 
-## Lifecycle decision
-
-Profile handlers are asynchronous because native Store persistence is awaited, so
-they use Home Assistant 2026.9.2's supported decorator chain:
-`require_admin`, `websocket_command`, `async_response`.
-
-An integration-wide `asyncio.Lock` is stored under an integration-owned `HassKey`.
-Config-entry setup, unload and every profile mutation acquire it. Handlers resolve
-the currently loaded entry only after acquiring the lock. A reload therefore
-cannot replace the runtime while a mutation is writing, and a waiting mutation
-cannot retain an obsolete runtime reference.
-
-Read-only `get_state` remains synchronous and unchanged. It has no await point and
-does not need the lifecycle lock.
+The supported Home Assistant 2026.9.2 decorator chain remains `require_admin`,
+`websocket_command`, `async_response`. No private command registry or unsupported
+unregister is used. The synchronous read endpoint is unchanged.
 
 ## Focused tests
 
-Exactly five profile API tests cover:
+Exactly five new group tests cover:
 
 1. non-admin rejection without configuration changes;
 2. create, partial update and delete with exact revision progression;
-3. stable stale-revision, missing-profile and empty-update errors;
-4. deletion rejection when groups/schedules own the profile;
-5. shared/exclusive activation plus active profile-type conversion.
+3. missing parent/group, stale revision and empty update errors;
+4. deletion rejection while a schedule owns the group;
+5. entity-membership validation preserving existing schedule targets.
 
-Targeted lifecycle/read API reload tests were also run because setup and unload now
-share the integration lock. The complete CI suite passed as recorded above. No
-physical Home Assistant installation is claimed.
+All five existing profile tests pass against the extracted shared mutation code.
+Final complete-suite evidence belongs in the draft PR after CI. No physical Home
+Assistant installation is claimed.
 
 ## Deliberately deferred
 
-- group and schedule CRUD;
+- moving an existing group between profiles;
+- schedule CRUD;
 - scheduling callbacks, recurrence and engine execution;
 - condition evaluation and entity service calls;
 - operational leases, snapshots and restore;
@@ -97,7 +76,7 @@ physical Home Assistant installation is claimed.
 
 ## Next recommended step
 
-Review the Phase 2.3B draft PR and its CI. Merge only with explicit owner
-authorization. The next small slice should be Phase 2.3C group CRUD, preserving
-admin authorization, optimistic revisions, ownership validation and the lifecycle
-lock. Do not combine it with schedule CRUD or engine execution.
+Review the Phase 2.3C draft PR and its CI. Merge only with explicit owner
+authorization. The next slice should define Phase 2.3D schedule CRUD as a contract
+before implementation because schedules contain nested slots, actions, conditions
+and notifications. Keep engine execution outside that API phase.
