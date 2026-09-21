@@ -8,7 +8,11 @@
 - Exact base: `0086cdecc89d5ea14555904294e0754f8887b079`
   (merged PR #11, Phase 2.4C)
 - Branch: `codex/phase-2-4d-safe-replanning`
-- Pull request and remote CI: pending publication
+- Draft PR: https://github.com/arozoire/schedule_creator/pull/12
+- Implementation commit: `80e02f76b319cbbcd7a9300756221600e894c2c0`
+- CI: https://github.com/arozoire/schedule_creator/actions/runs/35635662595
+  passed against temporary merge commit
+  `e7c050412fb098e03fb309b86d742cdf0f3c18fe`
 - No Phase 2.4D merge, version bump, tag or release. Manifest remains `0.0.1`.
 
 ## Implemented state
@@ -38,8 +42,8 @@ or retention policy is introduced.
 Five new replan tests cover frozen-revision replacement, disabled-schedule pruning,
 history preservation, collision with a started occurrence and temporal edits that
 change stable IDs. The horizon wiring test now verifies that a schedule rename
-updates only future freezes while preserving the current occurrence. Final
-complete-suite and remote-CI evidence belong here after publication.
+updates only future freezes while preserving the current occurrence. CI run #88
+passed HACS, Ruff, mypy over 15 source files and all 105 tests.
 
 ## Deliberately deferred
 
