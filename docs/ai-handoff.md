@@ -3,51 +3,46 @@
 ## Current checkpoint
 
 - Date: 2026-09-21
-- Completed phase: **2.4D – safe future occurrence replanning**
+- Completed phase: **2.4E – lifecycle-owned periodic horizon refresh**
 - Repository: `arozoire/schedule_creator`
-- Exact base: `0086cdecc89d5ea14555904294e0754f8887b079`
-  (merged PR #11, Phase 2.4C)
-- Branch: `codex/phase-2-4d-safe-replanning`
-- Draft PR: https://github.com/arozoire/schedule_creator/pull/12
-- Implementation commit: `80e02f76b319cbbcd7a9300756221600e894c2c0`
-- CI: https://github.com/arozoire/schedule_creator/actions/runs/35635662595
-  passed against temporary merge commit
-  `e7c050412fb098e03fb309b86d742cdf0f3c18fe`
-- No Phase 2.4D merge, version bump, tag or release. Manifest remains `0.0.1`.
+- Exact base: `7bb5fdc9db37f4cc5b51aac8ed6c83b70e22a654`
+  (merged PR #12, Phase 2.4D)
+- Branch: `codex/phase-2-4e-periodic-refresh`
+- Draft PR: https://github.com/arozoire/schedule_creator/pull/13
+- Implementation commit: `c557a73e3b283d45a91539559edc408a4bb2e525`
+- CI: https://github.com/arozoire/schedule_creator/actions/runs/35637966004
+  passed on the implementation commit with 108 tests
+- No Phase 2.4E merge, version bump, tag or release. Manifest remains `0.0.1`.
 
 ## Implemented state
 
-Phase 2.4C wired a fixed 14-day horizon into setup and configuration mutations.
-Phase 2.4D changes that lifecycle path from additive reconciliation to
-`async_replan_window()` while retaining the additive 2.4B API.
+Phase 2.4E adds one daily `async_track_time_interval` callback owned by the loaded
+config entry. Each tick safely replans the rolling 14-day occurrence horizon using
+the callback's UTC timestamp and the configured Home Assistant timezone.
 
-An existing occurrence is replaceable only when it:
+Refresh shares the integration lifecycle lock with setup, unload and WebSocket
+mutations. Unload marks the runtime inactive and cancels the callback before
+flushing storage. A callback already queued before cancellation rechecks the active
+flag under the lock and becomes a no-op. Refresh failures are logged and contained,
+leaving the coordinator active for the next interval.
 
-- is `pending`;
-- starts inside the future replan window;
-- has no snapshot IDs, pending-operation IDs or last operation;
-- is not referenced by any snapshot, operation or lease.
+The existing Phase 2.4D rules remain authoritative: only future pending occurrences
+without operational references may be replaced or removed. Started, historical,
+operational and out-of-window records are preserved.
 
-A matching projected ID replaces the safe record and refreshes its frozen schedule.
-A safe ID absent from projection is removed. This handles edits, time changes,
-disablement, deletion, profile deactivation and date exceptions. Occurrences which
-already started, changed lifecycle state or gained operational references always
-win and remain intact. History and records outside the horizon are retained.
+No occurrence state transition, entity state read, service call, snapshot, lease,
+operation or notification is performed.
 
-No callback, condition evaluation, entity state read, service call, lease creation
-or retention policy is introduced.
+## Validation
 
-## Focused tests
-
-Five new replan tests cover frozen-revision replacement, disabled-schedule pruning,
-history preservation, collision with a started occurrence and temporal edits that
-change stable IDs. The horizon wiring test now verifies that a schedule rename
-updates only future freezes while preserving the current occurrence. CI run #88
-passed HACS, Ruff, mypy over 15 source files and all 105 tests.
+- Ruff passed.
+- mypy passed over 16 source files.
+- All 108 tests passed locally and in CI run #94.
+- New tests cover horizon advancement, unload cancellation with a late callback,
+  and containment of refresh failures.
 
 ## Deliberately deferred
 
-- periodic rolling-horizon refresh and clock callbacks;
 - occurrence state transitions at start/end boundaries;
 - occurrence retention/compaction policy;
 - overlap arbitration and entity leases;
@@ -56,6 +51,7 @@ passed HACS, Ruff, mypy over 15 source files and all 105 tests.
 
 ## Next recommended step
 
-Review the Phase 2.4D draft PR and CI. Merge only with explicit owner authorization.
-Phase 2.4E should introduce a lifecycle-owned periodic horizon refresh and clean
-callback cancellation on unload, still without executing occurrences.
+Review and merge PR #13 only with explicit owner authorization. Then implement a
+separate phase for lifecycle-owned start/end boundary scheduling and persisted
+occurrence state transitions, still without entity reads or service calls. Define
+restart and late-callback semantics before adding any action execution.
