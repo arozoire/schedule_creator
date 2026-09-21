@@ -8,7 +8,12 @@
 - Exact base: `2543a2d633c0dbd77629b062d6ed7c0d958cfed5`
   (merged PR #5, Phase 2.3A)
 - Branch: `codex/phase-2-3b-profile-api`
-- Pull request and final CI: pending publication
+- Pull request: https://github.com/arozoire/schedule_creator/pull/6 — **DRAFT**
+- Implementation commit: `b4b08b80d7dd94c11be74e1a83282f7b30703503`
+- Verified CI: [run #53](https://github.com/arozoire/schedule_creator/actions/runs/35571372011)
+  succeeded on temporary PR merge ref
+  `20a84f79a4d43a68e572f3b7c46ff424da8f968f`. HACS, compile/JSON,
+  Ruff, strict mypy over 10 source files and all **76 pytest tests** passed.
 - No Phase 2.3B merge, version bump, tag or release. Manifest remains `0.0.1`.
 
 ## Implemented state
@@ -76,9 +81,9 @@ Exactly five profile API tests cover:
 4. deletion rejection when groups/schedules own the profile;
 5. shared/exclusive activation plus active profile-type conversion.
 
-Targeted lifecycle/read API reload tests are also run because setup and unload now
-share the integration lock. Final full-suite evidence belongs in the PR description
-after CI. No physical Home Assistant installation is claimed.
+Targeted lifecycle/read API reload tests were also run because setup and unload now
+share the integration lock. The complete CI suite passed as recorded above. No
+physical Home Assistant installation is claimed.
 
 ## Deliberately deferred
 
