@@ -163,6 +163,7 @@ async def test_get_state_populated(hass, hass_ws_client, hass_storage):
     client = await hass_ws_client(hass)
     before = _stored(hass_storage)
     storage = entry.runtime_data.storage
+    reconciled_runtime = storage.runtime.data
     models_before = (storage.config.data, storage.runtime.data, storage.audit.data)
     response = await _read(client)
     assert response["success"] is True
@@ -175,8 +176,8 @@ async def test_get_state_populated(hass, hass_ws_client, hass_storage):
             if k not in {"schema_version", "revision"}
         },
         "runtime_summary": {
-            "revision": 7,
-            "occurrences": 1,
+            "revision": reconciled_runtime.revision,
+            "occurrences": len(reconciled_runtime.occurrences),
             "active_leases": 1,
             "suspended_leases": 1,
             "pending_operations": 2,

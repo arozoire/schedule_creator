@@ -6,6 +6,7 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
+from zoneinfo import ZoneInfo
 
 from homeassistant.components.websocket_api.connection import ActiveConnection
 from homeassistant.config_entries import ConfigEntryState
@@ -13,6 +14,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 from .models import IntegrationConfig, ModelValidationError
+from .reconciliation import async_reconcile_horizon
 from .storage import RevisionConflictError, StorageNotLoadedError
 
 if TYPE_CHECKING:
@@ -74,12 +76,24 @@ async def async_mutate_config(
                     msg["id"], "not_loaded", "Schedule Creator is not loaded."
                 )
                 return
+            now = datetime.now(UTC)
             updated = await runtime.storage.config.async_update(
                 msg["expected_revision"],
-                lambda config: mutation(
-                    _require_config(config), datetime.now(UTC)
-                ),
+                lambda config: mutation(_require_config(config), now),
             )
+            try:
+                await async_reconcile_horizon(
+                    runtime.storage.runtime,
+                    updated,
+                    ZoneInfo(hass.config.time_zone),
+                    now,
+                )
+            except Exception:
+                # Configuration is already authoritative and cannot be rolled back
+                # safely after a second Store fails. Startup reconciliation heals it.
+                _LOGGER.exception(
+                    "Unable to reconcile occurrences after configuration commit"
+                )
         connection.send_result(msg["id"], response(updated))
     except RevisionConflictError as err:
         connection.send_error(

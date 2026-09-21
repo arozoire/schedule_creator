@@ -3,6 +3,7 @@
 import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -11,6 +12,7 @@ from homeassistant.util.hass_dict import HassKey
 
 from .const import DOMAIN
 from .journal import RecoveryInstruction, build_recovery_plan
+from .reconciliation import async_reconcile_horizon
 from .storage import ScheduleCreatorStorage
 from .websocket_api import async_register_commands
 
@@ -59,8 +61,15 @@ async def async_setup_entry(
 
     async with lifecycle_lock(hass):
         storage = ScheduleCreatorStorage(hass)
-        await storage.async_load(datetime.now(UTC))
-        recovery_plan = build_recovery_plan(storage.runtime.data, datetime.now(UTC))
+        now = datetime.now(UTC)
+        await storage.async_load(now)
+        config = storage.config.data
+        if config is None:
+            raise RuntimeError("configuration was not initialized")
+        await async_reconcile_horizon(
+            storage.runtime, config, ZoneInfo(hass.config.time_zone), now
+        )
+        recovery_plan = build_recovery_plan(storage.runtime.data, now)
         entry.runtime_data = ScheduleCreatorRuntimeData(
             storage=storage,
             recovery_plan=recovery_plan,

@@ -4,7 +4,7 @@ Schedule Creator is a native Home Assistant scheduling integration. It is being
 developed as the independent server-side backend for Weekly Schedule Card and does
 not depend on Scheduler Component.
 
-Current status: Phase 2.4B runtime occurrence reconciliation. The integration lifecycle, strict
+Current status: Phase 2.4C bounded horizon wiring. The integration lifecycle, strict
 version-one models, configuration/runtime/audit Stores and the side-effect-free
 journal recovery planner are operational and documented in
 [`docs/storage-schema.md`](docs/storage-schema.md). Scheduling and entity control
@@ -21,6 +21,8 @@ The pure planner projects frozen occurrences across local-time, overnight and DS
 boundaries without writing runtime state or scheduling callbacks.
 Bounded projections can now be reconciled atomically into the Runtime Store;
 repeated projections are true no-ops and historical records are preserved.
+Setup and successful configuration mutations reconcile a fixed 14-day horizon,
+without recurring callbacks or entity execution.
 
 ## Design requirements
 

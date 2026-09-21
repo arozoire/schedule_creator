@@ -10,6 +10,8 @@ from .models import IntegrationConfig, Occurrence
 from .planner import plan_occurrences
 from .storage import RuntimeRepository, RuntimeStoreData
 
+PLANNING_HORIZON = timedelta(days=14)
+
 
 def _utc(value: datetime, path: str) -> datetime:
     if value.tzinfo is None or value.utcoffset() != timedelta(0):
@@ -66,3 +68,22 @@ async def async_reconcile_window(
         config, window_start_utc, window_end_utc, timezone
     )
     return await async_reconcile_occurrences(repository, projected, now)
+
+
+async def async_reconcile_horizon(
+    repository: RuntimeRepository,
+    config: IntegrationConfig,
+    timezone: ZoneInfo,
+    now: datetime,
+) -> RuntimeStoreData:
+    """Reconcile the active instant and the fixed forward planning horizon."""
+
+    horizon_start = _utc(now, "now")
+    return await async_reconcile_window(
+        repository,
+        config,
+        horizon_start,
+        horizon_start + PLANNING_HORIZON,
+        timezone,
+        horizon_start,
+    )

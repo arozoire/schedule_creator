@@ -1,7 +1,7 @@
 # Schedule Creator persisted model schema
 
-**Status:** Phase 2.4B schema version 1. Native Store containers, restart recovery,
-occurrence projection and idempotent runtime reconciliation are implemented;
+**Status:** Phase 2.4C schema version 1. Native Store containers, restart recovery,
+occurrence projection, reconciliation and bounded-horizon wiring are implemented;
 runtime callbacks and entity actions remain deferred.
 
 ## Contract rules
@@ -89,6 +89,21 @@ never prunes history and does not change snapshots, leases, operations, timers o
 notification deduplication keys. Callback registration and retention policy remain
 separate later phases.
 
+## Bounded horizon wiring
+
+Config-entry setup reconciles from the current UTC instant through a fixed 14-day
+horizon before building the recovery plan or exposing loaded runtime data. Reload
+is idempotent because stable IDs already present in the Runtime Store are no-ops.
+Every successful profile, group or schedule configuration mutation performs the
+same bounded reconciliation while holding the integration lifecycle lock.
+
+Configuration is authoritative once its Store commit succeeds. If the subsequent
+Runtime Store reconciliation fails, the mutation still returns its successful
+configuration result and logs the runtime failure; reporting the already-committed
+configuration as failed would cause unsafe client retries. The next setup heals
+missing occurrences. There is not yet a periodic refresh, so a continuously loaded
+instance does not extend the horizon until a later mutation or reload.
+
 ## Native Store envelopes
 
 All three files use Home Assistant `Store` version 1 with private, atomic file
@@ -153,7 +168,7 @@ implemented.
 
 ## Deferred to later phases
 
-- scheduling callbacks for reconciled occurrences and retention policy;
+- rolling-horizon refresh, scheduling callbacks and retention policy;
 - condition evaluation, leases and target actions;
 - notification dispatch and deduplication execution;
 - the confirmed RESET/backup/restore maintenance API.
