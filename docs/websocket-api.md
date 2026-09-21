@@ -225,6 +225,11 @@ locking, optimistic revision handling, Store availability mapping and sanitized
 unexpected errors. Resource-specific modules retain their schemas, ownership
 rules and response contracts.
 
+After a configuration commit, the shared boundary reconciles the current 14-day
+occurrence horizon. This second Store is deliberately post-commit: a Runtime Store
+failure is logged but cannot convert an already-persisted configuration mutation
+into a client error. Config-entry setup retries the idempotent reconciliation.
+
 ## Administrative schedule commands
 
 These commands require a Home Assistant administrator:
