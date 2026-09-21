@@ -11,6 +11,7 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.util.hass_dict import HassKey
 
 from .const import DOMAIN
+from .horizon import HorizonRefreshCoordinator
 from .journal import RecoveryInstruction, build_recovery_plan
 from .reconciliation import async_reconcile_horizon
 from .storage import ScheduleCreatorStorage
@@ -25,13 +26,15 @@ class ScheduleCreatorRuntimeData:
 
     storage: ScheduleCreatorStorage
     recovery_plan: tuple[RecoveryInstruction, ...]
+    horizon_refresh: HorizonRefreshCoordinator
     loaded: bool = True
 
     async def async_shutdown(self) -> None:
         """Release runtime resources."""
 
-        await self.storage.async_shutdown()
         self.loaded = False
+        self.horizon_refresh.shutdown()
+        await self.storage.async_shutdown()
 
 
 type ScheduleCreatorConfigEntry = ConfigEntry[ScheduleCreatorRuntimeData]
@@ -70,10 +73,13 @@ async def async_setup_entry(
             storage.runtime, config, ZoneInfo(hass.config.time_zone), now
         )
         recovery_plan = build_recovery_plan(storage.runtime.data, now)
+        horizon_refresh = HorizonRefreshCoordinator(hass, storage)
         entry.runtime_data = ScheduleCreatorRuntimeData(
             storage=storage,
             recovery_plan=recovery_plan,
+            horizon_refresh=horizon_refresh,
         )
+        horizon_refresh.start()
     return True
 
 
