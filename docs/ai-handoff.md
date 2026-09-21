@@ -3,54 +3,50 @@
 ## Current checkpoint
 
 - Date: 2026-09-21
-- Completed phase: **2.4F – persisted occurrence boundary transitions**
+- Completed phase: **2.4G – conservative terminal occurrence retention**
 - Repository: `arozoire/schedule_creator`
-- Exact base: `2e9cb266e227000b71178a52b7dd686027d98c87`
-  (merged PR #13, Phase 2.4E)
-- Branch: `codex/phase-2-4f-occurrence-boundaries`
-- Draft PR: https://github.com/arozoire/schedule_creator/pull/14
-- Implementation commit: `b68cbe61d0c62604e1683ec459df48dbc549de22`
-- CI: https://github.com/arozoire/schedule_creator/actions/runs/35643876422
-  passed on the implementation commit with 113 tests
-- No Phase 2.4F merge, version bump, tag or release. Manifest remains `0.0.1`.
+- Exact base: `0c1b1f469761c687294e24efcb00fe7dc1b41c19`
+  (merged PR #14, Phase 2.4F)
+- Branch: `codex/phase-2-4g-terminal-retention`
+- Draft PR: https://github.com/arozoire/schedule_creator/pull/15
+- Implementation commit: `e58acf416fcee73657694bdf42d01829075b6c0d`
+- CI: https://github.com/arozoire/schedule_creator/actions/runs/35645415390
+  passed on the implementation commit with 116 tests
+- No Phase 2.4G merge, version bump, tag or release. Manifest remains `0.0.1`.
 
 ## Implemented state
 
-Phase 2.4F adds clock-only lifecycle transitions for materialized occurrences. A
-single lifecycle-owned callback targets the nearest start or end boundary. Due
-transitions are committed atomically in one Runtime Store write.
+Phase 2.4G bounds terminal occurrence history with a conservative 30-day policy.
+Only completed, cancelled or failed occurrences whose end is strictly older than
+the cutoff are eligible. Active, suspended, pending and cutoff-boundary records are
+always retained.
 
-Pending occurrences become active inside their interval and completed when their
-entire interval was missed. Active or suspended occurrences become completed at
-their end. Terminal states remain unchanged. Setup performs the same advancement
-after horizon reconciliation, giving deterministic restart behavior.
+An eligible occurrence is still retained when referenced by any snapshot, pending
+operation or entity lease. Retention does not cascade into operational records.
+Pruning is an atomic idempotent Runtime Store update and runs after startup state
+advancement and during the lifecycle-owned daily horizon refresh.
 
-The coordinator reschedules after setup, configuration mutations and daily horizon
-refresh. Unload cancels its owned callback, queued callbacks recheck activity under
-the shared lifecycle lock, and transient persistence failures schedule a bounded
-one-minute retry.
-
-No condition evaluation, entity state read, service call, snapshot, lease,
-operation execution or notification is performed.
+No condition evaluation, entity state read, service call, snapshot creation, lease
+acquisition, operation execution or notification is performed.
 
 ## Validation
 
 - Ruff passed.
-- mypy passed over 17 source files.
-- All 113 tests passed locally and in CI run #100.
-- New tests cover start/end transitions, missed intervals, nearest-boundary
-  selection, unload cancellation and persistence retry.
+- mypy passed over 18 source files.
+- All 116 tests passed locally and in CI run #106.
+- Tests cover cutoff behavior, preservation of operational references and
+  idempotent no-op behavior after pruning.
 
 ## Deliberately deferred
 
-- occurrence retention/compaction policy;
-- overlap arbitration and entity leases;
+- overlap arbitration and entity lease acquisition;
 - condition evaluation, snapshots, actions, restores and notifications;
 - Quick Timer execution and frontend work.
 
 ## Next recommended step
 
-Review and merge PR #14 only with explicit owner authorization. Then implement
-Phase 2.4G as bounded retention for terminal occurrences. Pruning must preserve any
-record referenced by snapshots, operations or leases and must never remove active,
-suspended or future pending occurrences. Keep execution out of that phase.
+Review and merge PR #15 only with explicit owner authorization. Then start a
+separate phase with a pure deterministic overlap-arbitration policy: compute winners
+and losers from immutable active occurrences and comparison keys without writing
+leases or touching entity state. Persisted lease acquisition should follow only
+after that policy is independently tested.
