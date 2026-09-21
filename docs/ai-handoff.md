@@ -8,7 +8,11 @@
 - Exact base: `4755d4b50aabe2d293637cb405b39a0f06e5aaf5`
   (merged PR #6, Phase 2.3B)
 - Branch: `codex/phase-2-3c-group-api`
-- Pull request and final CI: pending publication
+- Draft PR: https://github.com/arozoire/schedule_creator/pull/7
+- Implementation commit: `2649f4709f52c44f873c5cdf3a175086afe2a500`
+- CI: https://github.com/arozoire/schedule_creator/actions/runs/35596799301
+  passed against temporary merge commit
+  `7f12c434e9aa333f3b4c64fb3b94687246002d47`
 - No Phase 2.3C merge, version bump, tag or release. Manifest remains `0.0.1`.
 
 ## Implemented state
@@ -60,8 +64,8 @@ Exactly five new group tests cover:
 5. entity-membership validation preserving existing schedule targets.
 
 All five existing profile tests pass against the extracted shared mutation code.
-Final complete-suite evidence belongs in the draft PR after CI. No physical Home
-Assistant installation is claimed.
+CI run #58 passed Ruff, mypy over 12 source files and the full suite of 81 tests.
+No physical Home Assistant installation is claimed.
 
 ## Deliberately deferred
 
