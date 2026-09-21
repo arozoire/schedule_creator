@@ -3,60 +3,58 @@
 ## Current checkpoint
 
 - Date: 2026-09-21
-- Completed phase: **2.3D – administrative schedule mutation API**
+- Completed phase: **2.4A – deterministic occurrence planner**
 - Repository: `arozoire/schedule_creator`
-- Exact base: `c6ee7699e06acdf24f779c24ee26370b4bed4e30`
-  (merged PR #7, Phase 2.3C)
-- Branch: `codex/phase-2-3d-schedule-api`
-- Draft PR: https://github.com/arozoire/schedule_creator/pull/8
-- Implementation commit: `714fe65ae321a84f4c52d1382288e0fd6d8b3f8e`
-- CI: https://github.com/arozoire/schedule_creator/actions/runs/35599369423
+- Exact base: `39d7e172c0b41fd8279fd90831c36ab9217c6f88`
+  (merged PR #8, Phase 2.3D)
+- Branch: `codex/phase-2-4a-occurrence-planner`
+- Draft PR: https://github.com/arozoire/schedule_creator/pull/9
+- Implementation commit: `1864ecebf6ab26ad876d2d5de8cab81815a29d92`
+- CI: https://github.com/arozoire/schedule_creator/actions/runs/35601758503
   passed against temporary merge commit
-  `8f529a1d3e210355d4a0236c6a04ac3f492779f0`
-- No Phase 2.3D merge, version bump, tag or release. Manifest remains `0.0.1`.
+  `0d50e10bfe024b55bfb474dea3ea85c26f72a704`
+- No Phase 2.4A merge, version bump, tag or release. Manifest remains `0.0.1`.
 
 ## Implemented state
 
-Phase 2.3A added read-only `get_state`; 2.3B added profile mutations; 2.3C
-added group mutations and the shared mutation boundary. Phase 2.3D adds the
-admin-only commands:
+The completed 2.3 slices expose revision-safe read and admin mutation APIs for
+profiles, groups and schedules. Phase 2.4A adds the pure `plan_occurrences()`
+boundary. Given immutable configuration, an increasing UTC window and a `ZoneInfo`
+timezone, it returns sorted pending `Occurrence` records without I/O.
 
-- `schedule_creator/schedule/create`
-- `schedule_creator/schedule/update`
-- `schedule_creator/schedule/delete`
+The planner:
 
-Create requires an existing group owned by the supplied profile. Update permits
-all behavioral fields but not profile/group ownership. Delete removes only live
-configuration; immutable schedules frozen into runtime occurrences are untouched.
-Every successful command advances the configuration revision once; create starts
-the schedule revision at 1 and update advances it once.
+- includes enabled schedules owned by active profiles;
+- applies weekday rules plus local inclusion/exclusion dates;
+- includes occurrences overlapping the window, including a previous-day
+  overnight interval active at window start;
+- freezes the current schedule revision into every occurrence;
+- uses stable IDs from schedule, slot and resolved offset-bearing local start;
+- treats an end at or before start as next-day;
+- shifts nonexistent spring-gap boundaries forward to the first valid wall time;
+- chooses earliest ambiguous starts and latest ambiguous ends during autumn folds.
 
-The server generates IDs and metadata for schedules and all nested time slots,
-actions, condition nodes and notifications. Nested client payloads omit model
-metadata. Complete existing model validation enforces target membership, action
-domains, condition bounds and inclusion/exclusion date consistency. The API does
-not add another serializer or persistent schema.
+No runtime Store write, callback, entity state read, service call, condition
+evaluation, lease or arbitration is performed.
 
 ## Focused tests
 
-Five new schedule tests cover authorization; CRUD revision progression; stable
-ownership, missing-resource, conflict and empty-update errors; invalid targets
-and client-owned nested metadata; and recursive server-generated IDs. Profile and
-group API regression tests also pass against the same shared mutation path.
-CI run #64 passed HACS, Ruff, mypy over 13 source files and all 86 tests.
+Five planner tests cover deterministic ordering and immutability; active/enabled
+filters and date exceptions; overnight overlap at the planning boundary; Europe/Rome
+spring gap and autumn fold policy; and invalid UTC windows. CI run #70 passed
+HACS, Ruff, mypy over 14 source files and all 91 tests.
 
 ## Deliberately deferred
 
-- moving groups or schedules between owners;
-- schedule callback generation and recurrence;
-- condition evaluation and entity service calls;
-- leases, snapshots, restore and Quick Timer execution;
-- audit events for API mutations;
+- persisting planned occurrences and idempotent reconciliation;
+- Home Assistant callback registration and cancellation;
+- overlap arbitration and entity leases;
+- condition evaluation, snapshots, target actions and restores;
+- notifications and Quick Timer execution;
 - maintenance/reset/import/migration and frontend work.
 
 ## Next recommended step
 
-Review the Phase 2.3D draft PR and its CI. Merge only with explicit owner
-authorization. The next phase should begin scheduler-engine design around frozen
-occurrences and deterministic recurrence, without combining entity execution in
-the same slice.
+Review the Phase 2.4A draft PR and CI. Merge only with explicit owner authorization.
+Phase 2.4B should reconcile a bounded projection into the runtime Store idempotently
+before any clock callback or entity execution is introduced.
