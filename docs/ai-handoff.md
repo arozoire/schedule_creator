@@ -8,7 +8,11 @@
 - Exact base: `c6ee7699e06acdf24f779c24ee26370b4bed4e30`
   (merged PR #7, Phase 2.3C)
 - Branch: `codex/phase-2-3d-schedule-api`
-- Pull request and remote CI: pending publication
+- Draft PR: https://github.com/arozoire/schedule_creator/pull/8
+- Implementation commit: `714fe65ae321a84f4c52d1382288e0fd6d8b3f8e`
+- CI: https://github.com/arozoire/schedule_creator/actions/runs/35599369423
+  passed against temporary merge commit
+  `8f529a1d3e210355d4a0236c6a04ac3f492779f0`
 - No Phase 2.3D merge, version bump, tag or release. Manifest remains `0.0.1`.
 
 ## Implemented state
@@ -39,7 +43,7 @@ Five new schedule tests cover authorization; CRUD revision progression; stable
 ownership, missing-resource, conflict and empty-update errors; invalid targets
 and client-owned nested metadata; and recursive server-generated IDs. Profile and
 group API regression tests also pass against the same shared mutation path.
-Final complete-suite and remote-CI evidence belong here after publication.
+CI run #64 passed HACS, Ruff, mypy over 13 source files and all 86 tests.
 
 ## Deliberately deferred
 
