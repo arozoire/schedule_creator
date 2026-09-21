@@ -8,7 +8,11 @@
 - Exact base: `39d7e172c0b41fd8279fd90831c36ab9217c6f88`
   (merged PR #8, Phase 2.3D)
 - Branch: `codex/phase-2-4a-occurrence-planner`
-- Pull request and remote CI: pending publication
+- Draft PR: https://github.com/arozoire/schedule_creator/pull/9
+- Implementation commit: `1864ecebf6ab26ad876d2d5de8cab81815a29d92`
+- CI: https://github.com/arozoire/schedule_creator/actions/runs/35601758503
+  passed against temporary merge commit
+  `0d50e10bfe024b55bfb474dea3ea85c26f72a704`
 - No Phase 2.4A merge, version bump, tag or release. Manifest remains `0.0.1`.
 
 ## Implemented state
@@ -37,8 +41,8 @@ evaluation, lease or arbitration is performed.
 
 Five planner tests cover deterministic ordering and immutability; active/enabled
 filters and date exceptions; overnight overlap at the planning boundary; Europe/Rome
-spring gap and autumn fold policy; and invalid UTC windows. Final complete-suite
-and remote-CI evidence belong here after publication.
+spring gap and autumn fold policy; and invalid UTC windows. CI run #70 passed
+HACS, Ruff, mypy over 14 source files and all 91 tests.
 
 ## Deliberately deferred
 
