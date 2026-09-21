@@ -224,3 +224,31 @@ Profile and group commands share `async_mutate_config()`, which owns lifecycle
 locking, optimistic revision handling, Store availability mapping and sanitized
 unexpected errors. Resource-specific modules retain their schemas, ownership
 rules and response contracts.
+
+## Administrative schedule commands
+
+These commands require a Home Assistant administrator:
+
+| Command | Required fields | Result |
+|---|---|---|
+| `schedule_creator/schedule/create` | `expected_revision`, existing `profile_id` and `group_id`, `name`, `target_entity_ids`, `time_slots`, `start_action` | New configuration `revision` and server-created `schedule` |
+| `schedule_creator/schedule/update` | `expected_revision`, `schedule_id`, at least one editable field | New configuration `revision` and updated `schedule` |
+| `schedule_creator/schedule/delete` | `expected_revision`, `schedule_id` | New configuration `revision` and `deleted_schedule_id` |
+
+Create defaults `enabled` to true, `override_policy` to `cooperative`, optional
+end action, condition and notifications to null, and inclusion/exclusion dates
+to empty arrays. Editable fields are `name`, `enabled`, `target_entity_ids`,
+`time_slots`, both actions, `condition`, `override_policy`, both notifications
+and both date arrays. Profile/group ownership cannot be changed by update.
+
+Clients omit `schema_version`, IDs, revisions and timestamps. The server owns
+those values for the schedule and for nested time slots, actions, condition nodes
+and notification rules. Replacing a nested value generates new nested IDs.
+Full `Schedule` and `IntegrationConfig` validation enforces group ownership,
+target membership, action-domain matching, bounded conditions and date rules.
+
+Unknown resources return `not_found`; a group belonging to another profile
+returns `ownership_mismatch`. Other optimistic, validation, lifecycle and storage
+errors follow the shared mutation contract. Deleting configuration does not alter
+frozen runtime occurrence records. These endpoints do not generate occurrences,
+evaluate conditions, schedule callbacks or call Home Assistant services.
