@@ -8,7 +8,11 @@
 - Exact base: `f1e12835a484af164ea1285ea5c3c89c68796c1f`
   (merged PR #9, Phase 2.4A)
 - Branch: `codex/phase-2-4b-runtime-reconciliation`
-- Pull request and remote CI: pending publication
+- Draft PR: https://github.com/arozoire/schedule_creator/pull/10
+- Implementation commit: `dafc45a909dcc312b97317c0cbc9b89695e8729b`
+- CI: https://github.com/arozoire/schedule_creator/actions/runs/35603581953
+  passed against temporary merge commit
+  `ef48726c81f1ee3d38ee015ab268ebbed7db0b20`
 - No Phase 2.4B merge, version bump, tag or release. Manifest remains `0.0.1`.
 
 ## Implemented state
@@ -37,8 +41,8 @@ lease or retention policy is introduced.
 Five reconciliation tests cover first persistence; identical replay without a
 Store write; preservation of an existing operational record on stable-ID collision;
 additive adjacent windows; and concurrent identical reconciliation. Planner and
-Runtime Store regression tests pass with the new repository boundary. Final
-complete-suite and remote-CI evidence belong here after publication.
+Runtime Store regression tests pass with the new repository boundary. CI run #76
+passed HACS, Ruff, mypy over 15 source files and all 96 tests.
 
 ## Deliberately deferred
 
