@@ -1,7 +1,7 @@
 # Schedule Creator persisted model schema
 
-**Status:** Phase 2.2 schema version 1. Native Store containers and the
-side-effect-free restart recovery plan are implemented; the scheduling engine and
+**Status:** Phase 2.4A schema version 1. Native Store containers, restart recovery
+planning and pure occurrence projection are implemented; runtime callbacks and
 entity actions remain deferred.
 
 ## Contract rules
@@ -58,6 +58,22 @@ the host clock is corrected, while retry deadlines retain actual wall-clock time
 An occurrence embeds a full frozen `Schedule`. A later configuration revision
 therefore cannot replace its action, condition, fallback or notification rules.
 No model method reads Home Assistant state, writes a Store or calls a service.
+
+## Occurrence projection
+
+`plan_occurrences()` is a pure function over immutable configuration, an increasing
+half-open UTC window and a `ZoneInfo` timezone. It returns pending occurrences
+which overlap the window, sorted by instant and stable record identity. Only
+enabled schedules in active profiles participate. Exclusion dates suppress a
+local start date; inclusion dates add one even when its weekday is absent.
+
+Slot end times equal to or earlier than their start end on the next local day.
+During an autumn overlap, starts select the earliest instant and ends the latest,
+so a wall-clock interval is not shortened silently. A boundary inside a spring
+gap advances to the first valid wall time. IDs combine schedule ID, slot ID and
+the resolved offset-bearing local start. Projection freezes the current schedule
+revision but does not persist it, register callbacks or resolve overlaps between
+controllers.
 
 ## Native Store envelopes
 
@@ -124,7 +140,7 @@ implemented.
 ## Deferred to later phases
 
 - WebSocket CRUD and external optimistic-concurrency errors;
-- scheduling callbacks and recurrence;
+- persistence and scheduling callbacks for projected recurrence;
 - condition evaluation, leases and target actions;
 - notification dispatch and deduplication execution;
 - the confirmed RESET/backup/restore maintenance API.
