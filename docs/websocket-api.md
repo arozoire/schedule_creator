@@ -1,4 +1,4 @@
-# Read-only WebSocket API
+# WebSocket API
 
 Validated against installed Home Assistant **2026.9.2**, Python **3.14.7** and
 `pytest-homeassistant-custom-component==0.13.365`.
@@ -155,9 +155,47 @@ The no-await callback sees immutable config/runtime values without yielding to a
 reload or another update while constructing its response. Existing startup
 initialization and unload audit flushing are separate lifecycle operations.
 
-There are no mutating commands, subscriptions, scheduler engine, condition
-execution, operational snapshots/restores, Quick Timer execution or frontend.
+There are no group or schedule mutations, subscriptions, scheduler engine,
+condition execution, operational snapshots/restores, Quick Timer execution or frontend.
 Five focused tests cover empty/non-admin/read-only access, populated state and
 journal semantics, unloaded state, reload/idempotent registration, and sanitized
 storage/internal errors. Validation uses HA's test harness, not a physical HA
 installation.
+
+## Administrative profile commands
+
+The following commands require an authenticated Home Assistant administrator:
+
+| Command | Required fields | Result |
+|---|---|---|
+| `schedule_creator/profile/create` | `expected_revision`, `name`, `profile_type`; optional `icon`, `color`, `order` | New configuration `revision` and server-created `profile` |
+| `schedule_creator/profile/update` | `expected_revision`, `profile_id`, at least one editable field | New configuration `revision` and updated `profile` |
+| `schedule_creator/profile/delete` | `expected_revision`, `profile_id` | New configuration `revision` and `deleted_profile_id` |
+| `schedule_creator/profile/set_active` | `expected_revision`, `profile_id`, `active` | New configuration `revision`, all `profiles` and `active_profile_ids` |
+
+`profile_type` is `exclusive` or `shared`. Editable fields are `name`,
+`profile_type`, `icon`, `color` and `order`. IDs, record revisions and timestamps
+are server-owned. New profiles start inactive. Every successful command advances
+the configuration revision once; create starts the profile revision at 1, while
+update and active-state changes advance affected profile revisions.
+
+`expected_revision` provides optimistic concurrency. A stale client receives
+`revision_conflict` with the current revision and must fetch state before retrying.
+Invalid model data is rejected before Store persistence. Deletion returns
+`profile_in_use` while any group or schedule references the profile.
+
+Shared profiles may be active together. Activating an exclusive profile deactivates
+any other active exclusive profile while leaving active shared profiles unchanged.
+Changing an active shared profile to exclusive applies the same rule atomically.
+Deactivation leaves every other profile unchanged.
+
+Mutation-specific stable errors are `revision_conflict`, `not_found`,
+`profile_in_use` and `invalid_payload`; lifecycle/storage errors retain
+`not_loaded`, `storage_unavailable` and `internal_error`. Home Assistant supplies
+its standard `unauthorized` error for non-admin users.
+
+Mutations use `ConfigRepository.async_update()` and the existing immutable models.
+They do not introduce another serializer or persistent schema. An integration-wide
+lock serializes profile writes with config-entry setup and unload, so a reload
+cannot move a write onto an obsolete runtime. These commands do not read entity
+state, call entity services, modify runtime state or append audit records.

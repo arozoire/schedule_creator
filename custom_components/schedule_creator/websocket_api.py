@@ -14,6 +14,7 @@ from homeassistant.util.hass_dict import HassKey
 
 from .const import DOMAIN
 from .models import LeaseState
+from .profile_api import PROFILE_COMMANDS
 from .storage import StorageNotLoadedError
 
 if TYPE_CHECKING:
@@ -30,6 +31,8 @@ def async_register_commands(hass: HomeAssistant) -> None:
     if hass.data.get(_REGISTERED):
         return
     websocket_api.async_register_command(hass, websocket_get_state)
+    for command in PROFILE_COMMANDS:
+        websocket_api.async_register_command(hass, command)
     hass.data[_REGISTERED] = True
 
 
