@@ -129,8 +129,10 @@ async def test_schedule_mutation_reconciles_active_horizon(hass, hass_ws_client)
     assert len(runtime.occurrences) in {14, 15}
 
 
-async def test_non_temporal_update_does_not_rewrite_runtime(hass, hass_ws_client):
-    """An unchanged projection remains a Runtime Store no-op."""
+async def test_schedule_update_replans_only_future_pending_records(
+    hass, hass_ws_client
+):
+    """An edit refreshes future freezes but preserves the current occurrence."""
     entry = await _create_entry(hass)
     client = await hass_ws_client(hass)
     created = await _create_active_schedule(client)
@@ -148,7 +150,13 @@ async def test_non_temporal_update_does_not_rewrite_runtime(hass, hass_ws_client
     )
 
     assert response["success"] is True
-    assert entry.runtime_data.storage.runtime.data is before
+    after = entry.runtime_data.storage.runtime.data
+    assert after.revision == before.revision + 1
+    assert after.occurrences[0] is before.occurrences[0]
+    assert after.occurrences[0].frozen_schedule.name == "Always"
+    assert {
+        item.frozen_schedule.name for item in after.occurrences[1:]
+    } == {"Renamed"}
 
 
 async def test_post_commit_runtime_failure_does_not_falsify_config_result(

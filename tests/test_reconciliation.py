@@ -4,7 +4,7 @@ import asyncio
 import json
 from copy import deepcopy
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -18,6 +18,7 @@ from custom_components.schedule_creator.planner import plan_occurrences
 from custom_components.schedule_creator.reconciliation import (
     async_reconcile_occurrences,
     async_reconcile_window,
+    async_replan_window,
 )
 from custom_components.schedule_creator.storage import (
     RuntimeRepository,
@@ -149,3 +150,114 @@ async def test_concurrent_window_reconciliation_remains_idempotent(hass, config)
     assert repository.data.revision == 1
     assert len({item.id for item in repository.data.occurrences}) == 3
     assert len(store.saves) == 2
+
+
+async def test_replan_replaces_safe_future_frozen_revision(hass, config):
+    """A configuration edit replaces future pending materialization."""
+    repository, _store = await _repository(hass)
+    start = datetime(2026, 9, 14, tzinfo=UTC)
+    end = datetime(2026, 9, 17, tzinfo=UTC)
+    original = _project(config, 14, 17)
+    await async_reconcile_occurrences(repository, original, start)
+    changed_schedule = replace(
+        config.schedules[0], revision=4, name="Changed"
+    )
+    changed = replace(config, schedules=(changed_schedule,))
+
+    result = await async_replan_window(
+        repository, changed, start, end, ROME, start
+    )
+
+    assert {item.id for item in result.occurrences} == {
+        item.id for item in original
+    }
+    assert {item.frozen_schedule.revision for item in result.occurrences} == {4}
+    assert {item.frozen_schedule.name for item in result.occurrences} == {"Changed"}
+
+
+async def test_replan_removes_disabled_future_occurrences(hass, config):
+    """Disabled schedules no longer retain safe future pending records."""
+    repository, _store = await _repository(hass)
+    start = datetime(2026, 9, 14, tzinfo=UTC)
+    end = datetime(2026, 9, 17, tzinfo=UTC)
+    await async_reconcile_occurrences(repository, _project(config, 14, 17), start)
+    disabled = replace(
+        config, schedules=(replace(config.schedules[0], enabled=False),)
+    )
+
+    result = await async_replan_window(
+        repository, disabled, start, end, ROME, start
+    )
+
+    assert result.occurrences == ()
+
+
+async def test_replan_preserves_history_outside_future_scope(hass, config):
+    """Past materialization is retained while later pending records are removed."""
+    repository, _store = await _repository(hass)
+    original = _project(config, 14, 18)
+    await async_reconcile_occurrences(repository, original, NOW)
+    disabled = replace(
+        config, schedules=(replace(config.schedules[0], enabled=False),)
+    )
+    start = datetime(2026, 9, 15, tzinfo=UTC)
+    end = datetime(2026, 9, 18, tzinfo=UTC)
+
+    result = await async_replan_window(
+        repository, disabled, start, end, ROME, start
+    )
+
+    assert result.occurrences == (original[0],)
+
+
+async def test_replan_preserves_started_occurrence_on_collision(hass, config):
+    """A started record wins even when its frozen configuration is stale."""
+    repository, store = await _repository(hass)
+    start = datetime(2026, 9, 14, tzinfo=UTC)
+    end = datetime(2026, 9, 15, tzinfo=UTC)
+    projected = _project(config, 14, 15)
+    await async_reconcile_occurrences(repository, projected, start)
+    active = replace(projected[0], state=OccurrenceState.ACTIVE)
+    await repository.async_update(
+        lambda current: replace(
+            current,
+            revision=current.revision + 1,
+            occurrences=(active,),
+            updated_at=current.updated_at,
+        )
+    )
+    changed = replace(
+        config,
+        schedules=(replace(config.schedules[0], revision=4, name="Changed"),),
+    )
+    saves_before = len(store.saves)
+
+    result = await async_replan_window(
+        repository, changed, start, end, ROME, start
+    )
+
+    assert result.occurrences == (active,)
+    assert len(store.saves) == saves_before
+
+
+async def test_replan_temporal_edit_replaces_occurrence_ids(hass, config):
+    """Changing slot time drops old safe IDs and materializes new ones."""
+    repository, _store = await _repository(hass)
+    start = datetime(2026, 9, 14, tzinfo=UTC)
+    end = datetime(2026, 9, 17, tzinfo=UTC)
+    original = _project(config, 14, 17)
+    await async_reconcile_occurrences(repository, original, start)
+    moved_slot = replace(config.schedules[0].time_slots[0], start=time(19))
+    changed = replace(
+        config,
+        schedules=(replace(config.schedules[0], time_slots=(moved_slot,)),),
+    )
+
+    result = await async_replan_window(
+        repository, changed, start, end, ROME, start
+    )
+
+    assert {item.id for item in result.occurrences}.isdisjoint(
+        item.id for item in original
+    )
+    assert {item.local_start[11:19] for item in result.occurrences} == {"19:00:00"}
