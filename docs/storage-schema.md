@@ -1,8 +1,8 @@
 # Schedule Creator persisted model schema
 
-**Status:** Phase 2.4A schema version 1. Native Store containers, restart recovery
-planning and pure occurrence projection are implemented; runtime callbacks and
-entity actions remain deferred.
+**Status:** Phase 2.4B schema version 1. Native Store containers, restart recovery,
+occurrence projection and idempotent runtime reconciliation are implemented;
+runtime callbacks and entity actions remain deferred.
 
 ## Contract rules
 
@@ -75,6 +75,20 @@ the resolved offset-bearing local start. Projection freezes the current schedule
 revision but does not persist it, register callbacks or resolve overlaps between
 controllers.
 
+## Runtime occurrence reconciliation
+
+`async_reconcile_window()` projects one bounded window and atomically adds only
+occurrence IDs absent from the Runtime Store. The repository lock serializes
+concurrent reconciliation. Existing records always win an ID collision, preserving
+their frozen schedule revision, lifecycle state and operational references.
+
+The Runtime Store revision advances exactly once when at least one record is added.
+An identical or overlapping replay with no missing IDs returns the current immutable
+envelope without a write, timestamp change or revision increment. Reconciliation
+never prunes history and does not change snapshots, leases, operations, timers or
+notification deduplication keys. Callback registration and retention policy remain
+separate later phases.
+
 ## Native Store envelopes
 
 All three files use Home Assistant `Store` version 1 with private, atomic file
@@ -139,8 +153,7 @@ implemented.
 
 ## Deferred to later phases
 
-- WebSocket CRUD and external optimistic-concurrency errors;
-- persistence and scheduling callbacks for projected recurrence;
+- scheduling callbacks for reconciled occurrences and retention policy;
 - condition evaluation, leases and target actions;
 - notification dispatch and deduplication execution;
 - the confirmed RESET/backup/restore maintenance API.
