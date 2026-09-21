@@ -10,6 +10,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util.hass_dict import HassKey
 
+from .boundaries import (
+    OccurrenceBoundaryCoordinator,
+    async_advance_occurrence_states,
+)
 from .const import DOMAIN
 from .horizon import HorizonRefreshCoordinator
 from .journal import RecoveryInstruction, build_recovery_plan
@@ -27,6 +31,7 @@ class ScheduleCreatorRuntimeData:
     storage: ScheduleCreatorStorage
     recovery_plan: tuple[RecoveryInstruction, ...]
     horizon_refresh: HorizonRefreshCoordinator
+    occurrence_boundaries: OccurrenceBoundaryCoordinator
     loaded: bool = True
 
     async def async_shutdown(self) -> None:
@@ -34,6 +39,7 @@ class ScheduleCreatorRuntimeData:
 
         self.loaded = False
         self.horizon_refresh.shutdown()
+        self.occurrence_boundaries.shutdown()
         await self.storage.async_shutdown()
 
 
@@ -72,13 +78,19 @@ async def async_setup_entry(
         await async_reconcile_horizon(
             storage.runtime, config, ZoneInfo(hass.config.time_zone), now
         )
+        await async_advance_occurrence_states(storage.runtime, now)
         recovery_plan = build_recovery_plan(storage.runtime.data, now)
-        horizon_refresh = HorizonRefreshCoordinator(hass, storage)
+        occurrence_boundaries = OccurrenceBoundaryCoordinator(hass, storage.runtime)
+        horizon_refresh = HorizonRefreshCoordinator(
+            hass, storage, occurrence_boundaries.reschedule
+        )
         entry.runtime_data = ScheduleCreatorRuntimeData(
             storage=storage,
             recovery_plan=recovery_plan,
             horizon_refresh=horizon_refresh,
+            occurrence_boundaries=occurrence_boundaries,
         )
+        occurrence_boundaries.start(now)
         horizon_refresh.start()
     return True
 

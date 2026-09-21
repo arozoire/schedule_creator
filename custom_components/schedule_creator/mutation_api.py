@@ -12,6 +12,7 @@ from homeassistant.components.websocket_api.connection import ActiveConnection
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 
+from .boundaries import async_advance_occurrence_states
 from .const import DOMAIN
 from .models import IntegrationConfig, ModelValidationError
 from .reconciliation import async_reconcile_horizon
@@ -88,6 +89,10 @@ async def async_mutate_config(
                     ZoneInfo(hass.config.time_zone),
                     now,
                 )
+                await async_advance_occurrence_states(
+                    runtime.storage.runtime, now
+                )
+                runtime.occurrence_boundaries.reschedule(now)
             except Exception:
                 # Configuration is already authoritative and cannot be rolled back
                 # safely after a second Store fails. Startup reconciliation heals it.
