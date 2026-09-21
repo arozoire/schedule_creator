@@ -2,12 +2,14 @@
 
 import json
 from copy import deepcopy
+from datetime import timedelta
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from homeassistant import config_entries
 
 from custom_components.schedule_creator.const import DOMAIN
+from custom_components.schedule_creator.horizon import HORIZON_REFRESH_INTERVAL
 from custom_components.schedule_creator.storage import (
     CONFIG_STORE_KEY,
     RuntimeRepository,
@@ -177,3 +179,67 @@ async def test_post_commit_runtime_failure_does_not_falsify_config_result(
     assert response["result"]["revision"] == 5
     assert entry.runtime_data.storage.config.data.revision == 5
     assert entry.runtime_data.storage.runtime.data.revision == 0
+
+
+async def test_periodic_refresh_advances_the_materialized_horizon(
+    hass, hass_storage
+):
+    """The lifecycle callback extends the horizon once per day."""
+    _store_always_active_fixture(hass_storage)
+    entry = await _create_entry(hass)
+    runtime_data = entry.runtime_data
+    before = runtime_data.storage.runtime.data
+    previous_latest = max(item.start_utc for item in before.occurrences)
+
+    await runtime_data.horizon_refresh._async_refresh(
+        before.occurrences[0].start_utc + timedelta(days=2)
+    )
+
+    after = runtime_data.storage.runtime.data
+    assert HORIZON_REFRESH_INTERVAL == timedelta(days=1)
+    assert after.revision == before.revision + 1
+    assert max(item.start_utc for item in after.occurrences) > previous_latest
+
+
+async def test_unload_cancels_periodic_refresh_and_late_callback_is_safe(
+    hass, hass_storage
+):
+    """Unload unregisters refresh and a callback already queued becomes a no-op."""
+    _store_always_active_fixture(hass_storage)
+    cancel = Mock()
+    with patch(
+        "custom_components.schedule_creator.horizon.async_track_time_interval",
+        return_value=cancel,
+    ) as track:
+        entry = await _create_entry(hass)
+
+    runtime_data = entry.runtime_data
+    before = runtime_data.storage.runtime.data
+    callback = track.call_args.args[1]
+
+    assert runtime_data.horizon_refresh.active
+    assert track.call_args.args[2] == timedelta(days=1)
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await callback(before.updated_at + timedelta(days=1))
+
+    cancel.assert_called_once_with()
+    assert not runtime_data.horizon_refresh.active
+    assert runtime_data.storage.runtime.data is before
+
+
+async def test_periodic_refresh_failure_is_contained(hass, hass_storage, caplog):
+    """A Store failure is logged without disabling later refresh attempts."""
+    _store_always_active_fixture(hass_storage)
+    entry = await _create_entry(hass)
+    coordinator = entry.runtime_data.horizon_refresh
+    now = entry.runtime_data.storage.runtime.data.updated_at + timedelta(days=1)
+
+    reconcile = AsyncMock(side_effect=OSError("simulated runtime failure"))
+    with patch(
+        "custom_components.schedule_creator.horizon.async_reconcile_horizon",
+        reconcile,
+    ):
+        await coordinator._async_refresh(now)
+
+    assert coordinator.active
+    assert "Unable to refresh occurrence horizon" in caplog.text
