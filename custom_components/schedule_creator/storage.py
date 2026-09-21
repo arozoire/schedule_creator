@@ -43,6 +43,9 @@ AUDIT_SAVE_DELAY = 5.0
 type JsonObject = dict[str, Any]
 type ConfigMutation = Callable[[IntegrationConfig | None], IntegrationConfig]
 type RuntimeMutation = Callable[[RuntimeStoreData], RuntimeStoreData]
+type OptionalRuntimeMutation = Callable[
+    [RuntimeStoreData], RuntimeStoreData | None
+]
 
 
 class StorageValidationError(ModelValidationError):
@@ -764,6 +767,28 @@ class RuntimeRepository:
             updated = mutation(current)
             if not isinstance(updated, RuntimeStoreData):
                 raise TypeError("runtime mutation must return RuntimeStoreData")
+            if updated.revision != current.revision + 1:
+                raise InvalidRevisionError("runtime revision must advance exactly once")
+            if updated.updated_at < current.updated_at:
+                raise InvalidRevisionError("runtime timestamp cannot move backwards")
+            await self._store.async_save(updated.to_dict())
+            self._data = updated
+            return updated
+
+    async def async_update_if_changed(
+        self, mutation: OptionalRuntimeMutation
+    ) -> RuntimeStoreData:
+        """Commit one transition, or preserve the current data on a true no-op."""
+
+        async with self._lock:
+            if not self._loaded or self._data is None:
+                raise StorageNotLoadedError("runtime Store has not been loaded")
+            current = self._data
+            updated = mutation(current)
+            if updated is None:
+                return current
+            if not isinstance(updated, RuntimeStoreData):
+                raise TypeError("runtime mutation must return RuntimeStoreData or None")
             if updated.revision != current.revision + 1:
                 raise InvalidRevisionError("runtime revision must advance exactly once")
             if updated.updated_at < current.updated_at:

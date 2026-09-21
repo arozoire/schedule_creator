@@ -3,58 +3,54 @@
 ## Current checkpoint
 
 - Date: 2026-09-21
-- Completed phase: **2.4A – deterministic occurrence planner**
+- Completed phase: **2.4B – idempotent runtime occurrence reconciliation**
 - Repository: `arozoire/schedule_creator`
-- Exact base: `39d7e172c0b41fd8279fd90831c36ab9217c6f88`
-  (merged PR #8, Phase 2.3D)
-- Branch: `codex/phase-2-4a-occurrence-planner`
-- Draft PR: https://github.com/arozoire/schedule_creator/pull/9
-- Implementation commit: `1864ecebf6ab26ad876d2d5de8cab81815a29d92`
-- CI: https://github.com/arozoire/schedule_creator/actions/runs/35601758503
-  passed against temporary merge commit
-  `0d50e10bfe024b55bfb474dea3ea85c26f72a704`
-- No Phase 2.4A merge, version bump, tag or release. Manifest remains `0.0.1`.
+- Exact base: `f1e12835a484af164ea1285ea5c3c89c68796c1f`
+  (merged PR #9, Phase 2.4A)
+- Branch: `codex/phase-2-4b-runtime-reconciliation`
+- Pull request and remote CI: pending publication
+- No Phase 2.4B merge, version bump, tag or release. Manifest remains `0.0.1`.
 
 ## Implemented state
 
-The completed 2.3 slices expose revision-safe read and admin mutation APIs for
-profiles, groups and schedules. Phase 2.4A adds the pure `plan_occurrences()`
-boundary. Given immutable configuration, an increasing UTC window and a `ZoneInfo`
-timezone, it returns sorted pending `Occurrence` records without I/O.
+Phase 2.4A introduced pure deterministic occurrence projection. Phase 2.4B adds
+`async_reconcile_occurrences()` and `async_reconcile_window()` to atomically add
+projected occurrences to the authoritative Runtime Store.
 
-The planner:
+The reconciliation boundary:
 
-- includes enabled schedules owned by active profiles;
-- applies weekday rules plus local inclusion/exclusion dates;
-- includes occurrences overlapping the window, including a previous-day
-  overnight interval active at window start;
-- freezes the current schedule revision into every occurrence;
-- uses stable IDs from schedule, slot and resolved offset-bearing local start;
-- treats an end at or before start as next-day;
-- shifts nonexistent spring-gap boundaries forward to the first valid wall time;
-- chooses earliest ambiguous starts and latest ambiguous ends during autumn folds.
+- adds only stable occurrence IDs missing from the Store;
+- preserves all existing occurrence objects on ID collision, including their
+  frozen schedule revision, lifecycle state and operational references;
+- keeps historical occurrences and every unrelated runtime collection;
+- canonicalizes combined occurrence ordering;
+- advances the runtime revision once for a non-empty addition;
+- performs no write, timestamp update or revision increment on a true no-op;
+- serializes concurrent calls with the existing Runtime repository lock.
 
-No runtime Store write, callback, entity state read, service call, condition
-evaluation, lease or arbitration is performed.
+`RuntimeRepository.async_update_if_changed()` supplies the explicit no-op contract.
+No setup wiring, recurring callback, state read, service call, condition evaluation,
+lease or retention policy is introduced.
 
 ## Focused tests
 
-Five planner tests cover deterministic ordering and immutability; active/enabled
-filters and date exceptions; overnight overlap at the planning boundary; Europe/Rome
-spring gap and autumn fold policy; and invalid UTC windows. CI run #70 passed
-HACS, Ruff, mypy over 14 source files and all 91 tests.
+Five reconciliation tests cover first persistence; identical replay without a
+Store write; preservation of an existing operational record on stable-ID collision;
+additive adjacent windows; and concurrent identical reconciliation. Planner and
+Runtime Store regression tests pass with the new repository boundary. Final
+complete-suite and remote-CI evidence belong here after publication.
 
 ## Deliberately deferred
 
-- persisting planned occurrences and idempotent reconciliation;
+- config-entry startup projection and rolling-horizon refresh;
 - Home Assistant callback registration and cancellation;
+- occurrence retention/compaction policy;
 - overlap arbitration and entity leases;
 - condition evaluation, snapshots, target actions and restores;
-- notifications and Quick Timer execution;
-- maintenance/reset/import/migration and frontend work.
+- notifications, Quick Timer execution and frontend work.
 
 ## Next recommended step
 
-Review the Phase 2.4A draft PR and CI. Merge only with explicit owner authorization.
-Phase 2.4B should reconcile a bounded projection into the runtime Store idempotently
-before any clock callback or entity execution is introduced.
+Review the Phase 2.4B draft PR and CI. Merge only with explicit owner authorization.
+Phase 2.4C should wire a bounded rolling horizon into setup and configuration
+mutations, still without time callbacks or entity execution.
