@@ -8,7 +8,11 @@
 - Exact base: `7955ce2ed989baec726013eec5aa7f766097ed15`
   (merged PR #10, Phase 2.4B)
 - Branch: `codex/phase-2-4c-horizon-wiring`
-- Pull request and remote CI: pending publication
+- Draft PR: https://github.com/arozoire/schedule_creator/pull/11
+- Implementation commit: `e83d11ad82ff407e06ce02b3c9aca392ba131a4f`
+- CI: https://github.com/arozoire/schedule_creator/actions/runs/35630666443
+  passed against temporary merge commit
+  `cff5a9dcd38243630ad1bfa160cc5ab714bc9d01`
 - No Phase 2.4C merge, version bump, tag or release. Manifest remains `0.0.1`.
 
 ## Implemented state
@@ -36,8 +40,8 @@ the next setup retries reconciliation idempotently.
 Four wiring tests cover startup materialization plus idempotent reload, immediate
 projection after active-schedule creation, Runtime no-op after a non-temporal
 schedule edit, and truthful success after a simulated post-commit Runtime Store
-failure. Existing lifecycle and reconciliation tests pass. Final complete-suite
-and remote-CI evidence belong here after publication.
+failure. Existing lifecycle and reconciliation tests pass. CI run #82 passed
+HACS, Ruff, mypy over 15 source files and all 100 tests.
 
 ## Deliberately deferred
 
