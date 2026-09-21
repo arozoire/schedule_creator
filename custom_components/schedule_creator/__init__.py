@@ -5,9 +5,11 @@ from datetime import UTC, datetime
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.typing import ConfigType
 
 from .journal import RecoveryInstruction, build_recovery_plan
 from .storage import ScheduleCreatorStorage
+from .websocket_api import async_register_commands
 
 
 @dataclass(slots=True)
@@ -26,6 +28,13 @@ class ScheduleCreatorRuntimeData:
 
 
 type ScheduleCreatorConfigEntry = ConfigEntry[ScheduleCreatorRuntimeData]
+
+
+async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
+    """Register the global read API independently of config-entry reloads."""
+
+    async_register_commands(hass)
+    return True
 
 
 async def async_setup_entry(
