@@ -155,8 +155,9 @@ The no-await callback sees immutable config/runtime values without yielding to a
 reload or another update while constructing its response. Existing startup
 initialization and unload audit flushing are separate lifecycle operations.
 
-There are no subscriptions, operational snapshots/restores, entity service calls,
-Quick Timer execution or frontend.
+There are no API subscriptions, operational restores, notifications or frontend.
+Entity state reads, initial snapshots and target-action service calls belong to the
+separate integration lifecycle; the read handler never initiates them.
 Five focused tests cover empty/non-admin/read-only access, populated state and
 journal semantics, unloaded state, reload/idempotent registration, and sanitized
 storage/internal errors. Validation uses HA's test harness, not a physical HA
@@ -260,5 +261,7 @@ returns `ownership_mismatch`. Other optimistic, validation, lifecycle and storag
 errors follow the shared mutation contract. Deleting configuration does not alter
 frozen runtime occurrence records. Successful mutations reconcile the occurrence
 horizon, condition branches, leases and initial snapshots for readable active
-winners. Eligible winners also receive prepared target-action journal records;
-these commands do not call Home Assistant services.
+winners. Eligible winners also receive target-action journal records and the
+post-commit lifecycle may execute them through durable `sent`, success and bounded
+retry/failure transitions. A runtime-side failure remains logged and retryable; it
+does not roll back or misreport the already-persisted configuration mutation.

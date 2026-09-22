@@ -4,11 +4,10 @@ Schedule Creator is a native Home Assistant scheduling integration. It is being
 developed as the independent server-side backend for Weekly Schedule Card and does
 not depend on Scheduler Component.
 
-Current status: Phase 2.6B target-action preparation. The integration lifecycle, strict
+Current status: Phase 2.6C controlled target-action execution. The integration lifecycle, strict
 version-one models, configuration/runtime/audit Stores and the side-effect-free
 journal recovery planner are operational and documented in
-[`docs/storage-schema.md`](docs/storage-schema.md). Entity action execution is not
-implemented yet. The authenticated
+[`docs/storage-schema.md`](docs/storage-schema.md). The authenticated
 [`schedule_creator/get_state` WebSocket API](docs/websocket-api.md) exposes
 configuration and runtime counts without modifying stores or controlling entities.
 Administrative profile create, update, delete and activation commands use
@@ -37,8 +36,11 @@ entity leases. Structured conditions are evaluated from referenced Home Assistan
 states on setup, lifecycle changes, state-change events and duration deadlines.
 Their branches are persisted before arbitration. Active lease winners now capture
 one immutable starting snapshot per target entity before any future action. It then
-prepares deterministic journal intents for the winning lease generation; service
-calls remain deferred.
+prepares deterministic journal intents for the winning lease generation. Due intents
+revalidate that lease immediately before a blocking Home Assistant service call,
+persist `sent` first, and then persist success or a bounded retry/final failure.
+Restore actions, notifications and crash-time reconciliation of indeterminate
+`sent` records remain deferred.
 
 ## Design requirements
 
