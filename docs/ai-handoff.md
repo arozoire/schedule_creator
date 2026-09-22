@@ -3,50 +3,50 @@
 ## Current checkpoint
 
 - Date: 2026-09-22
-- Completed phase: **2.5B – atomic entity lease reconciliation**
+- Completed phase: **2.5D – Home Assistant condition-state reconciliation**
 - Repository: `arozoire/schedule_creator`
-- Exact base: `26e3acea8549b162de472a506864f2ffad6842ca`
-  (merged PR #16, Phase 2.5A)
-- Branch: `codex/phase-2-5b-lease-reconciliation`
-- Draft PR: https://github.com/arozoire/schedule_creator/pull/17
-- Implementation commit: `f1486acba3d15b0a5ec3bb0181a2a07621b2a26e`
-- CI: https://github.com/arozoire/schedule_creator/actions/runs/35685183734
-  passed on the implementation commit with 127 tests
-- No Phase 2.5B merge, version bump, tag or release. Manifest remains `0.0.1`.
+- Exact base: `d5426b38258ba7c85086d281675f403d120588e0`
+  (merged PR #18, Phase 2.5C)
+- Branch: `codex/phase-2-5d-condition-runtime`
+- Draft PR: https://github.com/arozoire/schedule_creator/pull/19
+- Implementation commit: `f7a8bfe5d0c38158b3150da501cd45da82664a91`
+- CI: https://github.com/arozoire/schedule_creator/actions/runs/35695381949
+  passed on the implementation commit with 154 tests
+- No Phase 2.5D merge, version bump, tag or release. Manifest remains `0.0.1`.
 
 ## Implemented state
 
-Phase 2.5B atomically reconciles EntityLease records from the pure arbitration
-plan. Each entity has exactly one active winner and deterministic suspended
-contenders. Lease IDs are stable UUID5 identities for each entity/controller pair.
+Phase 2.5C added a pure condition evaluator over explicit state-value mappings.
+It supports unavailable values, exact state comparisons, numeric thresholds and
+ranges, AND/OR composition, hysteresis and minimum-duration memory.
 
-Identical replay preserves lease objects, generations and Runtime Store revision.
-A material comparison or state change increments the existing lease generation;
-new leases begin at generation one. Controllers no longer effective lose their
-leases. Reconciliation runs after setup, configuration mutations, horizon refresh
-and clock boundary advancement.
+Phase 2.5D adapts referenced Home Assistant states into that evaluator and
+atomically persists `true` or `false` on non-terminal conditional occurrences.
+One lifecycle-owned coordinator reevaluates on setup, configuration and horizon
+changes, occurrence boundaries, relevant HA state changes and duration deadlines.
+Unknown and unavailable HA states fail closed. Evaluation memory is intentionally
+in-memory; reload restarts duration/hysteresis history conservatively.
 
-No condition evaluation, snapshot capture, entity state read, service call,
-operation execution or notification is performed.
+Conditional occurrences participate in arbitration only while their persisted
+branch is `true`. Safe replanning preserves evaluated branches on stable occurrence
+IDs. No snapshot capture, service call, operation execution or notification occurs.
 
 ## Validation
 
 - Ruff passed.
-- mypy passed over 20 source files.
-- All 127 tests passed locally and in CI run #118.
-- Tests cover winner/suspension persistence, replay idempotence, resumption with
-  generation increment and stale lease removal.
+- mypy passed over 21 source files.
+- All 154 tests passed locally and in CI run #128.
+- Tests cover pure semantics, HA state adaptation, fail-closed sentinels, duration
+  callbacks, branch persistence, arbitration gating and reload idempotence.
 
 ## Deliberately deferred
 
-- condition evaluation and condition-branch persistence;
 - snapshots, actions, restores and notifications;
 - Quick Timer service execution and frontend work.
 
 ## Next recommended step
 
-Review and merge PR #17 only with explicit owner authorization. Phase 2.5C should
-define a pure condition evaluator over an explicit immutable state-value mapping,
-including unavailable, numeric, boolean composition, hysteresis and duration
-semantics. Keep direct Home Assistant state reads and Runtime Store writes outside
-the first evaluator phase.
+Review and merge PR #19 only with explicit owner authorization. The next safe
+backend slice should capture immutable starting snapshots for lease-winning
+controllers before any entity action is sent. Keep actual service calls and restore
+execution in a later, separately reviewed phase.

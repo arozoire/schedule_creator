@@ -14,6 +14,7 @@ from custom_components.schedule_creator.arbitration import (
     comparison_key,
 )
 from custom_components.schedule_creator.models import (
+    ConditionBranch,
     ControllerType,
     Occurrence,
     OccurrenceState,
@@ -143,6 +144,27 @@ def test_plan_ignores_inactive_or_out_of_window_controllers() -> None:
     runtime = _runtime(occurrence=occurrence, timer=timer)
 
     assert build_arbitration_plan(runtime, timer.expires_at) == ()
+
+
+def test_plan_excludes_conditional_occurrence_until_true() -> None:
+    """Unknown, false and suppressed conditions cannot acquire target rights."""
+    bundle = _bundle()
+    occurrence = replace(
+        Occurrence.from_dict(bundle["occurrence"]),
+        condition_branch=ConditionBranch.FALSE,
+        snapshot_ids=(),
+        pending_operation_ids=(),
+        last_operation_id=None,
+    )
+    timer = replace(
+        QuickTimer.from_dict(bundle["quick_timer"]),
+        state=QuickTimerState.COMPLETED,
+        snapshot_id=None,
+    )
+
+    assert build_arbitration_plan(
+        _runtime(occurrence=occurrence, timer=timer), NOW
+    ) == ()
 
 
 def test_duplicate_controller_entity_candidate_is_rejected() -> None:

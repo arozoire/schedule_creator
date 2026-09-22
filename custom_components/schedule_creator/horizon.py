@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
@@ -36,10 +36,12 @@ class HorizonRefreshCoordinator:
         hass: HomeAssistant,
         storage: ScheduleCreatorStorage,
         on_reconciled: Callable[[datetime], None] | None = None,
+        on_runtime_changed: Callable[[datetime], Awaitable[object]] | None = None,
     ) -> None:
         self._hass = hass
         self._storage = storage
         self._on_reconciled = on_reconciled
+        self._on_runtime_changed = on_runtime_changed
         self._cancel: CALLBACK_TYPE | None = None
         self._active = False
 
@@ -90,9 +92,12 @@ class HorizonRefreshCoordinator:
                     now,
                 )
                 await async_advance_occurrence_states(self._storage.runtime, now)
-                await async_reconcile_entity_leases(
-                    self._storage.runtime, now
-                )
+                if self._on_runtime_changed is None:
+                    await async_reconcile_entity_leases(
+                        self._storage.runtime, now
+                    )
+                else:
+                    await self._on_runtime_changed(now)
                 await async_prune_terminal_occurrences(
                     self._storage.runtime, now
                 )

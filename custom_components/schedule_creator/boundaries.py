@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -86,9 +87,15 @@ def next_occurrence_boundary(
 class OccurrenceBoundaryCoordinator:
     """Own exactly one callback for the nearest occurrence boundary."""
 
-    def __init__(self, hass: HomeAssistant, runtime: RuntimeRepository) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        runtime: RuntimeRepository,
+        on_advanced: Callable[[datetime], Awaitable[object]] | None = None,
+    ) -> None:
         self._hass = hass
         self._runtime = runtime
+        self._on_advanced = on_advanced
         self._cancel: CALLBACK_TYPE | None = None
         self._active = False
 
@@ -136,7 +143,10 @@ class OccurrenceBoundaryCoordinator:
                 return
             try:
                 await async_advance_occurrence_states(self._runtime, now)
-                await async_reconcile_entity_leases(self._runtime, now)
+                if self._on_advanced is None:
+                    await async_reconcile_entity_leases(self._runtime, now)
+                else:
+                    await self._on_advanced(now)
             except Exception:
                 _LOGGER.exception("Unable to advance occurrence boundary")
                 retry_at = _utc(now) + BOUNDARY_RETRY_INTERVAL

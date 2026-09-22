@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from custom_components.schedule_creator.models import (
+    ConditionBranch,
     IntegrationConfig,
     OccurrenceState,
 )
@@ -173,6 +174,32 @@ async def test_replan_replaces_safe_future_frozen_revision(hass, config):
     }
     assert {item.frozen_schedule.revision for item in result.occurrences} == {4}
     assert {item.frozen_schedule.name for item in result.occurrences} == {"Changed"}
+
+
+async def test_replan_preserves_persisted_condition_branch(hass, config):
+    """An unchanged future occurrence keeps its evaluated runtime branch."""
+    repository, store = await _repository(hass)
+    start = datetime(2026, 9, 14, tzinfo=UTC)
+    end = datetime(2026, 9, 17, tzinfo=UTC)
+    original = _project(config, 14, 17)
+    evaluated = tuple(
+        replace(item, condition_branch=ConditionBranch.FALSE) for item in original
+    )
+    await repository.async_update(
+        lambda current: replace(
+            current,
+            revision=current.revision + 1,
+            occurrences=evaluated,
+        )
+    )
+    saves_before = len(store.saves)
+
+    result = await async_replan_window(
+        repository, config, start, end, ROME, start
+    )
+
+    assert result.occurrences == evaluated
+    assert len(store.saves) == saves_before
 
 
 async def test_replan_removes_disabled_future_occurrences(hass, config):
