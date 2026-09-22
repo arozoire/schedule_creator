@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.helpers.event import async_track_point_in_utc_time
 
+from .leases import async_reconcile_entity_leases
 from .models import Occurrence, OccurrenceState
 from .storage import RuntimeRepository, RuntimeStoreData
 
@@ -135,6 +136,7 @@ class OccurrenceBoundaryCoordinator:
                 return
             try:
                 await async_advance_occurrence_states(self._runtime, now)
+                await async_reconcile_entity_leases(self._runtime, now)
             except Exception:
                 _LOGGER.exception("Unable to advance occurrence boundary")
                 retry_at = _utc(now) + BOUNDARY_RETRY_INTERVAL

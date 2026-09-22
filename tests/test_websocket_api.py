@@ -179,7 +179,7 @@ async def test_get_state_populated(hass, hass_ws_client, hass_storage):
             "revision": reconciled_runtime.revision,
             "occurrences": len(reconciled_runtime.occurrences),
             "active_leases": 1,
-            "suspended_leases": 1,
+            "suspended_leases": 0,
             "pending_operations": 2,
             "quick_timers": 1,
             "recovery_instructions": 1,
