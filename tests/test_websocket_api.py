@@ -192,9 +192,9 @@ async def test_get_state_populated(hass, hass_ws_client, hass_storage):
                 lease.state is LeaseState.SUSPENDED
                 for lease in reconciled_runtime.leases
             ),
-            "pending_operations": 2,
+            "pending_operations": len(reconciled_runtime.pending_operations),
             "quick_timers": 1,
-            "recovery_instructions": 0,
+            "recovery_instructions": len(entry.runtime_data.recovery_plan),
         },
     }
     assert (

@@ -314,7 +314,7 @@ class JournalCoordinator:
                 raise OperationNotFoundError(operation_id)
             keys = current.notification_deduplication_keys
             if deduplication_key not in keys:
-                keys = (*keys, deduplication_key)
+                keys = tuple(sorted((*keys, deduplication_key)))
             return replace(
                 current,
                 revision=current.revision + 1,
