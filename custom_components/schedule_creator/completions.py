@@ -16,14 +16,18 @@ from .actions import (
 )
 from .journal import JournalCoordinator
 from .models import (
+    ConditionBranch,
     LeaseState,
+    Occurrence,
     OccurrenceState,
     OperationKind,
     OperationState,
     PendingOperation,
     QuickTimerState,
     Snapshot,
+    TargetAction,
 )
+from .notifications import async_execute_notifications, async_prepare_notifications
 from .storage import RuntimeRepository, RuntimeStoreData
 
 if TYPE_CHECKING:
@@ -45,6 +49,15 @@ def _restore_id(controller_id: str) -> str:
 def _schedule_end_id(controller_id: str, entity_id: str) -> str:
     return str(
         uuid5(_COMPLETION_NAMESPACE, f"schedule_end\0{controller_id}\0{entity_id}")
+    )
+
+
+def _condition_fallback_id(controller_id: str, entity_id: str, source_id: str) -> str:
+    return str(
+        uuid5(
+            _COMPLETION_NAMESPACE,
+            f"condition_fallback\0{controller_id}\0{entity_id}\0{source_id}",
+        )
     )
 
 
@@ -72,8 +85,7 @@ async def async_prepare_quick_timer_restores(
         candidates = tuple(
             (timer, snapshots[timer.snapshot_id])
             for timer in runtime.quick_timers
-            if timer.state
-            in {QuickTimerState.COMPLETED, QuickTimerState.CANCELLED}
+            if timer.state in {QuickTimerState.COMPLETED, QuickTimerState.CANCELLED}
             and timer.controller_id in successful_controllers
             and timer.snapshot_id is not None
             and timer.snapshot_id in snapshots
@@ -170,7 +182,7 @@ async def async_prepare_schedule_end_actions(
                     else OperationState.PREPARED
                 ),
                 payload={
-                    "phase": "completion",
+                    "phase": "schedule_end",
                     "action_id": action.id,
                     "domain": action.domain,
                     "action": action.action,
@@ -181,9 +193,7 @@ async def async_prepare_schedule_end_actions(
                 updated_at=persisted_at,
                 next_retry_at=None,
                 error_code=(
-                    "controller_replaced"
-                    if entity_id in active_entities
-                    else None
+                    "controller_replaced" if entity_id in active_entities else None
                 ),
             )
             for offset, (occurrence, entity_id, action) in enumerate(
@@ -194,9 +204,9 @@ async def async_prepare_schedule_end_actions(
         operations_by_occurrence: dict[str, list[PendingOperation]] = {}
         for operation in operations:
             assert operation.occurrence_id is not None
-            operations_by_occurrence.setdefault(
-                operation.occurrence_id, []
-            ).append(operation)
+            operations_by_occurrence.setdefault(operation.occurrence_id, []).append(
+                operation
+            )
         occurrences = tuple(
             replace(
                 occurrence,
@@ -204,9 +214,155 @@ async def async_prepare_schedule_end_actions(
                     *occurrence.pending_operation_ids,
                     *(
                         operation.id
-                        for operation in operations_by_occurrence.get(
-                            occurrence.id, ()
-                        )
+                        for operation in operations_by_occurrence.get(occurrence.id, ())
+                    ),
+                ),
+                last_operation_id=operations_by_occurrence[occurrence.id][-1].id,
+            )
+            if occurrence.id in operations_by_occurrence
+            else occurrence
+            for occurrence in runtime.occurrences
+        )
+        return replace(
+            runtime,
+            revision=runtime.revision + 1,
+            operation_counter=runtime.operation_counter + len(operations),
+            occurrences=occurrences,
+            pending_operations=(*runtime.pending_operations, *operations),
+            updated_at=persisted_at,
+        )
+
+    return await repository.async_update_if_changed(mutation)
+
+
+async def async_prepare_condition_fallbacks(
+    repository: RuntimeRepository, now: datetime
+) -> RuntimeStoreData:
+    """Prepare one fallback for each applied conditional-control episode."""
+
+    prepared_at = _utc(now)
+
+    def mutation(runtime: RuntimeStoreData) -> RuntimeStoreData | None:
+        existing_ids = {operation.id for operation in runtime.pending_operations}
+        active_entities = {
+            lease.entity_id
+            for lease in runtime.leases
+            if lease.state is LeaseState.ACTIVE
+        }
+        snapshots = {
+            (snapshot.occurrence_id, snapshot.entity_id): snapshot
+            for snapshot in runtime.snapshots
+        }
+        successful: dict[tuple[str | None, str | None], PendingOperation] = {}
+        for operation in runtime.pending_operations:
+            if (
+                operation.kind is OperationKind.TARGET_ACTION
+                and operation.state is OperationState.SUCCEEDED
+                and operation.payload.get("phase")
+                not in {"schedule_end", "condition_fallback"}
+            ):
+                key = operation.occurrence_id, operation.entity_id
+                previous = successful.get(key)
+                if previous is None or operation.sequence > previous.sequence:
+                    successful[key] = operation
+
+        candidates: list[
+            tuple[Occurrence, str, str, TargetAction | None, Snapshot | None]
+        ] = []
+        for occurrence in runtime.occurrences:
+            if (
+                occurrence.state
+                not in {OccurrenceState.ACTIVE, OccurrenceState.SUSPENDED}
+                or occurrence.condition_branch is not ConditionBranch.FALSE
+                or occurrence.frozen_schedule.condition is None
+            ):
+                continue
+            for entity_id in occurrence.frozen_schedule.target_entity_ids:
+                applied = successful.get((occurrence.id, entity_id))
+                if applied is None:
+                    if occurrence.frozen_schedule.end_action is None:
+                        continue
+                    source_id = "initial_false"
+                else:
+                    source_id = applied.id
+                operation_id = _condition_fallback_id(
+                    occurrence.id, entity_id, source_id
+                )
+                if operation_id in existing_ids:
+                    continue
+                action = occurrence.frozen_schedule.end_action
+                snapshot = snapshots.get((occurrence.id, entity_id))
+                if action is None and snapshot is None:
+                    continue
+                candidates.append((occurrence, entity_id, source_id, action, snapshot))
+        if not candidates:
+            return None
+
+        persisted_at = max(runtime.updated_at, prepared_at)
+        operations: list[PendingOperation] = []
+        for offset, candidate in enumerate(candidates, start=1):
+            occurrence, entity_id, source_id, action, snapshot = candidate
+            controller_id = occurrence.id
+            operation_id = _condition_fallback_id(controller_id, entity_id, source_id)
+            if action is not None:
+                payload = {
+                    "phase": "condition_fallback",
+                    "source_operation_id": source_id,
+                    "action_id": action.id,
+                    "domain": action.domain,
+                    "action": action.action,
+                    "data": action.data,
+                }
+                kind = OperationKind.TARGET_ACTION
+            else:
+                assert snapshot is not None
+                payload = {
+                    "phase": "condition_fallback",
+                    "source_operation_id": source_id,
+                    "snapshot_id": snapshot.id,
+                    "domain": snapshot.domain,
+                    "state": snapshot.state,
+                    "attributes": snapshot.attributes,
+                    "checksum": snapshot.checksum,
+                }
+                kind = OperationKind.RESTORE
+            operations.append(
+                PendingOperation(
+                    id=operation_id,
+                    sequence=runtime.operation_counter + offset,
+                    occurrence_id=controller_id,
+                    entity_id=entity_id,
+                    kind=kind,
+                    state=(
+                        OperationState.SUPERSEDED
+                        if entity_id in active_entities
+                        else OperationState.PREPARED
+                    ),
+                    payload=payload,
+                    attempt_count=0,
+                    created_at=persisted_at,
+                    updated_at=persisted_at,
+                    next_retry_at=None,
+                    error_code=(
+                        "controller_replaced" if entity_id in active_entities else None
+                    ),
+                )
+            )
+
+        operations_by_occurrence: dict[str, list[PendingOperation]] = {}
+        for operation in operations:
+            assert operation.occurrence_id is not None
+            operations_by_occurrence.setdefault(operation.occurrence_id, []).append(
+                operation
+            )
+        occurrences = tuple(
+            replace(
+                occurrence,
+                pending_operation_ids=(
+                    *occurrence.pending_operation_ids,
+                    *(
+                        operation.id
+                        for operation in operations_by_occurrence.get(occurrence.id, ())
                     ),
                 ),
                 last_operation_id=operations_by_occurrence[occurrence.id][-1].id,
@@ -265,6 +421,22 @@ def _restore_snapshot(
     )
 
 
+def _sendable_restore(runtime: RuntimeStoreData, operation: PendingOperation) -> bool:
+    if any(
+        lease.entity_id == operation.entity_id and lease.state is LeaseState.ACTIVE
+        for lease in runtime.leases
+    ):
+        return False
+    if operation.payload.get("phase") != "condition_fallback":
+        return True
+    return any(
+        occurrence.id == operation.occurrence_id
+        and occurrence.state in {OccurrenceState.ACTIVE, OccurrenceState.SUSPENDED}
+        and occurrence.condition_branch is ConditionBranch.FALSE
+        for occurrence in runtime.occurrences
+    )
+
+
 async def async_execute_restores(
     hass: HomeAssistant, repository: RuntimeRepository, now: datetime
 ) -> RuntimeStoreData:
@@ -288,15 +460,18 @@ async def async_execute_restores(
             repository.data, wall_clock
         ):
             continue
-        if any(
-            lease.entity_id == operation.entity_id
-            and lease.state is LeaseState.ACTIVE
-            for lease in repository.data.leases
-        ):
+        if not _sendable_restore(repository.data, operation):
+            active_controller = any(
+                lease.entity_id == operation.entity_id
+                and lease.state is LeaseState.ACTIVE
+                for lease in repository.data.leases
+            )
             await journal.async_supersede(
                 operation.id,
                 now=wall_clock,
-                error_code="controller_replaced",
+                error_code=(
+                    "controller_replaced" if active_controller else "fallback_obsolete"
+                ),
             )
             continue
         snapshot = _restore_snapshot(repository.data, operation)
@@ -351,7 +526,8 @@ class CompletionCoordinator:
 
         await async_prepare_quick_timer_restores(self._runtime, now)
         await async_prepare_schedule_end_actions(self._runtime, now)
+        await async_prepare_condition_fallbacks(self._runtime, now)
         await async_execute_restores(self._hass, self._runtime, now)
-        return await async_execute_target_actions(
-            self._hass, self._runtime, now
-        )
+        await async_execute_target_actions(self._hass, self._runtime, now)
+        await async_prepare_notifications(self._runtime, now)
+        return await async_execute_notifications(self._hass, self._runtime, now)

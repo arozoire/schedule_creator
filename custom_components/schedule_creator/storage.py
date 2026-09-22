@@ -43,9 +43,7 @@ AUDIT_SAVE_DELAY = 5.0
 type JsonObject = dict[str, Any]
 type ConfigMutation = Callable[[IntegrationConfig | None], IntegrationConfig]
 type RuntimeMutation = Callable[[RuntimeStoreData], RuntimeStoreData]
-type OptionalRuntimeMutation = Callable[
-    [RuntimeStoreData], RuntimeStoreData | None
-]
+type OptionalRuntimeMutation = Callable[[RuntimeStoreData], RuntimeStoreData | None]
 
 
 class StorageValidationError(ModelValidationError):
@@ -134,9 +132,7 @@ def _fail(path: str, message: str) -> Never:
     raise StorageValidationError(path, message)
 
 
-def _strict_envelope(
-    data: object, envelope: type[Any], path: str
-) -> dict[str, Any]:
+def _strict_envelope(data: object, envelope: type[Any], path: str) -> dict[str, Any]:
     if not isinstance(data, dict):
         _fail(path, "must be an object")
     if not all(isinstance(key, str) for key in data):
@@ -225,9 +221,7 @@ class RuntimeStoreData:
         occurrences = _typed_records(
             tuple(self.occurrences), Occurrence, "runtime.occurrences"
         )
-        snapshots = _typed_records(
-            tuple(self.snapshots), Snapshot, "runtime.snapshots"
-        )
+        snapshots = _typed_records(tuple(self.snapshots), Snapshot, "runtime.snapshots")
         leases = _typed_records(tuple(self.leases), EntityLease, "runtime.leases")
         operations = _typed_records(
             tuple(self.pending_operations),
@@ -291,9 +285,7 @@ class RuntimeStoreData:
             (*occurrence_ids, *timer_controller_ids),
             "runtime.controller_ids",
         )
-        timer_by_controller_id = {
-            timer.controller_id: timer for timer in timers
-        }
+        timer_by_controller_id = {timer.controller_id: timer for timer in timers}
         controller_ids = occurrence_id_set | set(timer_controller_ids)
         snapshot_by_id = {snapshot.id: snapshot for snapshot in snapshots}
         operation_by_id = {operation.id: operation for operation in operations}
@@ -385,15 +377,10 @@ class RuntimeStoreData:
                             "operation reference"
                         ),
                     )
-            if (
-                occurrence.last_operation_id is not None
-                and (
-                    occurrence.last_operation_id not in operation_by_id
-                    or operation_by_id[
-                        occurrence.last_operation_id
-                    ].occurrence_id
-                    != occurrence.id
-                )
+            if occurrence.last_operation_id is not None and (
+                occurrence.last_operation_id not in operation_by_id
+                or operation_by_id[occurrence.last_operation_id].occurrence_id
+                != occurrence.id
             ):
                 _fail(
                     "runtime.occurrences",
@@ -460,9 +447,7 @@ class RuntimeStoreData:
             snapshot_id
             for occurrence in occurrences
             for snapshot_id in occurrence.snapshot_ids
-        } | {
-            timer.snapshot_id for timer in timers if timer.snapshot_id is not None
-        }
+        } | {timer.snapshot_id for timer in timers if timer.snapshot_id is not None}
         if referenced_snapshot_ids != set(snapshot_ids):
             _fail("runtime.snapshots", "contains an unreferenced snapshot")
         referenced_operation_ids = {
@@ -487,9 +472,7 @@ class RuntimeStoreData:
         object.__setattr__(self, "leases", leases)
         object.__setattr__(self, "pending_operations", operations)
         object.__setattr__(self, "quick_timers", timers)
-        object.__setattr__(
-            self, "notification_deduplication_keys", deduplication_keys
-        )
+        object.__setattr__(self, "notification_deduplication_keys", deduplication_keys)
         object.__setattr__(self, "updated_at", updated_at)
 
     def to_dict(self) -> JsonObject:
@@ -775,6 +758,28 @@ class RuntimeRepository:
             self._data = updated
             return updated
 
+    async def async_update_expected(
+        self, expected_revision: int, mutation: RuntimeMutation
+    ) -> RuntimeStoreData:
+        """Commit one optimistic runtime transition atomically."""
+
+        async with self._lock:
+            if not self._loaded or self._data is None:
+                raise StorageNotLoadedError("runtime Store has not been loaded")
+            current = self._data
+            if expected_revision != current.revision:
+                raise RevisionConflictError(expected_revision, current.revision)
+            updated = mutation(current)
+            if not isinstance(updated, RuntimeStoreData):
+                raise TypeError("runtime mutation must return RuntimeStoreData")
+            if updated.revision != current.revision + 1:
+                raise InvalidRevisionError("runtime revision must advance exactly once")
+            if updated.updated_at < current.updated_at:
+                raise InvalidRevisionError("runtime timestamp cannot move backwards")
+            await self._store.async_save(updated.to_dict())
+            self._data = updated
+            return updated
+
     async def async_update_if_changed(
         self, mutation: OptionalRuntimeMutation
     ) -> RuntimeStoreData:
@@ -823,9 +828,7 @@ class AuditRepository:
             try:
                 raw = await self._store.async_load()
                 loaded = (
-                    empty_audit(now)
-                    if raw is None
-                    else AuditStoreData.from_dict(raw)
+                    empty_audit(now) if raw is None else AuditStoreData.from_dict(raw)
                 )
                 self._data = _prune_audit(loaded, now)
                 self._write_enabled = True
@@ -838,9 +841,7 @@ class AuditRepository:
             assert result is not None
             return result
 
-    async def async_append(
-        self, record: AuditRecord, now: datetime
-    ) -> AuditStoreData:
+    async def async_append(self, record: AuditRecord, now: datetime) -> AuditStoreData:
         """Append one record and schedule a delayed, best-effort write."""
 
         async with self._lock:
@@ -866,6 +867,7 @@ class AuditRepository:
             if not self._write_enabled:
                 return updated
             try:
+
                 def data_to_save() -> JsonObject:
                     return updated.to_dict()
 

@@ -53,9 +53,7 @@ def build_recovery_plan(
 
     current_time = _utc(now)
     instructions: list[RecoveryInstruction] = []
-    for operation in sorted(
-        runtime.pending_operations, key=lambda item: item.sequence
-    ):
+    for operation in sorted(runtime.pending_operations, key=lambda item: item.sequence):
         if operation.state is OperationState.PREPARED:
             decision = RecoveryDecision.RETRY_PREPARED
             not_before = None
@@ -272,9 +270,7 @@ class JournalCoordinator:
         def mark(
             operation: PendingOperation, persisted_at: datetime
         ) -> PendingOperation:
-            _require_state(
-                operation, {OperationState.SENT}, OperationState.SUCCEEDED
-            )
+            _require_state(operation, {OperationState.SENT}, OperationState.SUCCEEDED)
             return replace(
                 operation,
                 state=OperationState.SUCCEEDED,
@@ -283,6 +279,52 @@ class JournalCoordinator:
             )
 
         return await self._async_transition(operation_id, wall_clock, mark)
+
+    async def async_confirm_notification(
+        self,
+        operation_id: str,
+        *,
+        now: datetime,
+        deduplication_key: str,
+    ) -> PendingOperation:
+        """Atomically confirm a notification and retain its deduplication key."""
+
+        wall_clock = _utc(now)
+
+        def update(current: RuntimeStoreData) -> RuntimeStoreData:
+            persisted_at = max(wall_clock, current.updated_at)
+            found: PendingOperation | None = None
+            operations: list[PendingOperation] = []
+            for operation in current.pending_operations:
+                if operation.id == operation_id:
+                    _require_state(
+                        operation,
+                        {OperationState.SENT},
+                        OperationState.SUCCEEDED,
+                    )
+                    operation = replace(
+                        operation,
+                        state=OperationState.SUCCEEDED,
+                        updated_at=persisted_at,
+                        error_code=None,
+                    )
+                    found = operation
+                operations.append(operation)
+            if found is None:
+                raise OperationNotFoundError(operation_id)
+            keys = current.notification_deduplication_keys
+            if deduplication_key not in keys:
+                keys = (*keys, deduplication_key)
+            return replace(
+                current,
+                revision=current.revision + 1,
+                pending_operations=tuple(operations),
+                notification_deduplication_keys=keys,
+                updated_at=persisted_at,
+            )
+
+        updated = await self._runtime.async_update(update)
+        return _find_operation(updated, operation_id)
 
     async def async_schedule_retry(
         self,
@@ -302,9 +344,7 @@ class JournalCoordinator:
         def mark(
             operation: PendingOperation, persisted_at: datetime
         ) -> PendingOperation:
-            _require_state(
-                operation, {OperationState.SENT}, OperationState.RETRY_WAIT
-            )
+            _require_state(operation, {OperationState.SENT}, OperationState.RETRY_WAIT)
             return replace(
                 operation,
                 state=OperationState.RETRY_WAIT,
@@ -392,9 +432,7 @@ class JournalCoordinator:
         return _find_operation(updated, operation_id)
 
 
-def _find_operation(
-    runtime: RuntimeStoreData, operation_id: str
-) -> PendingOperation:
+def _find_operation(runtime: RuntimeStoreData, operation_id: str) -> PendingOperation:
     try:
         return next(
             operation

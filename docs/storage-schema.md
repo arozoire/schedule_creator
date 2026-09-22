@@ -1,13 +1,14 @@
 # Schedule Creator persisted model schema
 
-**Status:** Phase 2.6D-F schema version 1. Native Store containers, restart recovery,
+**Status:** Phase 2 backend complete, schema version 1. Native Store containers, restart recovery,
 occurrence projection, bounded-horizon reconciliation and safe future replanning
 are implemented. A lifecycle-owned daily callback rolls the horizon forward;
 clock-only occurrence state transitions and conservative terminal retention are
 implemented. Pure overlap arbitration, atomic lease reconciliation and persisted
 condition branches, initial winner snapshots and controlled target-action execution
 are available. Indeterminate sent operations fail closed; Quick Timer expiry and
-safe snapshot restoration and explicit schedule end actions are persisted.
+safe snapshot restoration, schedule completion/fallback actions and deduplicated
+notifications are persisted. Quick Timers have an optimistic runtime mutation API.
 
 ## Contract rules
 
@@ -227,9 +228,9 @@ sequence:
 | future `retry_wait` | wait until the persisted instant |
 | terminal state | no recovery instruction |
 
-Before exposing loaded runtime data, setup resolves indeterminate service-operation
-`sent` records conservatively. Other future operation kinds may retain a recovery
-instruction until their own reconciliation policy exists.
+Before exposing loaded runtime data, setup resolves indeterminate target, restore
+and notification `sent` records conservatively as `failed_final`; their external
+outcome is unknown and automatic replay could duplicate a side effect.
 
 ## Quick Timer completion
 
@@ -250,6 +251,34 @@ defines an explicit end action. A newer active lease creates the record directly
 the entity is still unowned immediately before sending. A schedule without an end
 action creates no operation and never implies snapshot restoration.
 
+## Conditional fallback
+
+When an active conditional occurrence becomes false after a successful start,
+each entity receives one deterministic fallback per applied lease generation. The
+frozen explicit end action is preferred; without one, the immutable initial snapshot
+is restored. An initially false condition executes only an explicit end action and
+otherwise does nothing. Repeated true/false cycles use the source start-operation ID
+to avoid duplicates while still allowing a later applied cycle. A resumed condition
+or newer active controller supersedes an unsent fallback.
+
+## Notifications
+
+Frozen start notifications become eligible after a schedule start action succeeds;
+end notifications become eligible when the occurrence completes. Each notification
+has a deterministic operation and occurrence/phase/rule deduplication key. The
+journal persists `sent` before calling the configured notify service, applies the
+same bounded retry policy, and commits success plus the deduplication key atomically.
+Interrupted sends fail closed on startup.
+
+## Quick Timer runtime mutations
+
+Administrative create and cancel operations compare the client's expected Runtime
+Store revision under the repository lock. Creation persists an active timer with
+server-owned IDs and timestamps, then runs normal arbitration, snapshot and action
+reconciliation. Cancellation is valid only while active and then runs the same
+chain, including the safe restore rules above. API responses return the final runtime
+revision after reconciliation.
+
 ## Removal and migration behaviour
 
 Removing the config entry preserves all native Store files. Data deletion will be
@@ -263,6 +292,5 @@ implemented.
 
 ## Deferred to later phases
 
-- conditional-fallback execution;
-- notification dispatch and deduplication execution;
 - the confirmed RESET/backup/restore maintenance API.
+- frontend work and API subscriptions.

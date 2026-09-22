@@ -21,12 +21,14 @@ from custom_components.schedule_creator.actions import (
 )
 from custom_components.schedule_creator.completions import (
     async_execute_restores,
+    async_prepare_condition_fallbacks,
     async_prepare_quick_timer_restores,
     async_prepare_schedule_end_actions,
 )
 from custom_components.schedule_creator.journal import JournalCoordinator
 from custom_components.schedule_creator.leases import async_reconcile_entity_leases
 from custom_components.schedule_creator.models import (
+    ConditionBranch,
     ControllerType,
     Occurrence,
     OccurrenceState,
@@ -34,6 +36,10 @@ from custom_components.schedule_creator.models import (
     OperationState,
     QuickTimer,
     QuickTimerState,
+)
+from custom_components.schedule_creator.notifications import (
+    async_execute_notifications,
+    async_prepare_notifications,
 )
 from custom_components.schedule_creator.snapshots import (
     async_capture_initial_snapshots,
@@ -133,9 +139,7 @@ async def test_identical_preparation_is_store_no_op(hass) -> None:
     first = await async_prepare_target_actions(repository, NOW)
     saves_before = len(store.saves)
 
-    second = await async_prepare_target_actions(
-        repository, NOW + timedelta(seconds=1)
-    )
+    second = await async_prepare_target_actions(repository, NOW + timedelta(seconds=1))
 
     assert second is first
     assert len(store.saves) == saves_before
@@ -164,9 +168,7 @@ async def test_resumed_schedule_prepares_frozen_start_action(hass) -> None:
             current,
             revision=current.revision + 1,
             quick_timers=(
-                replace(
-                    current.quick_timers[0], state=QuickTimerState.COMPLETED
-                ),
+                replace(current.quick_timers[0], state=QuickTimerState.COMPLETED),
             ),
             updated_at=resumed_at,
         )
@@ -214,9 +216,7 @@ async def test_new_active_generation_prepares_new_operation(hass) -> None:
     await set_timer(QuickTimerState.ACTIVE, NOW + timedelta(minutes=2))
     await set_timer(QuickTimerState.COMPLETED, NOW + timedelta(minutes=3))
 
-    result = await async_prepare_target_actions(
-        repository, NOW + timedelta(minutes=3)
-    )
+    result = await async_prepare_target_actions(repository, NOW + timedelta(minutes=3))
 
     occurrence = result.occurrences[0]
     schedule_operations = tuple(
@@ -320,9 +320,7 @@ async def test_completed_quick_timer_prepares_snapshot_restore(hass) -> None:
                 ),
             ),
             quick_timers=(
-                replace(
-                    current.quick_timers[0], state=QuickTimerState.COMPLETED
-                ),
+                replace(current.quick_timers[0], state=QuickTimerState.COMPLETED),
             ),
             leases=(),
             updated_at=NOW + timedelta(minutes=1),
@@ -387,16 +385,12 @@ async def test_resumed_controller_supersedes_quick_timer_restore(hass) -> None:
             current,
             revision=current.revision + 1,
             quick_timers=(
-                replace(
-                    current.quick_timers[0], state=QuickTimerState.COMPLETED
-                ),
+                replace(current.quick_timers[0], state=QuickTimerState.COMPLETED),
             ),
             updated_at=NOW + timedelta(minutes=1),
         )
     )
-    await async_reconcile_entity_leases(
-        repository, NOW + timedelta(minutes=1)
-    )
+    await async_reconcile_entity_leases(repository, NOW + timedelta(minutes=1))
 
     result = await async_prepare_quick_timer_restores(
         repository, NOW + timedelta(minutes=1)
@@ -414,9 +408,7 @@ async def _applied_schedule(hass, repository, when: datetime) -> str:
             current,
             revision=current.revision + 1,
             quick_timers=(
-                replace(
-                    current.quick_timers[0], state=QuickTimerState.COMPLETED
-                ),
+                replace(current.quick_timers[0], state=QuickTimerState.COMPLETED),
             ),
             updated_at=when,
         )
@@ -450,12 +442,10 @@ async def test_completed_schedule_executes_explicit_end_action(hass) -> None:
 
     prepared = await async_prepare_schedule_end_actions(repository, ended_at)
     end_operation = prepared.pending_operations[-1]
-    assert end_operation.payload["phase"] == "completion"
+    assert end_operation.payload["phase"] == "schedule_end"
     assert end_operation.state is OperationState.PREPARED
 
-    with patch.object(
-        type(hass.services), "async_call", AsyncMock()
-    ) as service_call:
+    with patch.object(type(hass.services), "async_call", AsyncMock()) as service_call:
         result = await async_execute_target_actions(hass, repository, ended_at)
 
     assert result.pending_operations[-1].state is OperationState.SUCCEEDED
@@ -529,6 +519,156 @@ async def test_schedule_end_without_action_is_no_op(hass) -> None:
 
     assert result is before
     assert len(result.pending_operations) == 1
+    assert len(store.saves) == saves_before
+
+
+async def test_false_condition_restores_applied_schedule_without_end_action(
+    hass,
+) -> None:
+    """A false condition restores the baseline after an applied start."""
+    repository, _store = await _repository(hass)
+    changed_at = NOW + timedelta(minutes=1)
+    start_operation_id = await _applied_schedule(hass, repository, changed_at)
+    await repository.async_update(
+        lambda current: replace(
+            current,
+            revision=current.revision + 1,
+            occurrences=(
+                replace(
+                    current.occurrences[0],
+                    condition_branch=ConditionBranch.FALSE,
+                    frozen_schedule=replace(
+                        current.occurrences[0].frozen_schedule,
+                        end_action=None,
+                    ),
+                ),
+            ),
+            leases=(),
+            updated_at=changed_at,
+        )
+    )
+
+    prepared = await async_prepare_condition_fallbacks(repository, changed_at)
+    fallback = prepared.pending_operations[-1]
+    assert fallback.kind is OperationKind.RESTORE
+    assert fallback.payload["phase"] == "condition_fallback"
+    assert fallback.payload["source_operation_id"] == start_operation_id
+
+    with patch.object(type(hass.services), "async_call", AsyncMock()) as service_call:
+        result = await async_execute_restores(hass, repository, changed_at)
+
+    assert result.pending_operations[-1].state is OperationState.SUCCEEDED
+    service_call.assert_awaited_once()
+
+
+async def test_initial_false_condition_without_end_action_is_no_op(hass) -> None:
+    """An initially false condition does not invent a restore."""
+    repository, store = await _repository(hass)
+    changed_at = NOW + timedelta(minutes=1)
+    await repository.async_update(
+        lambda current: replace(
+            current,
+            revision=current.revision + 1,
+            occurrences=(
+                replace(
+                    current.occurrences[0],
+                    condition_branch=ConditionBranch.FALSE,
+                    frozen_schedule=replace(
+                        current.occurrences[0].frozen_schedule,
+                        end_action=None,
+                    ),
+                ),
+            ),
+            leases=(),
+            updated_at=changed_at,
+        )
+    )
+    before = repository.data
+    saves_before = len(store.saves)
+
+    result = await async_prepare_condition_fallbacks(repository, changed_at)
+
+    assert result is before
+    assert len(store.saves) == saves_before
+
+
+async def test_initial_false_condition_executes_explicit_end_action(hass) -> None:
+    """An explicit end action defines the initial-false fallback."""
+    repository, _store = await _repository(hass)
+    changed_at = NOW + timedelta(minutes=1)
+    await repository.async_update(
+        lambda current: replace(
+            current,
+            revision=current.revision + 1,
+            occurrences=(
+                replace(
+                    current.occurrences[0],
+                    condition_branch=ConditionBranch.FALSE,
+                ),
+            ),
+            leases=(),
+            updated_at=changed_at,
+        )
+    )
+
+    prepared = await async_prepare_condition_fallbacks(repository, changed_at)
+    fallback = prepared.pending_operations[-1]
+    assert fallback.kind is OperationKind.TARGET_ACTION
+    assert fallback.payload["source_operation_id"] == "initial_false"
+
+    with patch.object(type(hass.services), "async_call", AsyncMock()) as service_call:
+        result = await async_execute_target_actions(hass, repository, changed_at)
+
+    assert result.pending_operations[-1].state is OperationState.SUCCEEDED
+    service_call.assert_awaited_once_with(
+        "light",
+        "off",
+        service_data={},
+        target={"entity_id": "light.living_room"},
+        blocking=True,
+    )
+
+
+async def test_notifications_are_journaled_and_deduplicated(hass) -> None:
+    """Confirmed start and end notifications cannot be prepared twice."""
+    repository, store = await _repository(hass)
+    ended_at = NOW + timedelta(minutes=1)
+    await _applied_schedule(hass, repository, ended_at)
+    await repository.async_update(
+        lambda current: replace(
+            current,
+            revision=current.revision + 1,
+            occurrences=(
+                replace(current.occurrences[0], state=OccurrenceState.COMPLETED),
+            ),
+            leases=(),
+            updated_at=ended_at,
+        )
+    )
+
+    prepared = await async_prepare_notifications(repository, ended_at)
+    notifications = tuple(
+        operation
+        for operation in prepared.pending_operations
+        if operation.kind is OperationKind.NOTIFICATION
+    )
+    assert {item.payload["phase"] for item in notifications} == {"start", "end"}
+
+    with patch.object(type(hass.services), "async_call", AsyncMock()) as service_call:
+        result = await async_execute_notifications(hass, repository, ended_at)
+
+    assert all(
+        item.state is OperationState.SUCCEEDED
+        for item in result.pending_operations
+        if item.kind is OperationKind.NOTIFICATION
+    )
+    assert len(result.notification_deduplication_keys) == 2
+    assert service_call.await_count == 2
+    saves_before = len(store.saves)
+
+    unchanged = await async_prepare_notifications(repository, ended_at)
+
+    assert unchanged is result
     assert len(store.saves) == saves_before
 
 
@@ -618,8 +758,7 @@ async def test_execution_coordinator_runs_due_retry_and_cancels_callback(
 
     cancel = Mock()
     with patch(
-        "custom_components.schedule_creator.actions."
-        "async_track_point_in_utc_time",
+        "custom_components.schedule_creator.actions.async_track_point_in_utc_time",
         return_value=cancel,
     ) as track:
         coordinator = ActionExecutionCoordinator(hass, repository)

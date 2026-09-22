@@ -14,6 +14,7 @@ from homeassistant.helpers.event import async_track_point_in_utc_time
 
 from .journal import JournalCoordinator
 from .models import (
+    ConditionBranch,
     EntityLease,
     FrozenJsonValue,
     LeaseState,
@@ -59,9 +60,7 @@ def _target_action(runtime: RuntimeStoreData, lease: EntityLease) -> TargetActio
     return timer.action
 
 
-def _payload(
-    lease: EntityLease, action: TargetAction
-) -> dict[str, FrozenJsonValue]:
+def _payload(lease: EntityLease, action: TargetAction) -> dict[str, FrozenJsonValue]:
     return {
         "lease_id": lease.id,
         "lease_generation": lease.generation,
@@ -149,9 +148,9 @@ async def async_prepare_target_actions(
         operations_by_occurrence: dict[str, list[PendingOperation]] = {}
         for operation in operations:
             assert operation.occurrence_id is not None
-            operations_by_occurrence.setdefault(
-                operation.occurrence_id, []
-            ).append(operation)
+            operations_by_occurrence.setdefault(operation.occurrence_id, []).append(
+                operation
+            )
         occurrences = tuple(
             replace(
                 occurrence,
@@ -159,9 +158,7 @@ async def async_prepare_target_actions(
                     *occurrence.pending_operation_ids,
                     *(
                         operation.id
-                        for operation in operations_by_occurrence.get(
-                            occurrence.id, ()
-                        )
+                        for operation in operations_by_occurrence.get(occurrence.id, ())
                     ),
                 ),
                 last_operation_id=operations_by_occurrence[occurrence.id][-1].id,
@@ -213,9 +210,11 @@ async def async_reconcile_sent_operations(
         sent_ids = {
             operation.id
             for operation in runtime.pending_operations
-            if operation.kind in {
+            if operation.kind
+            in {
                 OperationKind.TARGET_ACTION,
                 OperationKind.RESTORE,
+                OperationKind.NOTIFICATION,
             }
             and operation.state is OperationState.SENT
         }
@@ -243,9 +242,7 @@ async def async_reconcile_sent_operations(
     return await repository.async_update_if_changed(mutation)
 
 
-def _current_lease(
-    runtime: RuntimeStoreData, operation: PendingOperation
-) -> bool:
+def _current_lease(runtime: RuntimeStoreData, operation: PendingOperation) -> bool:
     lease_id = operation.payload.get("lease_id")
     generation = operation.payload.get("lease_generation")
     if (
@@ -267,17 +264,25 @@ def _current_lease(
 def _sendable_target_action(
     runtime: RuntimeStoreData, operation: PendingOperation
 ) -> bool:
-    if operation.payload.get("phase") != "completion":
+    phase = operation.payload.get("phase")
+    if phase not in {"schedule_end", "condition_fallback"}:
         return _current_lease(runtime, operation)
     if any(
-        lease.entity_id == operation.entity_id
-        and lease.state is LeaseState.ACTIVE
+        lease.entity_id == operation.entity_id and lease.state is LeaseState.ACTIVE
         for lease in runtime.leases
     ):
         return False
     return any(
         occurrence.id == operation.occurrence_id
-        and occurrence.state is OccurrenceState.COMPLETED
+        and (
+            (phase == "schedule_end" and occurrence.state is OccurrenceState.COMPLETED)
+            or (
+                phase == "condition_fallback"
+                and occurrence.state
+                in {OccurrenceState.ACTIVE, OccurrenceState.SUSPENDED}
+                and occurrence.condition_branch is ConditionBranch.FALSE
+            )
+        )
         for occurrence in runtime.occurrences
     )
 
@@ -344,7 +349,8 @@ async def async_execute_target_actions(
                 now=wall_clock,
                 error_code=(
                     "controller_replaced"
-                    if operation.payload.get("phase") == "completion"
+                    if operation.payload.get("phase")
+                    in {"schedule_end", "condition_fallback"}
                     else "lease_replaced"
                 ),
             )
@@ -403,13 +409,9 @@ class ActionExecutionCoordinator:
     async def async_refresh(self, now: datetime) -> RuntimeStoreData:
         """Execute all due actions and reschedule the nearest retry."""
 
-        result = await async_execute_target_actions(
-            self._hass, self._runtime, now
-        )
+        result = await async_execute_target_actions(self._hass, self._runtime, now)
         if self._on_actions_executed is not None:
-            result = cast(
-                RuntimeStoreData, await self._on_actions_executed(now)
-            )
+            result = cast(RuntimeStoreData, await self._on_actions_executed(now))
         self.reschedule(now)
         return result
 
