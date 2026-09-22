@@ -2,51 +2,50 @@
 
 ## Current checkpoint
 
-- Date: 2026-09-21
-- Completed phase: **2.4G – conservative terminal occurrence retention**
+- Date: 2026-09-22
+- Completed phase: **2.5A – pure deterministic overlap arbitration**
 - Repository: `arozoire/schedule_creator`
-- Exact base: `0c1b1f469761c687294e24efcb00fe7dc1b41c19`
-  (merged PR #14, Phase 2.4F)
-- Branch: `codex/phase-2-4g-terminal-retention`
-- Draft PR: https://github.com/arozoire/schedule_creator/pull/15
-- Implementation commit: `e58acf416fcee73657694bdf42d01829075b6c0d`
-- CI: https://github.com/arozoire/schedule_creator/actions/runs/35645415390
-  passed on the implementation commit with 116 tests
-- No Phase 2.4G merge, version bump, tag or release. Manifest remains `0.0.1`.
+- Exact base: `550e75e46283e1900bf15eed9c07b36bd29a71ea`
+  (merged PR #15, Phase 2.4G)
+- Branch: `codex/phase-2-5a-overlap-arbitration`
+- Draft PR: https://github.com/arozoire/schedule_creator/pull/16
+- Implementation commit: `84829cdd532affb6f676f967e8ab2b06eedfcf96`
+- CI: https://github.com/arozoire/schedule_creator/actions/runs/35684417458
+  passed on the implementation commit with 123 tests
+- No Phase 2.5A merge, version bump, tag or release. Manifest remains `0.0.1`.
 
 ## Implemented state
 
-Phase 2.4G bounds terminal occurrence history with a conservative 30-day policy.
-Only completed, cancelled or failed occurrences whose end is strictly older than
-the cutoff are eligible. Active, suspended, pending and cutoff-boundary records are
-always retained.
+Phase 2.5A builds immutable arbitration candidates from effective active schedule
+occurrences and Quick Timers. It chooses exactly one winner per entity and returns
+losers in deterministic order without mutating runtime state.
 
-An eligible occurrence is still retained when referenced by any snapshot, pending
-operation or entity lease. Retention does not cascade into operational records.
-Pruning is an atomic idempotent Runtime Store update and runs after startup state
-advancement and during the lifecycle-owned daily horizon refresh.
+Comparison keys match the persisted lease shape: effective UTC start, controller
+rank (`normal=1`, `conditional=2`, `quick timer=3`) and stable controller identity.
+The maximum key wins, so a later effective start has precedence; controller class
+and identity break ties. Duplicate controller/entity candidates fail explicitly.
 
-No condition evaluation, entity state read, service call, snapshot creation, lease
-acquisition, operation execution or notification is performed.
+No lease is created, updated or removed. No condition evaluation, snapshot, entity
+state read, service call, operation execution or notification is performed.
 
 ## Validation
 
 - Ruff passed.
-- mypy passed over 18 source files.
-- All 116 tests passed locally and in CI run #106.
-- Tests cover cutoff behavior, preservation of operational references and
-  idempotent no-op behavior after pruning.
+- mypy passed over 19 source files.
+- All 123 tests passed locally and in CI run #112.
+- Tests cover recency, controller rank, stable identity, runtime extraction,
+  inactive controllers, duplicate rejection and entity ordering.
 
 ## Deliberately deferred
 
-- overlap arbitration and entity lease acquisition;
+- persisted lease reconciliation and generation changes;
 - condition evaluation, snapshots, actions, restores and notifications;
-- Quick Timer execution and frontend work.
+- Quick Timer lifecycle execution and frontend work.
 
 ## Next recommended step
 
-Review and merge PR #15 only with explicit owner authorization. Then start a
-separate phase with a pure deterministic overlap-arbitration policy: compute winners
-and losers from immutable active occurrences and comparison keys without writing
-leases or touching entity state. Persisted lease acquisition should follow only
-after that policy is independently tested.
+Review and merge PR #16 only with explicit owner authorization. Phase 2.5B should
+atomically reconcile EntityLease records from one arbitration plan: one active
+winner per entity, suspended losing schedule controllers where resumability is
+required, monotonic generations and idempotent no-op replay. Keep entity reads and
+service calls outside that phase.
