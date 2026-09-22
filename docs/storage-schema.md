@@ -1,13 +1,13 @@
 # Schedule Creator persisted model schema
 
-**Status:** Phase 2.6D-E schema version 1. Native Store containers, restart recovery,
+**Status:** Phase 2.6D-F schema version 1. Native Store containers, restart recovery,
 occurrence projection, bounded-horizon reconciliation and safe future replanning
 are implemented. A lifecycle-owned daily callback rolls the horizon forward;
 clock-only occurrence state transitions and conservative terminal retention are
 implemented. Pure overlap arbitration, atomic lease reconciliation and persisted
 condition branches, initial winner snapshots and controlled target-action execution
 are available. Indeterminate sent operations fail closed; Quick Timer expiry and
-safe snapshot restoration are persisted. Schedule end actions remain deferred.
+safe snapshot restoration and explicit schedule end actions are persisted.
 
 ## Contract rules
 
@@ -241,6 +241,15 @@ executor persists `sent`, calls `scene.apply` with the captured state and attrib
 then persists success or the same bounded retry/final-failure policy as target
 actions. An interrupted restore also fails closed on startup without blind replay.
 
+## Schedule completion
+
+A completed occurrence receives deterministic `TARGET_ACTION` completion records
+only for entities whose start action succeeded and only when the frozen schedule
+defines an explicit end action. A newer active lease creates the record directly as
+`superseded`; otherwise execution revalidates that the occurrence is completed and
+the entity is still unowned immediately before sending. A schedule without an end
+action creates no operation and never implies snapshot restoration.
+
 ## Removal and migration behaviour
 
 Removing the config entry preserves all native Store files. Data deletion will be
@@ -254,6 +263,6 @@ implemented.
 
 ## Deferred to later phases
 
-- schedule end-action and conditional-fallback execution;
+- conditional-fallback execution;
 - notification dispatch and deduplication execution;
 - the confirmed RESET/backup/restore maintenance API.

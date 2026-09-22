@@ -3,16 +3,16 @@
 ## Current checkpoint
 
 - Date: 2026-09-22
-- Completed phase: **2.6D-E – runtime recovery and Quick Timer restore**
+- Completed phase: **2.6D-F – runtime recovery and completion actions**
 - Repository: `arozoire/schedule_creator`
 - Exact base: `b23c29928c29b215ce017a31de885270136c3a37`
   (merged PR #22, Phase 2.6C)
 - Branch: `codex/phase-2-6d-runtime-recovery`
 - Draft PR: https://github.com/arozoire/schedule_creator/pull/23
-- Implementation commit: `774ba2473ba5d9c762c03571a88fbc9a69316da1`
-- CI: https://github.com/arozoire/schedule_creator/actions/runs/35713726639
-  passed on the implementation commit with 176 tests
-- No Phase 2.6D-E merge, version bump, tag or release. Manifest remains `0.0.1`.
+- Implementation commit: `da1d86815811c662871bcff5455ed439ab7bfd6b`
+- CI: https://github.com/arozoire/schedule_creator/actions/runs/35715081807
+  passed on the implementation commit with 179 tests
+- No Phase 2.6D-F merge, version bump, tag or release. Manifest remains `0.0.1`.
 
 ## Implemented state
 
@@ -32,20 +32,25 @@ as `superseded`; otherwise `scene.apply` reproduces the immutable snapshot state
 attributes through the same sent/success/retry journal boundaries. Interrupted
 restores also fail closed at startup.
 
+Completed occurrences prepare and execute their frozen explicit end action only if
+their start action succeeded. Ownership is checked both while preparing and
+immediately before sending. A later controller permanently supersedes the end
+operation. No configured end action means no operation and no implicit restore.
+
 ## Validation
 
 - Ruff passed.
 - mypy passed over 24 source files.
-- All 176 tests passed in CI run #156; focused tests were run locally.
+- All 179 tests passed in CI run #160; focused tests were run locally.
 - Tests cover fail-closed SENT reconciliation, setup wiring, Quick Timer expiry,
   nearest-boundary selection and downstream reconciliation order.
 
 ## Deliberately deferred
 
-- schedule end actions, conditional fallbacks, notifications and frontend work.
+- conditional fallbacks, notifications and frontend work.
 
 ## Next recommended step
 
 Review and merge PR #23 only with explicit owner authorization. The next phase
-should add deterministic completion intents for normal schedule end and conditional
-fallback, reusing the completed journal and ownership protections.
+should add deterministic conditional-fallback intents, reusing the completed
+journal and ownership protections across repeated true/false condition cycles.
