@@ -164,6 +164,12 @@ async def test_get_state_populated(hass, hass_ws_client, hass_storage):
     before = _stored(hass_storage)
     storage = entry.runtime_data.storage
     reconciled_runtime = storage.runtime.data
+    reconciled_pending = next(
+        operation
+        for operation in reconciled_runtime.pending_operations
+        if operation.id == pending.id
+    )
+    assert reconciled_pending.state is OperationState.SUPERSEDED
     models_before = (storage.config.data, storage.runtime.data, storage.audit.data)
     response = await _read(client)
     assert response["success"] is True
@@ -188,7 +194,7 @@ async def test_get_state_populated(hass, hass_ws_client, hass_storage):
             ),
             "pending_operations": 2,
             "quick_timers": 1,
-            "recovery_instructions": 1,
+            "recovery_instructions": 0,
         },
     }
     assert (

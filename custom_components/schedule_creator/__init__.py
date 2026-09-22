@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util.hass_dict import HassKey
 
-from .actions import ActionPreparationCoordinator
+from .actions import ActionExecutionCoordinator, ActionPreparationCoordinator
 from .boundaries import (
     OccurrenceBoundaryCoordinator,
     async_advance_occurrence_states,
@@ -38,6 +38,7 @@ class ScheduleCreatorRuntimeData:
     occurrence_boundaries: OccurrenceBoundaryCoordinator
     conditions: ConditionCoordinator
     snapshots: SnapshotCoordinator
+    action_execution: ActionExecutionCoordinator
     loaded: bool = True
 
     async def async_shutdown(self) -> None:
@@ -48,6 +49,7 @@ class ScheduleCreatorRuntimeData:
         self.occurrence_boundaries.shutdown()
         self.conditions.shutdown()
         self.snapshots.shutdown()
+        self.action_execution.shutdown()
         await self.storage.async_shutdown()
 
 
@@ -87,7 +89,10 @@ async def async_setup_entry(
             storage.runtime, config, ZoneInfo(hass.config.time_zone), now
         )
         await async_advance_occurrence_states(storage.runtime, now)
-        actions = ActionPreparationCoordinator(storage.runtime)
+        action_execution = ActionExecutionCoordinator(hass, storage.runtime)
+        actions = ActionPreparationCoordinator(
+            storage.runtime, action_execution.async_refresh
+        )
         snapshots = SnapshotCoordinator(
             hass, storage.runtime, actions.async_refresh
         )
@@ -113,7 +118,9 @@ async def async_setup_entry(
             occurrence_boundaries=occurrence_boundaries,
             conditions=conditions,
             snapshots=snapshots,
+            action_execution=action_execution,
         )
+        action_execution.start(now)
         snapshots.start()
         conditions.start(now)
         occurrence_boundaries.start(now)

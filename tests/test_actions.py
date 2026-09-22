@@ -5,10 +5,16 @@ from copy import deepcopy
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, patch
+
+from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.schedule_creator.actions import (
+    ACTION_RETRY_INTERVAL,
+    MAX_ACTION_ATTEMPTS,
+    ActionExecutionCoordinator,
     ActionPreparationCoordinator,
+    async_execute_target_actions,
     async_prepare_target_actions,
 )
 from custom_components.schedule_creator.leases import async_reconcile_entity_leases
@@ -229,3 +235,139 @@ async def test_coordinator_does_not_call_home_assistant_services(hass) -> None:
 
     assert len(result.pending_operations) == 1
     service_call.assert_not_called()
+
+
+async def test_execute_persists_sent_before_service_and_success_after(hass) -> None:
+    """The service call is strictly enclosed by durable journal boundaries."""
+    repository, store = await _repository(hass)
+    await async_prepare_target_actions(repository, NOW)
+    saves_before = len(store.saves)
+
+    async def service_call(*args, **kwargs):
+        assert repository.data.pending_operations[0].state is OperationState.SENT
+
+    with patch.object(
+        type(hass.services),
+        "async_call",
+        AsyncMock(side_effect=service_call),
+    ) as call:
+        result = await async_execute_target_actions(hass, repository, NOW)
+
+    operation = result.pending_operations[0]
+    assert operation.state is OperationState.SUCCEEDED
+    assert operation.attempt_count == 1
+    assert len(store.saves) == saves_before + 2
+    call.assert_awaited_once_with(
+        "light",
+        "on",
+        service_data={"brightness": 255},
+        target={"entity_id": "light.living_room"},
+        blocking=True,
+    )
+
+
+async def test_stale_lease_is_superseded_without_service_call(hass) -> None:
+    """Lease revalidation immediately before SENT blocks obsolete intent."""
+    repository, _store = await _repository(hass)
+    await async_prepare_target_actions(repository, NOW)
+    await repository.async_update(
+        lambda current: replace(
+            current,
+            revision=current.revision + 1,
+            leases=(),
+            updated_at=NOW + timedelta(seconds=1),
+        )
+    )
+
+    with patch.object(type(hass.services), "async_call") as service_call:
+        result = await async_execute_target_actions(
+            hass, repository, NOW + timedelta(seconds=1)
+        )
+
+    assert result.pending_operations[0].state is OperationState.SUPERSEDED
+    assert result.pending_operations[0].error_code == "lease_replaced"
+    service_call.assert_not_called()
+
+
+async def test_service_failure_persists_bounded_retry(hass) -> None:
+    """A transient HA failure becomes a timed retry with retained evidence."""
+    repository, _store = await _repository(hass)
+    await async_prepare_target_actions(repository, NOW)
+
+    with patch.object(
+        type(hass.services),
+        "async_call",
+        AsyncMock(side_effect=HomeAssistantError("unavailable")),
+    ):
+        result = await async_execute_target_actions(hass, repository, NOW)
+
+    operation = result.pending_operations[0]
+    assert operation.state is OperationState.RETRY_WAIT
+    assert operation.attempt_count == 1
+    assert operation.next_retry_at == NOW + ACTION_RETRY_INTERVAL
+    assert operation.error_code == "service_error"
+
+
+async def test_third_service_failure_is_final(hass) -> None:
+    """Repeated failures stop after the configured bounded attempt count."""
+    repository, _store = await _repository(hass)
+    await async_prepare_target_actions(repository, NOW)
+    await repository.async_update(
+        lambda current: replace(
+            current,
+            revision=current.revision + 1,
+            pending_operations=(
+                replace(current.pending_operations[0], attempt_count=2),
+            ),
+        )
+    )
+
+    with patch.object(
+        type(hass.services),
+        "async_call",
+        AsyncMock(side_effect=HomeAssistantError("still unavailable")),
+    ):
+        result = await async_execute_target_actions(hass, repository, NOW)
+
+    operation = result.pending_operations[0]
+    assert MAX_ACTION_ATTEMPTS == 3
+    assert operation.state is OperationState.FAILED_FINAL
+    assert operation.attempt_count == 3
+    assert operation.next_retry_at is None
+    assert operation.error_code == "service_failed"
+
+
+async def test_execution_coordinator_runs_due_retry_and_cancels_callback(
+    hass,
+) -> None:
+    """The lifecycle owner schedules and executes the nearest persisted retry."""
+    repository, _store = await _repository(hass)
+    await async_prepare_target_actions(repository, NOW)
+    with patch.object(
+        type(hass.services),
+        "async_call",
+        AsyncMock(side_effect=HomeAssistantError("temporary")),
+    ):
+        await async_execute_target_actions(hass, repository, NOW)
+
+    cancel = Mock()
+    with patch(
+        "custom_components.schedule_creator.actions."
+        "async_track_point_in_utc_time",
+        return_value=cancel,
+    ) as track:
+        coordinator = ActionExecutionCoordinator(hass, repository)
+        coordinator.start(NOW)
+        callback = track.call_args.args[1]
+        with patch.object(
+            type(hass.services), "async_call", AsyncMock()
+        ) as service_call:
+            await callback(NOW + ACTION_RETRY_INTERVAL)
+
+        assert track.call_args.args[2] == NOW + ACTION_RETRY_INTERVAL
+        assert repository.data.pending_operations[0].state is OperationState.SUCCEEDED
+        assert repository.data.pending_operations[0].attempt_count == 2
+        service_call.assert_awaited_once()
+        coordinator.shutdown()
+
+    cancel.assert_called_once_with()

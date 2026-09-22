@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID, uuid5
 
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.event import async_track_point_in_utc_time
+
+from .journal import JournalCoordinator
 from .models import (
     EntityLease,
     FrozenJsonValue,
@@ -17,7 +24,13 @@ from .models import (
 )
 from .storage import RuntimeRepository, RuntimeStoreData
 
+if TYPE_CHECKING:
+    from homeassistant.core import CALLBACK_TYPE, HomeAssistant
+
 _OPERATION_NAMESPACE = UUID("639890ae-ec49-4c94-b925-6b022bd92a8f")
+_LOGGER = logging.getLogger(__name__)
+ACTION_RETRY_INTERVAL = timedelta(seconds=30)
+MAX_ACTION_ATTEMPTS = 3
 
 
 def _utc(value: datetime) -> datetime:
@@ -170,10 +183,205 @@ async def async_prepare_target_actions(
 class ActionPreparationCoordinator:
     """Expose action preparation as a lifecycle reconciliation stage."""
 
-    def __init__(self, runtime: RuntimeRepository) -> None:
+    def __init__(
+        self,
+        runtime: RuntimeRepository,
+        on_actions_prepared: Callable[[datetime], Awaitable[object]] | None = None,
+    ) -> None:
         self._runtime = runtime
+        self._on_actions_prepared = on_actions_prepared
 
     async def async_refresh(self, now: datetime) -> RuntimeStoreData:
         """Prepare all currently eligible target actions."""
 
-        return await async_prepare_target_actions(self._runtime, now)
+        result = await async_prepare_target_actions(self._runtime, now)
+        if self._on_actions_prepared is not None:
+            result = cast(RuntimeStoreData, await self._on_actions_prepared(now))
+        return result
+
+
+def _current_lease(
+    runtime: RuntimeStoreData, operation: PendingOperation
+) -> bool:
+    lease_id = operation.payload.get("lease_id")
+    generation = operation.payload.get("lease_generation")
+    if (
+        not isinstance(lease_id, str)
+        or not isinstance(generation, int)
+        or isinstance(generation, bool)
+    ):
+        return False
+    return any(
+        lease.id == lease_id
+        and lease.generation == generation
+        and lease.state is LeaseState.ACTIVE
+        and lease.controller_id == operation.occurrence_id
+        and lease.entity_id == operation.entity_id
+        for lease in runtime.leases
+    )
+
+
+def _service_request(
+    operation: PendingOperation,
+) -> tuple[str, str, dict[str, Any]]:
+    domain = operation.payload.get("domain")
+    action = operation.payload.get("action")
+    data = operation.payload.get("data")
+    if (
+        not isinstance(domain, str)
+        or not isinstance(action, str)
+        or not isinstance(data, Mapping)
+    ):
+        raise ValueError("invalid target-action payload")
+    return domain, action, dict(data)
+
+
+def _due_operations(
+    runtime: RuntimeStoreData, now: datetime
+) -> tuple[PendingOperation, ...]:
+    return tuple(
+        operation
+        for operation in runtime.pending_operations
+        if operation.kind is OperationKind.TARGET_ACTION
+        and (
+            operation.state is OperationState.PREPARED
+            or (
+                operation.state is OperationState.RETRY_WAIT
+                and operation.next_retry_at is not None
+                and operation.next_retry_at <= now
+            )
+        )
+    )
+
+
+async def async_execute_target_actions(
+    hass: HomeAssistant, repository: RuntimeRepository, now: datetime
+) -> RuntimeStoreData:
+    """Execute due target actions through durable journal boundaries."""
+
+    wall_clock = _utc(now)
+    journal = JournalCoordinator(repository)
+    operation_ids = tuple(
+        operation.id for operation in _due_operations(repository.data, wall_clock)
+    )
+    for operation_id in operation_ids:
+        operation = next(
+            (
+                item
+                for item in repository.data.pending_operations
+                if item.id == operation_id
+            ),
+            None,
+        )
+        if operation is None or operation not in _due_operations(
+            repository.data, wall_clock
+        ):
+            continue
+        if not _current_lease(repository.data, operation):
+            await journal.async_supersede(
+                operation.id, now=wall_clock, error_code="lease_replaced"
+            )
+            continue
+        try:
+            domain, action, data = _service_request(operation)
+        except ValueError:
+            await journal.async_fail_final(
+                operation.id, now=wall_clock, error_code="invalid_payload"
+            )
+            continue
+
+        sent = await journal.async_mark_sent(operation.id, wall_clock)
+        try:
+            await hass.services.async_call(
+                domain,
+                action,
+                service_data=data,
+                target={"entity_id": operation.entity_id},
+                blocking=True,
+            )
+        except (HomeAssistantError, TimeoutError):
+            if sent.attempt_count >= MAX_ACTION_ATTEMPTS:
+                await journal.async_fail_final(
+                    operation.id,
+                    now=wall_clock,
+                    error_code="service_failed",
+                )
+            else:
+                await journal.async_schedule_retry(
+                    operation.id,
+                    now=wall_clock,
+                    retry_at=wall_clock + ACTION_RETRY_INTERVAL,
+                    error_code="service_error",
+                )
+            continue
+        await journal.async_mark_succeeded(operation.id, wall_clock)
+    return repository.data
+
+
+class ActionExecutionCoordinator:
+    """Execute actions now and own the nearest persisted retry callback."""
+
+    def __init__(self, hass: HomeAssistant, runtime: RuntimeRepository) -> None:
+        self._hass = hass
+        self._runtime = runtime
+        self._cancel: CALLBACK_TYPE | None = None
+        self._active = False
+
+    async def async_refresh(self, now: datetime) -> RuntimeStoreData:
+        """Execute all due actions and reschedule the nearest retry."""
+
+        result = await async_execute_target_actions(
+            self._hass, self._runtime, now
+        )
+        self.reschedule(now)
+        return result
+
+    def start(self, now: datetime) -> None:
+        """Activate persisted retry scheduling after initial execution."""
+
+        self._active = True
+        self.reschedule(now)
+
+    def reschedule(self, now: datetime) -> None:
+        """Replace the owned callback with the nearest future retry."""
+
+        if not self._active:
+            return
+        if self._cancel is not None:
+            self._cancel()
+            self._cancel = None
+        wall_clock = _utc(now)
+        retry_at = min(
+            (
+                operation.next_retry_at
+                for operation in self._runtime.data.pending_operations
+                if operation.state is OperationState.RETRY_WAIT
+                and operation.next_retry_at is not None
+                and operation.next_retry_at > wall_clock
+            ),
+            default=None,
+        )
+        if retry_at is not None:
+            self._cancel = async_track_point_in_utc_time(
+                self._hass, self._async_retry, retry_at
+            )
+
+    def shutdown(self) -> None:
+        """Cancel the retry callback before runtime storage is released."""
+
+        self._active = False
+        if self._cancel is not None:
+            self._cancel()
+            self._cancel = None
+
+    async def _async_retry(self, now: datetime) -> None:
+        from . import lifecycle_lock
+
+        async with lifecycle_lock(self._hass):
+            if not self._active:
+                return
+            try:
+                await self.async_refresh(now.astimezone(UTC))
+            except Exception:
+                _LOGGER.exception("Unable to retry target action")
+                self.reschedule(now.astimezone(UTC))
