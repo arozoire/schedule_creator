@@ -31,6 +31,7 @@ _OPERATION_NAMESPACE = UUID("639890ae-ec49-4c94-b925-6b022bd92a8f")
 _LOGGER = logging.getLogger(__name__)
 ACTION_RETRY_INTERVAL = timedelta(seconds=30)
 MAX_ACTION_ATTEMPTS = 3
+UNKNOWN_SENT_OUTCOME = "sent_outcome_unknown"
 
 
 def _utc(value: datetime) -> datetime:
@@ -198,6 +199,44 @@ class ActionPreparationCoordinator:
         if self._on_actions_prepared is not None:
             result = cast(RuntimeStoreData, await self._on_actions_prepared(now))
         return result
+
+
+async def async_reconcile_sent_target_actions(
+    repository: RuntimeRepository, now: datetime
+) -> RuntimeStoreData:
+    """Fail closed for target actions left SENT by an interrupted process."""
+
+    reconciled_at = _utc(now)
+
+    def mutation(runtime: RuntimeStoreData) -> RuntimeStoreData | None:
+        sent_ids = {
+            operation.id
+            for operation in runtime.pending_operations
+            if operation.kind is OperationKind.TARGET_ACTION
+            and operation.state is OperationState.SENT
+        }
+        if not sent_ids:
+            return None
+        persisted_at = max(runtime.updated_at, reconciled_at)
+        return replace(
+            runtime,
+            revision=runtime.revision + 1,
+            pending_operations=tuple(
+                replace(
+                    operation,
+                    state=OperationState.FAILED_FINAL,
+                    updated_at=persisted_at,
+                    next_retry_at=None,
+                    error_code=UNKNOWN_SENT_OUTCOME,
+                )
+                if operation.id in sent_ids
+                else operation
+                for operation in runtime.pending_operations
+            ),
+            updated_at=persisted_at,
+        )
+
+    return await repository.async_update_if_changed(mutation)
 
 
 def _current_lease(

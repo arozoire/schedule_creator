@@ -12,11 +12,14 @@ from homeassistant.exceptions import HomeAssistantError
 from custom_components.schedule_creator.actions import (
     ACTION_RETRY_INTERVAL,
     MAX_ACTION_ATTEMPTS,
+    UNKNOWN_SENT_OUTCOME,
     ActionExecutionCoordinator,
     ActionPreparationCoordinator,
     async_execute_target_actions,
     async_prepare_target_actions,
+    async_reconcile_sent_target_actions,
 )
+from custom_components.schedule_creator.journal import JournalCoordinator
 from custom_components.schedule_creator.leases import async_reconcile_entity_leases
 from custom_components.schedule_creator.models import (
     ControllerType,
@@ -264,6 +267,32 @@ async def test_execute_persists_sent_before_service_and_success_after(hass) -> N
         target={"entity_id": "light.living_room"},
         blocking=True,
     )
+
+
+async def test_restart_fails_closed_for_indeterminate_sent_action(hass) -> None:
+    """Startup never blindly replays a service call with an unknown outcome."""
+    repository, store = await _repository(hass)
+    await async_prepare_target_actions(repository, NOW)
+    operation_id = repository.data.pending_operations[0].id
+    await JournalCoordinator(repository).async_mark_sent(operation_id, NOW)
+    saves_before = len(store.saves)
+
+    with patch.object(type(hass.services), "async_call") as service_call:
+        result = await async_reconcile_sent_target_actions(
+            repository, NOW + timedelta(seconds=1)
+        )
+        replay = await async_reconcile_sent_target_actions(
+            repository, NOW + timedelta(seconds=2)
+        )
+
+    operation = result.pending_operations[0]
+    assert operation.state is OperationState.FAILED_FINAL
+    assert operation.attempt_count == 1
+    assert operation.error_code == UNKNOWN_SENT_OUTCOME
+    assert operation.next_retry_at is None
+    assert replay is result
+    assert len(store.saves) == saves_before + 1
+    service_call.assert_not_called()
 
 
 async def test_stale_lease_is_superseded_without_service_call(hass) -> None:

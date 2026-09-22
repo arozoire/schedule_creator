@@ -10,10 +10,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util.hass_dict import HassKey
 
-from .actions import ActionExecutionCoordinator, ActionPreparationCoordinator
+from .actions import (
+    ActionExecutionCoordinator,
+    ActionPreparationCoordinator,
+    async_reconcile_sent_target_actions,
+)
 from .boundaries import (
     OccurrenceBoundaryCoordinator,
     async_advance_occurrence_states,
+    async_advance_quick_timer_states,
 )
 from .condition_runtime import ConditionCoordinator
 from .const import DOMAIN
@@ -89,6 +94,8 @@ async def async_setup_entry(
             storage.runtime, config, ZoneInfo(hass.config.time_zone), now
         )
         await async_advance_occurrence_states(storage.runtime, now)
+        await async_advance_quick_timer_states(storage.runtime, now)
+        await async_reconcile_sent_target_actions(storage.runtime, now)
         action_execution = ActionExecutionCoordinator(hass, storage.runtime)
         actions = ActionPreparationCoordinator(
             storage.runtime, action_execution.async_refresh
