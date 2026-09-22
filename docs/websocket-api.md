@@ -155,9 +155,9 @@ The no-await callback sees immutable config/runtime values without yielding to a
 reload or another update while constructing its response. Existing startup
 initialization and unload audit flushing are separate lifecycle operations.
 
-There are no API subscriptions, operational restores, notifications or frontend.
-Entity state reads, initial snapshots and target-action service calls belong to the
-separate integration lifecycle; the read handler never initiates them.
+There are no API subscriptions or frontend. Entity state reads, initial snapshots,
+target actions, restores and notifications belong to the separate integration
+lifecycle; the read handler never initiates them.
 Five focused tests cover empty/non-admin/read-only access, populated state and
 journal semantics, unloaded state, reload/idempotent registration, and sanitized
 storage/internal errors. Validation uses HA's test harness, not a physical HA
@@ -265,3 +265,20 @@ winners. Eligible winners also receive target-action journal records and the
 post-commit lifecycle may execute them through durable `sent`, success and bounded
 retry/failure transitions. A runtime-side failure remains logged and retryable; it
 does not roll back or misreport the already-persisted configuration mutation.
+
+## Administrative Quick Timer commands
+
+These commands require a Home Assistant administrator and use the independent
+runtime revision returned by `runtime_summary.revision` or a previous timer result:
+
+| Command | Required fields | Result |
+|---|---|---|
+| `schedule_creator/quick_timer/create` | `expected_revision`, `entity_id`, `duration_seconds` (1–604800), `action` | Current runtime `revision` and server-created `quick_timer` |
+| `schedule_creator/quick_timer/cancel` | `expected_revision`, active `quick_timer_id` | Current runtime `revision` and cancelled `quick_timer` |
+
+The server owns timer, controller and nested action IDs plus all timestamps. Create
+commits the active timer before running the normal lease, snapshot and target-action
+chain. Cancel commits `cancelled` before that chain releases ownership and prepares
+a restore only when the timer action succeeded. A newer controller still supersedes
+the restore. Stale runtime revisions return `revision_conflict`; cancelling a
+non-active timer returns `invalid_state`.

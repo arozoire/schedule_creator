@@ -12,11 +12,14 @@ from custom_components.schedule_creator.boundaries import (
     BOUNDARY_RETRY_INTERVAL,
     OccurrenceBoundaryCoordinator,
     async_advance_occurrence_states,
+    async_advance_quick_timer_states,
     next_occurrence_boundary,
 )
 from custom_components.schedule_creator.models import (
     IntegrationConfig,
     OccurrenceState,
+    QuickTimer,
+    QuickTimerState,
 )
 from custom_components.schedule_creator.planner import plan_occurrences
 from custom_components.schedule_creator.storage import (
@@ -54,12 +57,16 @@ def _projected():
     )
 
 
-async def _repository(hass, occurrences):
+async def _repository(hass, occurrences, quick_timers=()):
     store = MemoryJsonStore()
     repository = RuntimeRepository(hass, store)
     assert await repository.async_load() is None
     await repository.async_initialize(
-        replace(empty_runtime(NOW), occurrences=occurrences)
+        replace(
+            empty_runtime(NOW),
+            occurrences=occurrences,
+            quick_timers=quick_timers,
+        )
     )
     return repository, store
 
@@ -98,6 +105,58 @@ async def test_next_boundary_selects_one_nearest_clock_instant(hass):
     boundary = next_occurrence_boundary(repository.data, NOW)
 
     assert boundary == min(item.start_utc for item in occurrences)
+
+
+async def test_quick_timer_expiry_is_persisted_and_becomes_next_boundary(hass):
+    """The shared clock coordinator owns Quick Timer expiry as durable state."""
+    bundle = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    timer = replace(
+        QuickTimer.from_dict(bundle["quick_timer"]),
+        starts_at=NOW,
+        expires_at=NOW + timedelta(minutes=5),
+        state=QuickTimerState.ACTIVE,
+        snapshot_id=None,
+        created_at=NOW,
+    )
+    occurrence = _projected()[0]
+    repository, store = await _repository(hass, (occurrence,), (timer,))
+
+    assert next_occurrence_boundary(repository.data, NOW) == timer.expires_at
+    result = await async_advance_quick_timer_states(
+        repository, timer.expires_at
+    )
+
+    assert result.quick_timers[0].state is QuickTimerState.COMPLETED
+    assert len(store.saves) == 2
+
+
+async def test_coordinator_advances_due_quick_timer(hass):
+    """The owned callback persists expiry before downstream reconciliation."""
+    bundle = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    timer = replace(
+        QuickTimer.from_dict(bundle["quick_timer"]),
+        starts_at=NOW,
+        expires_at=NOW + timedelta(minutes=5),
+        state=QuickTimerState.ACTIVE,
+        snapshot_id=None,
+        created_at=NOW,
+    )
+    repository, _store = await _repository(hass, (), (timer,))
+    downstream = AsyncMock()
+    with patch(
+        "custom_components.schedule_creator.boundaries."
+        "async_track_point_in_utc_time",
+        return_value=Mock(),
+    ) as track:
+        coordinator = OccurrenceBoundaryCoordinator(
+            hass, repository, downstream
+        )
+        coordinator.start(NOW)
+        callback = track.call_args.args[1]
+        await callback(timer.expires_at)
+
+    assert repository.data.quick_timers[0].state is QuickTimerState.COMPLETED
+    downstream.assert_awaited_once_with(timer.expires_at)
 
 
 async def test_coordinator_cancels_owned_callback_and_rejects_late_work(hass):

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from homeassistant.helpers.event import async_track_point_in_utc_time
 
 from .leases import async_reconcile_entity_leases
-from .models import Occurrence, OccurrenceState
+from .models import Occurrence, OccurrenceState, QuickTimer, QuickTimerState
 from .storage import RuntimeRepository, RuntimeStoreData
 
 if TYPE_CHECKING:
@@ -63,10 +63,40 @@ async def async_advance_occurrence_states(
     return await repository.async_update_if_changed(mutation)
 
 
+def _advance_quick_timer(timer: QuickTimer, now: datetime) -> QuickTimer:
+    if timer.state is QuickTimerState.ACTIVE and timer.expires_at <= now:
+        return replace(timer, state=QuickTimerState.COMPLETED)
+    return timer
+
+
+async def async_advance_quick_timer_states(
+    repository: RuntimeRepository, now: datetime
+) -> RuntimeStoreData:
+    """Persist all clock-due Quick Timer expirations in one atomic write."""
+
+    wall_clock = _utc(now)
+
+    def mutation(current: RuntimeStoreData) -> RuntimeStoreData | None:
+        timers = tuple(
+            _advance_quick_timer(timer, wall_clock)
+            for timer in current.quick_timers
+        )
+        if timers == current.quick_timers:
+            return None
+        return replace(
+            current,
+            revision=current.revision + 1,
+            quick_timers=timers,
+            updated_at=max(current.updated_at, wall_clock),
+        )
+
+    return await repository.async_update_if_changed(mutation)
+
+
 def next_occurrence_boundary(
     runtime: RuntimeStoreData, now: datetime
 ) -> datetime | None:
-    """Return the next lifecycle boundary strictly after the wall clock."""
+    """Return the next occurrence or Quick Timer boundary after the wall clock."""
 
     wall_clock = _utc(now)
     candidates: list[datetime] = []
@@ -81,6 +111,12 @@ def next_occurrence_boundary(
             OccurrenceState.SUSPENDED,
         } and occurrence.end_utc > wall_clock:
             candidates.append(occurrence.end_utc)
+    candidates.extend(
+        timer.expires_at
+        for timer in runtime.quick_timers
+        if timer.state is QuickTimerState.ACTIVE
+        and timer.expires_at > wall_clock
+    )
     return min(candidates, default=None)
 
 
@@ -143,6 +179,7 @@ class OccurrenceBoundaryCoordinator:
                 return
             try:
                 await async_advance_occurrence_states(self._runtime, now)
+                await async_advance_quick_timer_states(self._runtime, now)
                 if self._on_advanced is None:
                     await async_reconcile_entity_leases(self._runtime, now)
                 else:

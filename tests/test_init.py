@@ -1,8 +1,13 @@
 """Test Schedule Creator config-entry lifecycle."""
 
+from unittest.mock import patch
+
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 
+from custom_components.schedule_creator.actions import (
+    async_reconcile_sent_operations,
+)
 from custom_components.schedule_creator.const import DOMAIN
 from custom_components.schedule_creator.storage import (
     ConfigRepository,
@@ -33,6 +38,19 @@ async def test_unload_releases_runtime(hass: HomeAssistant) -> None:
     assert not any(
         state.entity_id.startswith(f"{DOMAIN}.") for state in hass.states.async_all()
     )
+
+
+async def test_setup_reconciles_indeterminate_sent_actions(
+    hass: HomeAssistant,
+) -> None:
+    """Config-entry setup crosses the SENT recovery boundary before loading."""
+    with patch(
+        "custom_components.schedule_creator.async_reconcile_sent_operations",
+        wraps=async_reconcile_sent_operations,
+    ) as reconcile:
+        await _create_entry(hass)
+
+    reconcile.assert_awaited_once()
 
 
 async def test_reload_replaces_runtime_after_shutdown(hass: HomeAssistant) -> None:

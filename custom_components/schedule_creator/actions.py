@@ -14,9 +14,11 @@ from homeassistant.helpers.event import async_track_point_in_utc_time
 
 from .journal import JournalCoordinator
 from .models import (
+    ConditionBranch,
     EntityLease,
     FrozenJsonValue,
     LeaseState,
+    OccurrenceState,
     OperationKind,
     OperationState,
     PendingOperation,
@@ -31,6 +33,7 @@ _OPERATION_NAMESPACE = UUID("639890ae-ec49-4c94-b925-6b022bd92a8f")
 _LOGGER = logging.getLogger(__name__)
 ACTION_RETRY_INTERVAL = timedelta(seconds=30)
 MAX_ACTION_ATTEMPTS = 3
+UNKNOWN_SENT_OUTCOME = "sent_outcome_unknown"
 
 
 def _utc(value: datetime) -> datetime:
@@ -57,9 +60,7 @@ def _target_action(runtime: RuntimeStoreData, lease: EntityLease) -> TargetActio
     return timer.action
 
 
-def _payload(
-    lease: EntityLease, action: TargetAction
-) -> dict[str, FrozenJsonValue]:
+def _payload(lease: EntityLease, action: TargetAction) -> dict[str, FrozenJsonValue]:
     return {
         "lease_id": lease.id,
         "lease_generation": lease.generation,
@@ -147,9 +148,9 @@ async def async_prepare_target_actions(
         operations_by_occurrence: dict[str, list[PendingOperation]] = {}
         for operation in operations:
             assert operation.occurrence_id is not None
-            operations_by_occurrence.setdefault(
-                operation.occurrence_id, []
-            ).append(operation)
+            operations_by_occurrence.setdefault(operation.occurrence_id, []).append(
+                operation
+            )
         occurrences = tuple(
             replace(
                 occurrence,
@@ -157,9 +158,7 @@ async def async_prepare_target_actions(
                     *occurrence.pending_operation_ids,
                     *(
                         operation.id
-                        for operation in operations_by_occurrence.get(
-                            occurrence.id, ()
-                        )
+                        for operation in operations_by_occurrence.get(occurrence.id, ())
                     ),
                 ),
                 last_operation_id=operations_by_occurrence[occurrence.id][-1].id,
@@ -200,9 +199,50 @@ class ActionPreparationCoordinator:
         return result
 
 
-def _current_lease(
-    runtime: RuntimeStoreData, operation: PendingOperation
-) -> bool:
+async def async_reconcile_sent_operations(
+    repository: RuntimeRepository, now: datetime
+) -> RuntimeStoreData:
+    """Fail closed for service operations left SENT by an interrupted process."""
+
+    reconciled_at = _utc(now)
+
+    def mutation(runtime: RuntimeStoreData) -> RuntimeStoreData | None:
+        sent_ids = {
+            operation.id
+            for operation in runtime.pending_operations
+            if operation.kind
+            in {
+                OperationKind.TARGET_ACTION,
+                OperationKind.RESTORE,
+                OperationKind.NOTIFICATION,
+            }
+            and operation.state is OperationState.SENT
+        }
+        if not sent_ids:
+            return None
+        persisted_at = max(runtime.updated_at, reconciled_at)
+        return replace(
+            runtime,
+            revision=runtime.revision + 1,
+            pending_operations=tuple(
+                replace(
+                    operation,
+                    state=OperationState.FAILED_FINAL,
+                    updated_at=persisted_at,
+                    next_retry_at=None,
+                    error_code=UNKNOWN_SENT_OUTCOME,
+                )
+                if operation.id in sent_ids
+                else operation
+                for operation in runtime.pending_operations
+            ),
+            updated_at=persisted_at,
+        )
+
+    return await repository.async_update_if_changed(mutation)
+
+
+def _current_lease(runtime: RuntimeStoreData, operation: PendingOperation) -> bool:
     lease_id = operation.payload.get("lease_id")
     generation = operation.payload.get("lease_generation")
     if (
@@ -218,6 +258,32 @@ def _current_lease(
         and lease.controller_id == operation.occurrence_id
         and lease.entity_id == operation.entity_id
         for lease in runtime.leases
+    )
+
+
+def _sendable_target_action(
+    runtime: RuntimeStoreData, operation: PendingOperation
+) -> bool:
+    phase = operation.payload.get("phase")
+    if phase not in {"schedule_end", "condition_fallback"}:
+        return _current_lease(runtime, operation)
+    if any(
+        lease.entity_id == operation.entity_id and lease.state is LeaseState.ACTIVE
+        for lease in runtime.leases
+    ):
+        return False
+    return any(
+        occurrence.id == operation.occurrence_id
+        and (
+            (phase == "schedule_end" and occurrence.state is OccurrenceState.COMPLETED)
+            or (
+                phase == "condition_fallback"
+                and occurrence.state
+                in {OccurrenceState.ACTIVE, OccurrenceState.SUSPENDED}
+                and occurrence.condition_branch is ConditionBranch.FALSE
+            )
+        )
+        for occurrence in runtime.occurrences
     )
 
 
@@ -277,9 +343,16 @@ async def async_execute_target_actions(
             repository.data, wall_clock
         ):
             continue
-        if not _current_lease(repository.data, operation):
+        if not _sendable_target_action(repository.data, operation):
             await journal.async_supersede(
-                operation.id, now=wall_clock, error_code="lease_replaced"
+                operation.id,
+                now=wall_clock,
+                error_code=(
+                    "controller_replaced"
+                    if operation.payload.get("phase")
+                    in {"schedule_end", "condition_fallback"}
+                    else "lease_replaced"
+                ),
             )
             continue
         try:
@@ -321,18 +394,24 @@ async def async_execute_target_actions(
 class ActionExecutionCoordinator:
     """Execute actions now and own the nearest persisted retry callback."""
 
-    def __init__(self, hass: HomeAssistant, runtime: RuntimeRepository) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        runtime: RuntimeRepository,
+        on_actions_executed: Callable[[datetime], Awaitable[object]] | None = None,
+    ) -> None:
         self._hass = hass
         self._runtime = runtime
+        self._on_actions_executed = on_actions_executed
         self._cancel: CALLBACK_TYPE | None = None
         self._active = False
 
     async def async_refresh(self, now: datetime) -> RuntimeStoreData:
         """Execute all due actions and reschedule the nearest retry."""
 
-        result = await async_execute_target_actions(
-            self._hass, self._runtime, now
-        )
+        result = await async_execute_target_actions(self._hass, self._runtime, now)
+        if self._on_actions_executed is not None:
+            result = cast(RuntimeStoreData, await self._on_actions_executed(now))
         self.reschedule(now)
         return result
 

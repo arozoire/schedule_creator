@@ -4,7 +4,7 @@ Schedule Creator is a native Home Assistant scheduling integration. It is being
 developed as the independent server-side backend for Weekly Schedule Card and does
 not depend on Scheduler Component.
 
-Current status: Phase 2.6C controlled target-action execution. The integration lifecycle, strict
+Current status: Phase 2 backend complete. The integration lifecycle, strict
 version-one models, configuration/runtime/audit Stores and the side-effect-free
 journal recovery planner are operational and documented in
 [`docs/storage-schema.md`](docs/storage-schema.md). The authenticated
@@ -39,8 +39,15 @@ one immutable starting snapshot per target entity before any future action. It t
 prepares deterministic journal intents for the winning lease generation. Due intents
 revalidate that lease immediately before a blocking Home Assistant service call,
 persist `sent` first, and then persist success or a bounded retry/final failure.
-Restore actions, notifications and crash-time reconciliation of indeterminate
-`sent` records remain deferred.
+Target actions left `sent` by an interrupted process now fail closed at startup as
+unknown outcomes and are never blindly replayed. The shared boundary coordinator
+also persists Quick Timer expiry as `completed`. A successfully applied timer then
+restores its captured state through journaled `scene.apply`, unless another
+controller already owns the entity. Explicit schedule end actions and conditional
+fallbacks use the same journal and ownership protections; a normal schedule without
+an end action still does nothing. Start/end notifications are journaled and
+deduplicated. Administrative WebSocket commands create and cancel Quick Timers with
+optimistic runtime revisions and immediate lifecycle reconciliation.
 
 ## Design requirements
 

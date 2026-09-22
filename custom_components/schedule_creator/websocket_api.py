@@ -16,6 +16,7 @@ from .const import DOMAIN
 from .group_api import GROUP_COMMANDS
 from .models import LeaseState
 from .profile_api import PROFILE_COMMANDS
+from .quick_timer_api import QUICK_TIMER_COMMANDS
 from .schedule_api import SCHEDULE_COMMANDS
 from .storage import StorageNotLoadedError
 
@@ -38,6 +39,8 @@ def async_register_commands(hass: HomeAssistant) -> None:
     for command in GROUP_COMMANDS:
         websocket_api.async_register_command(hass, command)
     for command in SCHEDULE_COMMANDS:
+        websocket_api.async_register_command(hass, command)
+    for command in QUICK_TIMER_COMMANDS:
         websocket_api.async_register_command(hass, command)
     hass.data[_REGISTERED] = True
 
