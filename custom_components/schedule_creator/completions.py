@@ -9,10 +9,15 @@ from uuid import UUID, uuid5
 
 from homeassistant.exceptions import HomeAssistantError
 
-from .actions import ACTION_RETRY_INTERVAL, MAX_ACTION_ATTEMPTS
+from .actions import (
+    ACTION_RETRY_INTERVAL,
+    MAX_ACTION_ATTEMPTS,
+    async_execute_target_actions,
+)
 from .journal import JournalCoordinator
 from .models import (
     LeaseState,
+    OccurrenceState,
     OperationKind,
     OperationState,
     PendingOperation,
@@ -35,6 +40,12 @@ def _utc(value: datetime) -> datetime:
 
 def _restore_id(controller_id: str) -> str:
     return str(uuid5(_COMPLETION_NAMESPACE, f"quick_timer\0{controller_id}"))
+
+
+def _schedule_end_id(controller_id: str, entity_id: str) -> str:
+    return str(
+        uuid5(_COMPLETION_NAMESPACE, f"schedule_end\0{controller_id}\0{entity_id}")
+    )
 
 
 async def async_prepare_quick_timer_restores(
@@ -106,6 +117,109 @@ async def async_prepare_quick_timer_restores(
             runtime,
             revision=runtime.revision + 1,
             operation_counter=runtime.operation_counter + len(operations),
+            pending_operations=(*runtime.pending_operations, *operations),
+            updated_at=persisted_at,
+        )
+
+    return await repository.async_update_if_changed(mutation)
+
+
+async def async_prepare_schedule_end_actions(
+    repository: RuntimeRepository, now: datetime
+) -> RuntimeStoreData:
+    """Prepare explicit end actions only for schedules that applied their start."""
+
+    prepared_at = _utc(now)
+
+    def mutation(runtime: RuntimeStoreData) -> RuntimeStoreData | None:
+        existing_ids = {operation.id for operation in runtime.pending_operations}
+        successful_targets = {
+            (operation.occurrence_id, operation.entity_id)
+            for operation in runtime.pending_operations
+            if operation.kind is OperationKind.TARGET_ACTION
+            and operation.state is OperationState.SUCCEEDED
+            and operation.payload.get("phase") != "completion"
+        }
+        active_entities = {
+            lease.entity_id
+            for lease in runtime.leases
+            if lease.state is LeaseState.ACTIVE
+        }
+        candidates = tuple(
+            (occurrence, entity_id, occurrence.frozen_schedule.end_action)
+            for occurrence in runtime.occurrences
+            if occurrence.state is OccurrenceState.COMPLETED
+            and occurrence.frozen_schedule.end_action is not None
+            for entity_id in occurrence.frozen_schedule.target_entity_ids
+            if (occurrence.id, entity_id) in successful_targets
+            and _schedule_end_id(occurrence.id, entity_id) not in existing_ids
+        )
+        if not candidates:
+            return None
+        persisted_at = max(runtime.updated_at, prepared_at)
+        operations = tuple(
+            PendingOperation(
+                id=_schedule_end_id(occurrence.id, entity_id),
+                sequence=runtime.operation_counter + offset,
+                occurrence_id=occurrence.id,
+                entity_id=entity_id,
+                kind=OperationKind.TARGET_ACTION,
+                state=(
+                    OperationState.SUPERSEDED
+                    if entity_id in active_entities
+                    else OperationState.PREPARED
+                ),
+                payload={
+                    "phase": "completion",
+                    "action_id": action.id,
+                    "domain": action.domain,
+                    "action": action.action,
+                    "data": action.data,
+                },
+                attempt_count=0,
+                created_at=persisted_at,
+                updated_at=persisted_at,
+                next_retry_at=None,
+                error_code=(
+                    "controller_replaced"
+                    if entity_id in active_entities
+                    else None
+                ),
+            )
+            for offset, (occurrence, entity_id, action) in enumerate(
+                candidates, start=1
+            )
+            if action is not None
+        )
+        operations_by_occurrence: dict[str, list[PendingOperation]] = {}
+        for operation in operations:
+            assert operation.occurrence_id is not None
+            operations_by_occurrence.setdefault(
+                operation.occurrence_id, []
+            ).append(operation)
+        occurrences = tuple(
+            replace(
+                occurrence,
+                pending_operation_ids=(
+                    *occurrence.pending_operation_ids,
+                    *(
+                        operation.id
+                        for operation in operations_by_occurrence.get(
+                            occurrence.id, ()
+                        )
+                    ),
+                ),
+                last_operation_id=operations_by_occurrence[occurrence.id][-1].id,
+            )
+            if occurrence.id in operations_by_occurrence
+            else occurrence
+            for occurrence in runtime.occurrences
+        )
+        return replace(
+            runtime,
+            revision=runtime.revision + 1,
+            operation_counter=runtime.operation_counter + len(operations),
+            occurrences=occurrences,
             pending_operations=(*runtime.pending_operations, *operations),
             updated_at=persisted_at,
         )
@@ -236,4 +350,8 @@ class CompletionCoordinator:
         """Prepare and execute all currently eligible completion operations."""
 
         await async_prepare_quick_timer_restores(self._runtime, now)
-        return await async_execute_restores(self._hass, self._runtime, now)
+        await async_prepare_schedule_end_actions(self._runtime, now)
+        await async_execute_restores(self._hass, self._runtime, now)
+        return await async_execute_target_actions(
+            self._hass, self._runtime, now
+        )

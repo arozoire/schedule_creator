@@ -22,6 +22,7 @@ from custom_components.schedule_creator.actions import (
 from custom_components.schedule_creator.completions import (
     async_execute_restores,
     async_prepare_quick_timer_restores,
+    async_prepare_schedule_end_actions,
 )
 from custom_components.schedule_creator.journal import JournalCoordinator
 from custom_components.schedule_creator.leases import async_reconcile_entity_leases
@@ -405,6 +406,130 @@ async def test_resumed_controller_supersedes_quick_timer_restore(hass) -> None:
     assert restore.kind is OperationKind.RESTORE
     assert restore.state is OperationState.SUPERSEDED
     assert restore.error_code == "controller_replaced"
+
+
+async def _applied_schedule(hass, repository, when: datetime) -> str:
+    await repository.async_update(
+        lambda current: replace(
+            current,
+            revision=current.revision + 1,
+            quick_timers=(
+                replace(
+                    current.quick_timers[0], state=QuickTimerState.COMPLETED
+                ),
+            ),
+            updated_at=when,
+        )
+    )
+    await async_reconcile_entity_leases(repository, when)
+    await async_capture_initial_snapshots(hass, repository, when)
+    await async_prepare_target_actions(repository, when)
+    operation = repository.data.pending_operations[-1]
+    journal = JournalCoordinator(repository)
+    await journal.async_mark_sent(operation.id, when)
+    await journal.async_mark_succeeded(operation.id, when)
+    return operation.id
+
+
+async def test_completed_schedule_executes_explicit_end_action(hass) -> None:
+    """A schedule that applied its start action may apply its explicit end."""
+    repository, _store = await _repository(hass)
+    ended_at = NOW + timedelta(minutes=1)
+    await _applied_schedule(hass, repository, ended_at)
+    await repository.async_update(
+        lambda current: replace(
+            current,
+            revision=current.revision + 1,
+            occurrences=(
+                replace(current.occurrences[0], state=OccurrenceState.COMPLETED),
+            ),
+            leases=(),
+            updated_at=ended_at,
+        )
+    )
+
+    prepared = await async_prepare_schedule_end_actions(repository, ended_at)
+    end_operation = prepared.pending_operations[-1]
+    assert end_operation.payload["phase"] == "completion"
+    assert end_operation.state is OperationState.PREPARED
+
+    with patch.object(
+        type(hass.services), "async_call", AsyncMock()
+    ) as service_call:
+        result = await async_execute_target_actions(hass, repository, ended_at)
+
+    assert result.pending_operations[-1].state is OperationState.SUCCEEDED
+    service_call.assert_awaited_once_with(
+        "light",
+        "off",
+        service_data={},
+        target={"entity_id": "light.living_room"},
+        blocking=True,
+    )
+
+
+async def test_new_controller_supersedes_schedule_end_action(hass) -> None:
+    """An end action cannot overwrite an entity acquired by a later controller."""
+    repository, _store = await _repository(hass)
+    ended_at = NOW + timedelta(minutes=1)
+    await _applied_schedule(hass, repository, ended_at)
+    await repository.async_update(
+        lambda current: replace(
+            current,
+            revision=current.revision + 1,
+            occurrences=(
+                replace(current.occurrences[0], state=OccurrenceState.COMPLETED),
+            ),
+            quick_timers=(
+                replace(
+                    current.quick_timers[0],
+                    state=QuickTimerState.ACTIVE,
+                    starts_at=ended_at,
+                ),
+            ),
+            updated_at=ended_at,
+        )
+    )
+    await async_reconcile_entity_leases(repository, ended_at)
+
+    result = await async_prepare_schedule_end_actions(repository, ended_at)
+
+    end_operation = result.pending_operations[-1]
+    assert end_operation.state is OperationState.SUPERSEDED
+    assert end_operation.error_code == "controller_replaced"
+
+
+async def test_schedule_end_without_action_is_no_op(hass) -> None:
+    """Normal schedule completion never invents an implicit restore."""
+    repository, store = await _repository(hass)
+    ended_at = NOW + timedelta(minutes=1)
+    await _applied_schedule(hass, repository, ended_at)
+    await repository.async_update(
+        lambda current: replace(
+            current,
+            revision=current.revision + 1,
+            occurrences=(
+                replace(
+                    current.occurrences[0],
+                    state=OccurrenceState.COMPLETED,
+                    frozen_schedule=replace(
+                        current.occurrences[0].frozen_schedule,
+                        end_action=None,
+                    ),
+                ),
+            ),
+            leases=(),
+            updated_at=ended_at,
+        )
+    )
+    before = repository.data
+    saves_before = len(store.saves)
+
+    result = await async_prepare_schedule_end_actions(repository, ended_at)
+
+    assert result is before
+    assert len(result.pending_operations) == 1
+    assert len(store.saves) == saves_before
 
 
 async def test_stale_lease_is_superseded_without_service_call(hass) -> None:

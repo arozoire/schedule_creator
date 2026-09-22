@@ -17,6 +17,7 @@ from .models import (
     EntityLease,
     FrozenJsonValue,
     LeaseState,
+    OccurrenceState,
     OperationKind,
     OperationState,
     PendingOperation,
@@ -263,6 +264,24 @@ def _current_lease(
     )
 
 
+def _sendable_target_action(
+    runtime: RuntimeStoreData, operation: PendingOperation
+) -> bool:
+    if operation.payload.get("phase") != "completion":
+        return _current_lease(runtime, operation)
+    if any(
+        lease.entity_id == operation.entity_id
+        and lease.state is LeaseState.ACTIVE
+        for lease in runtime.leases
+    ):
+        return False
+    return any(
+        occurrence.id == operation.occurrence_id
+        and occurrence.state is OccurrenceState.COMPLETED
+        for occurrence in runtime.occurrences
+    )
+
+
 def _service_request(
     operation: PendingOperation,
 ) -> tuple[str, str, dict[str, Any]]:
@@ -319,9 +338,15 @@ async def async_execute_target_actions(
             repository.data, wall_clock
         ):
             continue
-        if not _current_lease(repository.data, operation):
+        if not _sendable_target_action(repository.data, operation):
             await journal.async_supersede(
-                operation.id, now=wall_clock, error_code="lease_replaced"
+                operation.id,
+                now=wall_clock,
+                error_code=(
+                    "controller_replaced"
+                    if operation.payload.get("phase") == "completion"
+                    else "lease_replaced"
+                ),
             )
             continue
         try:
