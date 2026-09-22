@@ -20,6 +20,20 @@ After authentication, send:
 `id` is the client's positive, increasing WebSocket request ID. There are no other
 parameters; HA rejects additional fields with its standard `invalid_format` error.
 
+## `schedule_creator/subscribe_runtime`
+
+After the same authentication handshake, send:
+
+```json
+{"id": 2, "type": "schedule_creator/subscribe_runtime"}
+```
+
+The successful initial result is `{ "revision": number }`. Every later committed
+runtime transition sends an `event` with that same revision-only payload. Clients
+call `schedule_creator/get_state` after an event to read the fresh summary. The
+subscription exposes no runtime journal, entity snapshot or lease data, and HA
+removes it automatically when the WebSocket connection closes.
+
 ## Success response
 
 Example for an empty configuration initialized at the timestamp shown:
@@ -116,7 +130,9 @@ command registered; this code never edits HA's private registry to remove it.
 Each request resolves the current config entry and runtime. No entry, repository
 or runtime is captured in a callback closure. Requests between unload and setup
 return `not_loaded`; after setup they read the replacement runtime. No
-subscription, task, timer or listener is created by the endpoint.
+subscription, task, timer or listener is created by `get_state`. Runtime
+subscriptions use HA's normal connection lifecycle and do not retain an entry
+after the client disconnects.
 
 Source inspection in the installed 2026.9.2 package confirmed:
 
@@ -155,9 +171,9 @@ The no-await callback sees immutable config/runtime values without yielding to a
 reload or another update while constructing its response. Existing startup
 initialization and unload audit flushing are separate lifecycle operations.
 
-There are no API subscriptions or frontend. Entity state reads, initial snapshots,
-target actions, restores and notifications belong to the separate integration
-lifecycle; the read handler never initiates them.
+There is no frontend. Entity state reads, initial snapshots, target actions,
+restores and notifications belong to the separate integration lifecycle; these
+WebSocket handlers never initiate them.
 Five focused tests cover empty/non-admin/read-only access, populated state and
 journal semantics, unloaded state, reload/idempotent registration, and sanitized
 storage/internal errors. Validation uses HA's test harness, not a physical HA
