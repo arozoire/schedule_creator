@@ -1,12 +1,12 @@
 # Schedule Creator persisted model schema
 
-**Status:** Phase 2.6A schema version 1. Native Store containers, restart recovery,
+**Status:** Phase 2.6B schema version 1. Native Store containers, restart recovery,
 occurrence projection, bounded-horizon reconciliation and safe future replanning
 are implemented. A lifecycle-owned daily callback rolls the horizon forward;
 clock-only occurrence state transitions and conservative terminal retention are
 implemented. Pure overlap arbitration, atomic lease reconciliation and persisted
-condition branches and initial winner snapshots are available; entity actions
-remain deferred.
+condition branches, initial winner snapshots and prepared target-action intents are
+available; entity service calls remain deferred.
 
 ## Contract rules
 
@@ -153,6 +153,21 @@ the lifecycle coordinator tracks only those unsnapshotted active entities and
 retries when their state changes. This phase does not prepare or send an action and
 does not restore a snapshot.
 
+## Target-action preparation
+
+An active lease becomes eligible only after its controller/entity snapshot exists.
+The preparation reconciler then creates one deterministic `TARGET_ACTION` operation
+per lease generation. Its payload freezes the lease ID and generation plus the
+validated action ID, domain, action and immutable data. Schedule operations are
+referenced by their occurrence; Quick Timer operations retain the timer controller
+ID.
+
+All eligible operations and monotonic sequences are allocated in one Runtime Store
+commit. Replaying the same lease generation is a no-op. If an unsent prepared
+operation is no longer backed by its active lease generation, reconciliation marks
+it `superseded` with `lease_replaced`. This phase never advances an operation to
+`sent` and never invokes Home Assistant services.
+
 ## Native Store envelopes
 
 All three files use Home Assistant `Store` version 1 with private, atomic file
@@ -217,6 +232,6 @@ implemented.
 
 ## Deferred to later phases
 
-- target-action preparation, service execution and restore execution;
+- target-action service execution, retry handling and restore execution;
 - notification dispatch and deduplication execution;
 - the confirmed RESET/backup/restore maintenance API.

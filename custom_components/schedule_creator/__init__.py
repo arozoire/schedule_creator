@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util.hass_dict import HassKey
 
+from .actions import ActionPreparationCoordinator
 from .boundaries import (
     OccurrenceBoundaryCoordinator,
     async_advance_occurrence_states,
@@ -86,7 +87,10 @@ async def async_setup_entry(
             storage.runtime, config, ZoneInfo(hass.config.time_zone), now
         )
         await async_advance_occurrence_states(storage.runtime, now)
-        snapshots = SnapshotCoordinator(hass, storage.runtime)
+        actions = ActionPreparationCoordinator(storage.runtime)
+        snapshots = SnapshotCoordinator(
+            hass, storage.runtime, actions.async_refresh
+        )
         conditions = ConditionCoordinator(
             hass, storage.runtime, snapshots.async_refresh
         )
