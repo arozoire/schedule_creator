@@ -4,7 +4,7 @@ Schedule Creator is a native Home Assistant scheduling integration. It is being
 developed as the independent server-side backend for Weekly Schedule Card and does
 not depend on Scheduler Component.
 
-Current status: Phase 2.4G terminal occurrence retention. The integration lifecycle, strict
+Current status: Phase 2.5A pure overlap arbitration. The integration lifecycle, strict
 version-one models, configuration/runtime/audit Stores and the side-effect-free
 journal recovery planner are operational and documented in
 [`docs/storage-schema.md`](docs/storage-schema.md). Scheduling and entity control
@@ -30,6 +30,8 @@ One lifecycle-owned callback advances the nearest occurrence boundary and persis
 clock-only `active` and `completed` states without controlling entities.
 Terminal occurrence history is retained for 30 days and pruned only when no
 snapshot, operation or lease references it.
+Effective schedule and Quick Timer controllers can now be ranked into immutable,
+deterministic winner plans without persisting ownership or touching entities.
 
 ## Design requirements
 
