@@ -8,6 +8,9 @@
 - Base: `b23c29928c29b215ce017a31de885270136c3a37` (merged PR #22)
 - Branch: `codex/phase-2-6d-runtime-recovery`
 - Draft PR: https://github.com/arozoire/schedule_creator/pull/23
+- Implementation commit: `9083a9cc87d633588751e9772aa8736dae81db42`
+- CI: https://github.com/arozoire/schedule_creator/actions/runs/35751132007
+  passed with HACS, Ruff, mypy and 185 tests.
 - No merge, version bump, tag or release. Manifest remains `0.0.1`.
 
 ## Implemented state
@@ -31,12 +34,12 @@ sending.
 Frozen start/end notifications are durable journal operations. Successful dispatch
 atomically stores the terminal result and its deduplication key.
 
-## Validation required for this checkpoint
+## Validation
 
-Run the PR CI once after publishing the final implementation. It must pass Ruff,
-mypy and the complete test suite. Local Ruff has passed; the session's retained
-Python virtual environment lost its interpreter, so no redundant local full suite
-was attempted.
+The implementation CI passed HACS, Ruff, mypy over 27 source files and all 185
+tests. Local Ruff and Python compilation also passed. The session's retained Python
+virtual environment had lost its interpreter, so the complete suite was run once in
+CI rather than duplicated locally.
 
 ## Next recommended step
 
