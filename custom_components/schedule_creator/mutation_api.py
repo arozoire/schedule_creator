@@ -14,7 +14,6 @@ from homeassistant.core import HomeAssistant
 
 from .boundaries import async_advance_occurrence_states
 from .const import DOMAIN
-from .leases import async_reconcile_entity_leases
 from .models import IntegrationConfig, ModelValidationError
 from .reconciliation import async_reconcile_horizon
 from .storage import RevisionConflictError, StorageNotLoadedError
@@ -93,9 +92,7 @@ async def async_mutate_config(
                 await async_advance_occurrence_states(
                     runtime.storage.runtime, now
                 )
-                await async_reconcile_entity_leases(
-                    runtime.storage.runtime, now
-                )
+                await runtime.conditions.async_refresh(now)
                 runtime.occurrence_boundaries.reschedule(now)
             except Exception:
                 # Configuration is already authoritative and cannot be rolled back

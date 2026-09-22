@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from .models import (
+    ConditionBranch,
     ControllerType,
     OccurrenceState,
     QuickTimerState,
@@ -82,6 +83,11 @@ def arbitration_candidates(
             if occurrence.frozen_schedule.condition is not None
             else ControllerType.NORMAL_SCHEDULE
         )
+        if (
+            controller_type is ControllerType.CONDITIONAL_SCHEDULE
+            and occurrence.condition_branch is not ConditionBranch.TRUE
+        ):
+            continue
         key = comparison_key(
             occurrence.start_utc, controller_type, occurrence.id
         )

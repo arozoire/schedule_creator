@@ -14,10 +14,10 @@ from .boundaries import (
     OccurrenceBoundaryCoordinator,
     async_advance_occurrence_states,
 )
+from .condition_runtime import ConditionCoordinator
 from .const import DOMAIN
 from .horizon import HorizonRefreshCoordinator
 from .journal import RecoveryInstruction, build_recovery_plan
-from .leases import async_reconcile_entity_leases
 from .reconciliation import async_reconcile_horizon
 from .retention import async_prune_terminal_occurrences
 from .storage import ScheduleCreatorStorage
@@ -34,6 +34,7 @@ class ScheduleCreatorRuntimeData:
     recovery_plan: tuple[RecoveryInstruction, ...]
     horizon_refresh: HorizonRefreshCoordinator
     occurrence_boundaries: OccurrenceBoundaryCoordinator
+    conditions: ConditionCoordinator
     loaded: bool = True
 
     async def async_shutdown(self) -> None:
@@ -42,6 +43,7 @@ class ScheduleCreatorRuntimeData:
         self.loaded = False
         self.horizon_refresh.shutdown()
         self.occurrence_boundaries.shutdown()
+        self.conditions.shutdown()
         await self.storage.async_shutdown()
 
 
@@ -81,19 +83,27 @@ async def async_setup_entry(
             storage.runtime, config, ZoneInfo(hass.config.time_zone), now
         )
         await async_advance_occurrence_states(storage.runtime, now)
-        await async_reconcile_entity_leases(storage.runtime, now)
+        conditions = ConditionCoordinator(hass, storage.runtime)
+        await conditions.async_refresh(now)
         await async_prune_terminal_occurrences(storage.runtime, now)
         recovery_plan = build_recovery_plan(storage.runtime.data, now)
-        occurrence_boundaries = OccurrenceBoundaryCoordinator(hass, storage.runtime)
+        occurrence_boundaries = OccurrenceBoundaryCoordinator(
+            hass, storage.runtime, conditions.async_refresh
+        )
         horizon_refresh = HorizonRefreshCoordinator(
-            hass, storage, occurrence_boundaries.reschedule
+            hass,
+            storage,
+            occurrence_boundaries.reschedule,
+            conditions.async_refresh,
         )
         entry.runtime_data = ScheduleCreatorRuntimeData(
             storage=storage,
             recovery_plan=recovery_plan,
             horizon_refresh=horizon_refresh,
             occurrence_boundaries=occurrence_boundaries,
+            conditions=conditions,
         )
+        conditions.start(now)
         occurrence_boundaries.start(now)
         horizon_refresh.start()
     return True

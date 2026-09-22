@@ -18,6 +18,7 @@ class ConditionNodeEvaluation:
     matches: bool
     result: bool
     matching_since: datetime | None
+    ready_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -128,12 +129,18 @@ def evaluate_condition(
             and matching_since is not None
             and (evaluated_at - matching_since).total_seconds() >= duration
         )
+        ready_at = (
+            matching_since + timedelta(seconds=duration)
+            if matches and not result and matching_since is not None
+            else None
+        )
         evaluations.append(
             ConditionNodeEvaluation(
                 node_id=node.id,
                 matches=matches,
                 result=result,
                 matching_since=matching_since,
+                ready_at=ready_at,
             )
         )
         return result

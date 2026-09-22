@@ -128,6 +128,10 @@ async def async_replan_window(
             ):
                 replacement = projected_by_id.get(occurrence.id)
                 if replacement is not None:
+                    replacement = replace(
+                        replacement,
+                        condition_branch=occurrence.condition_branch,
+                    )
                     retained.append(replacement)
                     retained_ids.add(replacement.id)
                 continue
