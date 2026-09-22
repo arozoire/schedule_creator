@@ -20,6 +20,7 @@ from .horizon import HorizonRefreshCoordinator
 from .journal import RecoveryInstruction, build_recovery_plan
 from .reconciliation import async_reconcile_horizon
 from .retention import async_prune_terminal_occurrences
+from .snapshots import SnapshotCoordinator
 from .storage import ScheduleCreatorStorage
 from .websocket_api import async_register_commands
 
@@ -35,6 +36,7 @@ class ScheduleCreatorRuntimeData:
     horizon_refresh: HorizonRefreshCoordinator
     occurrence_boundaries: OccurrenceBoundaryCoordinator
     conditions: ConditionCoordinator
+    snapshots: SnapshotCoordinator
     loaded: bool = True
 
     async def async_shutdown(self) -> None:
@@ -44,6 +46,7 @@ class ScheduleCreatorRuntimeData:
         self.horizon_refresh.shutdown()
         self.occurrence_boundaries.shutdown()
         self.conditions.shutdown()
+        self.snapshots.shutdown()
         await self.storage.async_shutdown()
 
 
@@ -83,7 +86,10 @@ async def async_setup_entry(
             storage.runtime, config, ZoneInfo(hass.config.time_zone), now
         )
         await async_advance_occurrence_states(storage.runtime, now)
-        conditions = ConditionCoordinator(hass, storage.runtime)
+        snapshots = SnapshotCoordinator(hass, storage.runtime)
+        conditions = ConditionCoordinator(
+            hass, storage.runtime, snapshots.async_refresh
+        )
         await conditions.async_refresh(now)
         await async_prune_terminal_occurrences(storage.runtime, now)
         recovery_plan = build_recovery_plan(storage.runtime.data, now)
@@ -102,7 +108,9 @@ async def async_setup_entry(
             horizon_refresh=horizon_refresh,
             occurrence_boundaries=occurrence_boundaries,
             conditions=conditions,
+            snapshots=snapshots,
         )
+        snapshots.start()
         conditions.start(now)
         occurrence_boundaries.start(now)
         horizon_refresh.start()

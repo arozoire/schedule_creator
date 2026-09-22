@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.helpers.event import (
@@ -118,9 +119,15 @@ def _next_duration_deadline(
 class ConditionCoordinator:
     """Own condition state listeners, duration callbacks and evaluation memory."""
 
-    def __init__(self, hass: HomeAssistant, runtime: RuntimeRepository) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        runtime: RuntimeRepository,
+        on_leases_reconciled: Callable[[datetime], Awaitable[object]] | None = None,
+    ) -> None:
         self._hass = hass
         self._runtime = runtime
+        self._on_leases_reconciled = on_leases_reconciled
         self._evaluations: dict[str, ConditionEvaluation] = {}
         self._cancel_states: CALLBACK_TYPE | None = None
         self._cancel_deadline: CALLBACK_TYPE | None = None
@@ -140,6 +147,10 @@ class ConditionCoordinator:
         )
         self._evaluations = evaluations
         result = await async_reconcile_entity_leases(self._runtime, now)
+        if self._on_leases_reconciled is not None:
+            result = cast(
+                RuntimeStoreData, await self._on_leases_reconciled(now)
+            )
         self.reschedule(now)
         return result
 
