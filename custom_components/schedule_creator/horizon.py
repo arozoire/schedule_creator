@@ -12,6 +12,7 @@ from homeassistant.helpers.event import async_track_time_interval
 
 from .boundaries import async_advance_occurrence_states
 from .const import DOMAIN
+from .leases import async_reconcile_entity_leases
 from .reconciliation import async_reconcile_horizon
 from .retention import async_prune_terminal_occurrences
 
@@ -89,6 +90,9 @@ class HorizonRefreshCoordinator:
                     now,
                 )
                 await async_advance_occurrence_states(self._storage.runtime, now)
+                await async_reconcile_entity_leases(
+                    self._storage.runtime, now
+                )
                 await async_prune_terminal_occurrences(
                     self._storage.runtime, now
                 )
