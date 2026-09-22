@@ -1,13 +1,13 @@
 # Schedule Creator persisted model schema
 
-**Status:** Phase 2.6D schema version 1. Native Store containers, restart recovery,
+**Status:** Phase 2.6D-E schema version 1. Native Store containers, restart recovery,
 occurrence projection, bounded-horizon reconciliation and safe future replanning
 are implemented. A lifecycle-owned daily callback rolls the horizon forward;
 clock-only occurrence state transitions and conservative terminal retention are
 implemented. Pure overlap arbitration, atomic lease reconciliation and persisted
 condition branches, initial winner snapshots and controlled target-action execution
-are available. Indeterminate sent actions fail closed and Quick Timer expiry is
-persisted; restore/end actions remain deferred.
+are available. Indeterminate sent operations fail closed; Quick Timer expiry and
+safe snapshot restoration are persisted. Schedule end actions remain deferred.
 
 ## Contract rules
 
@@ -227,9 +227,19 @@ sequence:
 | future `retry_wait` | wait until the persisted instant |
 | terminal state | no recovery instruction |
 
-Before exposing loaded runtime data, setup resolves indeterminate target-action
+Before exposing loaded runtime data, setup resolves indeterminate service-operation
 `sent` records conservatively. Other future operation kinds may retain a recovery
 instruction until their own reconciliation policy exists.
+
+## Quick Timer completion
+
+A completed or cancelled Quick Timer receives one deterministic `RESTORE` operation
+only when its target action succeeded and its immutable snapshot still matches.
+If another active lease owns the entity, the restore is created terminal as
+`superseded`; it can never overwrite the newer controller later. Otherwise the
+executor persists `sent`, calls `scene.apply` with the captured state and attributes,
+then persists success or the same bounded retry/final-failure policy as target
+actions. An interrupted restore also fails closed on startup without blind replay.
 
 ## Removal and migration behaviour
 
@@ -244,6 +254,6 @@ implemented.
 
 ## Deferred to later phases
 
-- restore/end-action preparation and execution;
+- schedule end-action and conditional-fallback execution;
 - notification dispatch and deduplication execution;
 - the confirmed RESET/backup/restore maintenance API.
