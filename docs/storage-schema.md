@@ -1,11 +1,11 @@
 # Schedule Creator persisted model schema
 
-**Status:** Phase 2.5B schema version 1. Native Store containers, restart recovery,
+**Status:** Phase 2.5D schema version 1. Native Store containers, restart recovery,
 occurrence projection, bounded-horizon reconciliation and safe future replanning
 are implemented. A lifecycle-owned daily callback rolls the horizon forward;
 clock-only occurrence state transitions and conservative terminal retention are
-implemented. Pure overlap arbitration and atomic lease reconciliation are
-available; entity actions remain deferred.
+implemented. Pure overlap arbitration, atomic lease reconciliation and persisted
+condition branches are available; snapshots and entity actions remain deferred.
 
 ## Contract rules
 
@@ -113,7 +113,8 @@ Horizon refresh now removes or replaces an existing occurrence only when all of
 the following hold: its start is inside the future UTC window, its state is
 `pending`, and it owns no snapshot, operation, last-operation or lease reference.
 The newly projected record replaces a safe stable-ID collision, allowing edits to
-refresh the frozen schedule revision. A safe ID absent from the projection is
+refresh the frozen schedule revision while preserving its evaluated condition
+branch. A safe ID absent from the projection is
 removed, covering schedule deletion, disablement, profile deactivation, date
 exceptions and time-slot changes.
 
@@ -121,6 +122,21 @@ Occurrences which already started, left `pending`, or acquired any operational
 reference always win and remain byte-for-byte intact. Historical records and
 records outside the bounded horizon are not compacted. The additive 2.4B
 reconciliation API remains available; lifecycle wiring uses safe replanning.
+
+## Condition evaluation
+
+The pure evaluator accepts an explicit `entity_id` to state-value mapping and no
+Home Assistant object. Missing values fail closed. It evaluates exact state
+comparisons, numeric thresholds and inclusive ranges, AND/OR nodes, hysteresis and
+minimum-duration windows. Its immutable result contains the node memory required
+for a deterministic later evaluation.
+
+The lifecycle coordinator reads only entities referenced by non-terminal frozen
+conditions. Missing, `unknown` and `unavailable` HA states map to unavailable.
+Branches are committed atomically to the Runtime Store before entity leases are
+reconciled. Referenced state changes and duration deadlines trigger reevaluation.
+Memory for duration and hysteresis is not persisted; reload starts that history
+again conservatively while retaining the last branch until reconciliation.
 
 ## Native Store envelopes
 
@@ -186,7 +202,6 @@ implemented.
 
 ## Deferred to later phases
 
-- periodic rolling-horizon refresh, scheduling callbacks and retention policy;
-- condition evaluation, leases and target actions;
+- snapshot capture, target actions and restore execution;
 - notification dispatch and deduplication execution;
 - the confirmed RESET/backup/restore maintenance API.

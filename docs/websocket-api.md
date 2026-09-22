@@ -155,8 +155,8 @@ The no-await callback sees immutable config/runtime values without yielding to a
 reload or another update while constructing its response. Existing startup
 initialization and unload audit flushing are separate lifecycle operations.
 
-There are no schedule mutations, subscriptions, scheduler engine,
-condition execution, operational snapshots/restores, Quick Timer execution or frontend.
+There are no subscriptions, operational snapshots/restores, entity service calls,
+Quick Timer execution or frontend.
 Five focused tests cover empty/non-admin/read-only access, populated state and
 journal semantics, unloaded state, reload/idempotent registration, and sanitized
 storage/internal errors. Validation uses HA's test harness, not a physical HA
@@ -258,5 +258,6 @@ target membership, action-domain matching, bounded conditions and date rules.
 Unknown resources return `not_found`; a group belonging to another profile
 returns `ownership_mismatch`. Other optimistic, validation, lifecycle and storage
 errors follow the shared mutation contract. Deleting configuration does not alter
-frozen runtime occurrence records. These endpoints do not generate occurrences,
-evaluate conditions, schedule callbacks or call Home Assistant services.
+frozen runtime occurrence records. Successful mutations reconcile the occurrence
+horizon and condition branches; they do not capture snapshots or call Home
+Assistant services.
