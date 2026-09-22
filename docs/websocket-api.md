@@ -259,5 +259,5 @@ Unknown resources return `not_found`; a group belonging to another profile
 returns `ownership_mismatch`. Other optimistic, validation, lifecycle and storage
 errors follow the shared mutation contract. Deleting configuration does not alter
 frozen runtime occurrence records. Successful mutations reconcile the occurrence
-horizon and condition branches; they do not capture snapshots or call Home
-Assistant services.
+horizon, condition branches, leases and initial snapshots for readable active
+winners; they do not call Home Assistant services.

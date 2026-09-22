@@ -1,11 +1,12 @@
 # Schedule Creator persisted model schema
 
-**Status:** Phase 2.5D schema version 1. Native Store containers, restart recovery,
+**Status:** Phase 2.6A schema version 1. Native Store containers, restart recovery,
 occurrence projection, bounded-horizon reconciliation and safe future replanning
 are implemented. A lifecycle-owned daily callback rolls the horizon forward;
 clock-only occurrence state transitions and conservative terminal retention are
 implemented. Pure overlap arbitration, atomic lease reconciliation and persisted
-condition branches are available; snapshots and entity actions remain deferred.
+condition branches and initial winner snapshots are available; entity actions
+remain deferred.
 
 ## Contract rules
 
@@ -138,6 +139,20 @@ reconciled. Referenced state changes and duration deadlines trigger reevaluation
 Memory for duration and hysteresis is not persisted; reload starts that history
 again conservatively while retaining the last branch until reconciliation.
 
+## Initial snapshot capture
+
+After leases are reconciled, each active winner captures the readable starting
+state of its target entity exactly once. Suspended contenders do not capture. The
+snapshot and its occurrence or Quick Timer reference are committed in one Runtime
+Store write. Deterministic UUID5 identity and controller/entity uniqueness prevent
+overwrite on replay.
+
+The checksum is SHA-256 over the normalized state and attributes. Missing,
+`unknown`, `unavailable` and unserializable states are not valid restore baselines;
+the lifecycle coordinator tracks only those unsnapshotted active entities and
+retries when their state changes. This phase does not prepare or send an action and
+does not restore a snapshot.
+
 ## Native Store envelopes
 
 All three files use Home Assistant `Store` version 1 with private, atomic file
@@ -202,6 +217,6 @@ implemented.
 
 ## Deferred to later phases
 
-- snapshot capture, target actions and restore execution;
+- target-action preparation, service execution and restore execution;
 - notification dispatch and deduplication execution;
 - the confirmed RESET/backup/restore maintenance API.
