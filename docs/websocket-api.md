@@ -260,4 +260,5 @@ returns `ownership_mismatch`. Other optimistic, validation, lifecycle and storag
 errors follow the shared mutation contract. Deleting configuration does not alter
 frozen runtime occurrence records. Successful mutations reconcile the occurrence
 horizon, condition branches, leases and initial snapshots for readable active
-winners; they do not call Home Assistant services.
+winners. Eligible winners also receive prepared target-action journal records;
+these commands do not call Home Assistant services.
