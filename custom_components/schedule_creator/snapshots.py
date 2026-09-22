@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
@@ -174,9 +174,15 @@ def _uncaptured_active_entities(runtime: RuntimeStoreData) -> frozenset[str]:
 class SnapshotCoordinator:
     """Capture initial states and retry unreadable winners on state changes."""
 
-    def __init__(self, hass: HomeAssistant, runtime: RuntimeRepository) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        runtime: RuntimeRepository,
+        on_snapshots_reconciled: Callable[[datetime], Awaitable[object]] | None = None,
+    ) -> None:
         self._hass = hass
         self._runtime = runtime
+        self._on_snapshots_reconciled = on_snapshots_reconciled
         self._cancel: CALLBACK_TYPE | None = None
         self._active = False
 
@@ -192,6 +198,10 @@ class SnapshotCoordinator:
         result = await async_capture_initial_snapshots(
             self._hass, self._runtime, now
         )
+        if self._on_snapshots_reconciled is not None:
+            result = cast(
+                RuntimeStoreData, await self._on_snapshots_reconciled(now)
+            )
         self.reschedule()
         return result
 
