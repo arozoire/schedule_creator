@@ -1,9 +1,10 @@
 # Schedule Creator persisted model schema
 
-**Status:** Phase 2.4F schema version 1. Native Store containers, restart recovery,
+**Status:** Phase 2.4G schema version 1. Native Store containers, restart recovery,
 occurrence projection, bounded-horizon reconciliation and safe future replanning
 are implemented. A lifecycle-owned daily callback rolls the horizon forward;
-clock-only occurrence state transitions are persisted; entity actions remain deferred.
+clock-only occurrence state transitions and conservative terminal retention are
+implemented; entity actions remain deferred.
 
 ## Contract rules
 

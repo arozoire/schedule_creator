@@ -13,6 +13,7 @@ from homeassistant.helpers.event import async_track_time_interval
 from .boundaries import async_advance_occurrence_states
 from .const import DOMAIN
 from .reconciliation import async_reconcile_horizon
+from .retention import async_prune_terminal_occurrences
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -88,6 +89,9 @@ class HorizonRefreshCoordinator:
                     now,
                 )
                 await async_advance_occurrence_states(self._storage.runtime, now)
+                await async_prune_terminal_occurrences(
+                    self._storage.runtime, now
+                )
                 if self._on_reconciled is not None:
                     self._on_reconciled(now)
             except Exception:

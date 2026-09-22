@@ -18,6 +18,7 @@ from .const import DOMAIN
 from .horizon import HorizonRefreshCoordinator
 from .journal import RecoveryInstruction, build_recovery_plan
 from .reconciliation import async_reconcile_horizon
+from .retention import async_prune_terminal_occurrences
 from .storage import ScheduleCreatorStorage
 from .websocket_api import async_register_commands
 
@@ -79,6 +80,7 @@ async def async_setup_entry(
             storage.runtime, config, ZoneInfo(hass.config.time_zone), now
         )
         await async_advance_occurrence_states(storage.runtime, now)
+        await async_prune_terminal_occurrences(storage.runtime, now)
         recovery_plan = build_recovery_plan(storage.runtime.data, now)
         occurrence_boundaries = OccurrenceBoundaryCoordinator(hass, storage.runtime)
         horizon_refresh = HorizonRefreshCoordinator(
