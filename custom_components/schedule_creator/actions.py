@@ -201,10 +201,10 @@ class ActionPreparationCoordinator:
         return result
 
 
-async def async_reconcile_sent_target_actions(
+async def async_reconcile_sent_operations(
     repository: RuntimeRepository, now: datetime
 ) -> RuntimeStoreData:
-    """Fail closed for target actions left SENT by an interrupted process."""
+    """Fail closed for service operations left SENT by an interrupted process."""
 
     reconciled_at = _utc(now)
 
@@ -212,7 +212,10 @@ async def async_reconcile_sent_target_actions(
         sent_ids = {
             operation.id
             for operation in runtime.pending_operations
-            if operation.kind is OperationKind.TARGET_ACTION
+            if operation.kind in {
+                OperationKind.TARGET_ACTION,
+                OperationKind.RESTORE,
+            }
             and operation.state is OperationState.SENT
         }
         if not sent_ids:
@@ -360,9 +363,15 @@ async def async_execute_target_actions(
 class ActionExecutionCoordinator:
     """Execute actions now and own the nearest persisted retry callback."""
 
-    def __init__(self, hass: HomeAssistant, runtime: RuntimeRepository) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        runtime: RuntimeRepository,
+        on_actions_executed: Callable[[datetime], Awaitable[object]] | None = None,
+    ) -> None:
         self._hass = hass
         self._runtime = runtime
+        self._on_actions_executed = on_actions_executed
         self._cancel: CALLBACK_TYPE | None = None
         self._active = False
 
@@ -372,6 +381,10 @@ class ActionExecutionCoordinator:
         result = await async_execute_target_actions(
             self._hass, self._runtime, now
         )
+        if self._on_actions_executed is not None:
+            result = cast(
+                RuntimeStoreData, await self._on_actions_executed(now)
+            )
         self.reschedule(now)
         return result
 

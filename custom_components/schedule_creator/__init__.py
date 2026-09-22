@@ -13,13 +13,14 @@ from homeassistant.util.hass_dict import HassKey
 from .actions import (
     ActionExecutionCoordinator,
     ActionPreparationCoordinator,
-    async_reconcile_sent_target_actions,
+    async_reconcile_sent_operations,
 )
 from .boundaries import (
     OccurrenceBoundaryCoordinator,
     async_advance_occurrence_states,
     async_advance_quick_timer_states,
 )
+from .completions import CompletionCoordinator
 from .condition_runtime import ConditionCoordinator
 from .const import DOMAIN
 from .horizon import HorizonRefreshCoordinator
@@ -44,6 +45,7 @@ class ScheduleCreatorRuntimeData:
     conditions: ConditionCoordinator
     snapshots: SnapshotCoordinator
     action_execution: ActionExecutionCoordinator
+    completions: CompletionCoordinator
     loaded: bool = True
 
     async def async_shutdown(self) -> None:
@@ -95,8 +97,11 @@ async def async_setup_entry(
         )
         await async_advance_occurrence_states(storage.runtime, now)
         await async_advance_quick_timer_states(storage.runtime, now)
-        await async_reconcile_sent_target_actions(storage.runtime, now)
-        action_execution = ActionExecutionCoordinator(hass, storage.runtime)
+        await async_reconcile_sent_operations(storage.runtime, now)
+        completions = CompletionCoordinator(hass, storage.runtime)
+        action_execution = ActionExecutionCoordinator(
+            hass, storage.runtime, completions.async_refresh
+        )
         actions = ActionPreparationCoordinator(
             storage.runtime, action_execution.async_refresh
         )
@@ -126,6 +131,7 @@ async def async_setup_entry(
             conditions=conditions,
             snapshots=snapshots,
             action_execution=action_execution,
+            completions=completions,
         )
         action_execution.start(now)
         snapshots.start()

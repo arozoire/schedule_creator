@@ -17,13 +17,18 @@ from custom_components.schedule_creator.actions import (
     ActionPreparationCoordinator,
     async_execute_target_actions,
     async_prepare_target_actions,
-    async_reconcile_sent_target_actions,
+    async_reconcile_sent_operations,
+)
+from custom_components.schedule_creator.completions import (
+    async_execute_restores,
+    async_prepare_quick_timer_restores,
 )
 from custom_components.schedule_creator.journal import JournalCoordinator
 from custom_components.schedule_creator.leases import async_reconcile_entity_leases
 from custom_components.schedule_creator.models import (
     ControllerType,
     Occurrence,
+    OccurrenceState,
     OperationKind,
     OperationState,
     QuickTimer,
@@ -278,10 +283,10 @@ async def test_restart_fails_closed_for_indeterminate_sent_action(hass) -> None:
     saves_before = len(store.saves)
 
     with patch.object(type(hass.services), "async_call") as service_call:
-        result = await async_reconcile_sent_target_actions(
+        result = await async_reconcile_sent_operations(
             repository, NOW + timedelta(seconds=1)
         )
-        replay = await async_reconcile_sent_target_actions(
+        replay = await async_reconcile_sent_operations(
             repository, NOW + timedelta(seconds=2)
         )
 
@@ -293,6 +298,113 @@ async def test_restart_fails_closed_for_indeterminate_sent_action(hass) -> None:
     assert replay is result
     assert len(store.saves) == saves_before + 1
     service_call.assert_not_called()
+
+
+async def test_completed_quick_timer_prepares_snapshot_restore(hass) -> None:
+    """An applied one-shot timer durably prepares its original state restore."""
+    repository, store = await _repository(hass)
+    await async_prepare_target_actions(repository, NOW)
+    operation_id = repository.data.pending_operations[0].id
+    journal = JournalCoordinator(repository)
+    await journal.async_mark_sent(operation_id, NOW)
+    await journal.async_mark_succeeded(operation_id, NOW)
+    await repository.async_update(
+        lambda current: replace(
+            current,
+            revision=current.revision + 1,
+            occurrences=(
+                replace(
+                    current.occurrences[0],
+                    state=OccurrenceState.COMPLETED,
+                ),
+            ),
+            quick_timers=(
+                replace(
+                    current.quick_timers[0], state=QuickTimerState.COMPLETED
+                ),
+            ),
+            leases=(),
+            updated_at=NOW + timedelta(minutes=1),
+        )
+    )
+    saves_before = len(store.saves)
+
+    result = await async_prepare_quick_timer_restores(
+        repository, NOW + timedelta(minutes=1)
+    )
+    replay = await async_prepare_quick_timer_restores(
+        repository, NOW + timedelta(minutes=2)
+    )
+
+    restore = result.pending_operations[-1]
+    snapshot = result.snapshots[0]
+    assert restore.kind is OperationKind.RESTORE
+    assert restore.state is OperationState.PREPARED
+    assert restore.payload["snapshot_id"] == snapshot.id
+    assert restore.payload["state"] == snapshot.state
+    assert replay is result
+    assert len(store.saves) == saves_before + 1
+
+    async def apply_scene(*args, **kwargs):
+        assert repository.data.pending_operations[-1].state is OperationState.SENT
+
+    with patch.object(
+        type(hass.services),
+        "async_call",
+        AsyncMock(side_effect=apply_scene),
+    ) as service_call:
+        executed = await async_execute_restores(
+            hass, repository, NOW + timedelta(minutes=2)
+        )
+
+    assert executed.pending_operations[-1].state is OperationState.SUCCEEDED
+    service_call.assert_awaited_once_with(
+        "scene",
+        "apply",
+        service_data={
+            "entities": {
+                "light.living_room": {
+                    **snapshot.attributes,
+                    "state": snapshot.state,
+                }
+            }
+        },
+        blocking=True,
+    )
+
+
+async def test_resumed_controller_supersedes_quick_timer_restore(hass) -> None:
+    """A resumed schedule cannot be overwritten by an expired timer restore."""
+    repository, _store = await _repository(hass)
+    await async_prepare_target_actions(repository, NOW)
+    operation_id = repository.data.pending_operations[0].id
+    journal = JournalCoordinator(repository)
+    await journal.async_mark_sent(operation_id, NOW)
+    await journal.async_mark_succeeded(operation_id, NOW)
+    await repository.async_update(
+        lambda current: replace(
+            current,
+            revision=current.revision + 1,
+            quick_timers=(
+                replace(
+                    current.quick_timers[0], state=QuickTimerState.COMPLETED
+                ),
+            ),
+            updated_at=NOW + timedelta(minutes=1),
+        )
+    )
+    await async_reconcile_entity_leases(
+        repository, NOW + timedelta(minutes=1)
+    )
+
+    result = await async_prepare_quick_timer_restores(
+        repository, NOW + timedelta(minutes=1)
+    )
+
+    restore = result.pending_operations[-1]
+    assert restore.kind is OperationKind.RESTORE
+    assert restore.state is OperationState.SUPERSEDED
+    assert restore.error_code == "controller_replaced"
 
 
 async def test_stale_lease_is_superseded_without_service_call(hass) -> None:

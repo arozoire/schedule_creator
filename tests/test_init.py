@@ -6,7 +6,7 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 
 from custom_components.schedule_creator.actions import (
-    async_reconcile_sent_target_actions,
+    async_reconcile_sent_operations,
 )
 from custom_components.schedule_creator.const import DOMAIN
 from custom_components.schedule_creator.storage import (
@@ -45,8 +45,8 @@ async def test_setup_reconciles_indeterminate_sent_actions(
 ) -> None:
     """Config-entry setup crosses the SENT recovery boundary before loading."""
     with patch(
-        "custom_components.schedule_creator.async_reconcile_sent_target_actions",
-        wraps=async_reconcile_sent_target_actions,
+        "custom_components.schedule_creator.async_reconcile_sent_operations",
+        wraps=async_reconcile_sent_operations,
     ) as reconcile:
         await _create_entry(hass)
 
