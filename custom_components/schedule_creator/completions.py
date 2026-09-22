@@ -17,6 +17,7 @@ from .actions import (
 from .journal import JournalCoordinator
 from .models import (
     ConditionBranch,
+    FrozenJsonValue,
     LeaseState,
     Occurrence,
     OccurrenceState,
@@ -304,6 +305,7 @@ async def async_prepare_condition_fallbacks(
             occurrence, entity_id, source_id, action, snapshot = candidate
             controller_id = occurrence.id
             operation_id = _condition_fallback_id(controller_id, entity_id, source_id)
+            payload: dict[str, FrozenJsonValue]
             if action is not None:
                 payload = {
                     "phase": "condition_fallback",
