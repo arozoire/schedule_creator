@@ -1,12 +1,13 @@
 # Schedule Creator persisted model schema
 
-**Status:** Phase 2.6B schema version 1. Native Store containers, restart recovery,
+**Status:** Phase 2.6D schema version 1. Native Store containers, restart recovery,
 occurrence projection, bounded-horizon reconciliation and safe future replanning
 are implemented. A lifecycle-owned daily callback rolls the horizon forward;
 clock-only occurrence state transitions and conservative terminal retention are
 implemented. Pure overlap arbitration, atomic lease reconciliation and persisted
-condition branches, initial winner snapshots and prepared target-action intents are
-available; entity service calls remain deferred.
+condition branches, initial winner snapshots and controlled target-action execution
+are available. Indeterminate sent actions fail closed and Quick Timer expiry is
+persisted; restore/end actions remain deferred.
 
 ## Contract rules
 
@@ -93,6 +94,11 @@ never prunes history and does not change snapshots, leases, operations, timers o
 notification deduplication keys. Callback registration and retention policy remain
 separate later phases.
 
+The lifecycle-owned nearest-boundary callback covers both occurrence start/end
+instants and active Quick Timer expiry. A due timer is persisted as `completed`
+before leases and downstream actions are reconciled. Setup performs the same
+transition for timers that expired while Home Assistant was stopped.
+
 ## Bounded horizon wiring
 
 Config-entry setup reconciles from the current UTC instant through a fixed 14-day
@@ -105,8 +111,8 @@ Configuration is authoritative once its Store commit succeeds. If the subsequent
 Runtime Store reconciliation fails, the mutation still returns its successful
 configuration result and logs the runtime failure; reporting the already-committed
 configuration as failed would cause unsafe client retries. The next setup heals
-missing occurrences. There is not yet a periodic refresh, so a continuously loaded
-instance does not extend the horizon until a later mutation or reload.
+missing occurrences. A lifecycle-owned daily refresh extends the horizon for a
+continuously loaded instance.
 
 ## Safe future replanning
 
@@ -153,7 +159,7 @@ the lifecycle coordinator tracks only those unsnapshotted active entities and
 retries when their state changes. This phase does not prepare or send an action and
 does not restore a snapshot.
 
-## Target-action preparation
+## Target-action execution
 
 An active lease becomes eligible only after its controller/entity snapshot exists.
 The preparation reconciler then creates one deterministic `TARGET_ACTION` operation
@@ -165,8 +171,14 @@ ID.
 All eligible operations and monotonic sequences are allocated in one Runtime Store
 commit. Replaying the same lease generation is a no-op. If an unsent prepared
 operation is no longer backed by its active lease generation, reconciliation marks
-it `superseded` with `lease_replaced`. This phase never advances an operation to
-`sent` and never invokes Home Assistant services.
+it `superseded` with `lease_replaced`.
+
+Due prepared or retry operations revalidate that same active lease immediately
+before execution. The journal persists `sent` before the blocking Home Assistant
+service call, followed by success or a persisted 30-second retry. Three failed
+attempts become terminal. At startup, a target action already left `sent` has an
+indeterminate external outcome: it becomes `failed_final` with
+`sent_outcome_unknown` and is never replayed automatically.
 
 ## Native Store envelopes
 
@@ -204,8 +216,8 @@ The journal API persists these boundaries separately:
 2. `sent`: durable before a future caller may invoke a Home Assistant service;
 3. `succeeded`, `retry_wait`, `failed_final` or `superseded`: durable result.
 
-Phase 2.2 does not invoke a service. On startup it creates a deterministic recovery
-plan, ordered by operation sequence:
+The generic recovery planner remains deterministic and ordered by operation
+sequence:
 
 | Persisted state | Recovery instruction |
 |---|---|
@@ -215,9 +227,9 @@ plan, ordered by operation sequence:
 | future `retry_wait` | wait until the persisted instant |
 | terminal state | no recovery instruction |
 
-The integration builds this plan before it marks its runtime loaded. Later engine
-phases will consume the plan only after lease validation; this PR cannot command an
-entity.
+Before exposing loaded runtime data, setup resolves indeterminate target-action
+`sent` records conservatively. Other future operation kinds may retain a recovery
+instruction until their own reconciliation policy exists.
 
 ## Removal and migration behaviour
 
@@ -232,6 +244,6 @@ implemented.
 
 ## Deferred to later phases
 
-- target-action service execution, retry handling and restore execution;
+- restore/end-action preparation and execution;
 - notification dispatch and deduplication execution;
 - the confirmed RESET/backup/restore maintenance API.
