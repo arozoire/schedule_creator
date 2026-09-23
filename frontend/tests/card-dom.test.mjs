@@ -4,14 +4,14 @@ import { readFileSync } from 'node:fs';
 import { JSDOM, VirtualConsole } from 'jsdom';
 const bundle = readFileSync(new URL('../../custom_components/schedule_creator/frontend/schedule-creator-card.js',import.meta.url),'utf8');
 const tick=()=>new Promise((r)=>setImmediate(r));
-const services={switch:{turn_on:{},turn_off:{}},light:{turn_on:{},turn_off:{}},climate:{set_temperature:{},set_hvac_mode:{},set_fan_mode:{}},fan:{turn_on:{},turn_off:{},set_percentage:{},set_preset_mode:{}},automation:{trigger:{}}};
+const services={switch:{turn_on:{},turn_off:{}},light:{turn_on:{},turn_off:{}},climate:{set_temperature:{},set_hvac_mode:{},set_fan_mode:{}},fan:{turn_on:{},turn_off:{},set_percentage:{},set_preset_mode:{}},automation:{trigger:{}},update:{install:{}}};
 function setup() {
   const dom=new JSDOM('<body></body>',{runScripts:'dangerously',virtualConsole:new VirtualConsole()});
   dom.window.structuredClone=structuredClone;
   dom.window.confirm=()=>true;
   dom.window.eval(bundle);
   const states=Object.fromEntries([
-    ['switch.a',{friendly_name:'Lampada test'}],['switch.outside',{friendly_name:'Fuori gruppo'}],['sensor.temperature',{}],['automation.test',{}],
+    ['switch.a',{friendly_name:'Lampada test'}],['switch.outside',{friendly_name:'Fuori gruppo'}],['sensor.temperature',{}],['automation.test',{}],['update.test',{}],
     ['light.rgb',{supported_color_modes:['rgb','color_temp'],min_color_temp_kelvin:2000,max_color_temp_kelvin:6500}],
     ['climate.room',{hvac_modes:['heat','cool','off'],fan_modes:['low','high'],supported_features:9,min_temp:7,max_temp:30}],
     ['fan.room',{supported_features:9,preset_modes:['eco']}],
@@ -29,9 +29,21 @@ test('group lists controllable entities and search really hides nonmatches',asyn
  const t=setup();try {await tick();t.click('newGroup');
  assert.equal(t.root.querySelector('[name="entities"][value="sensor.temperature"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="automation.test"]'),null);
+ assert.equal(t.root.querySelector('[name="entities"][value="update.test"]'),null);
+ assert.equal(t.root.querySelector('.sc-version').textContent,'v0.2.2');
  t.set('entity_search','lampada','input');
  const hidden=t.root.querySelector('[value="switch.outside"]').parentElement;
  assert.equal(hidden.hidden,true);
+ assert.equal(hidden.style.getPropertyValue('display'),'none');
+ assert.equal(hidden.style.getPropertyPriority('display'),'important');
+ const search=t.root.querySelector('[name="entity_search"]');
+ const enter=new t.dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true});
+ assert.equal(search.dispatchEvent(enter),false);
+ assert.equal(enter.defaultPrevented,true);
+ assert.ok(t.root.querySelector('[name="entity_search"]'));
+ assert.equal(t.writes.length,0);
+ t.card.render();
+ assert.equal(t.root.querySelector('[value="switch.outside"]').parentElement.hidden,true);
  // Apply the shipped styles in the document to test the display override too.
  const style=t.dom.window.document.createElement('style');style.textContent=[...t.root.querySelectorAll('style')].map((n)=>n.textContent).join('');t.dom.window.document.head.append(style);
  const holder=t.dom.window.document.createElement('div');holder.className='sc-entities';holder.innerHTML=hidden.outerHTML;t.dom.window.document.body.append(holder);
@@ -48,6 +60,18 @@ test('schedule only offers group members and sends ON/OFF without temperature or
  assert.deepEqual(t.writes[0].start_action,{domain:'switch',action:'turn_on',data:{}});
  assert.deepEqual(t.writes[0].end_action,{domain:'switch',action:'turn_off',data:{}});
  assert.equal(t.writes[0].profile_id,'p');assert.equal(t.writes[0].group_id,'g');
+ }finally{t.close();}
+});
+test('schedule write error identifies command, gives recovery steps and keeps editor',async()=>{
+ const t=setup();try {await tick();t.click('newSchedule');t.set('name','Test','input');
+ const original=t.hass.connection.sendMessagePromise;
+ t.hass.connection.sendMessagePromise=(msg)=>msg.type==='schedule_creator/schedule/create' ? Promise.reject({message:'method not implemented.'}) : original(msg);
+ t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
+ const alert=t.root.querySelector('.sc-error').textContent;
+ assert.match(alert,/schedule_creator\/schedule\/create/);
+ assert.match(alert,/riavvia completamente Home Assistant/);
+ assert.ok(t.root.querySelector('form[data-editor]'));
+ assert.equal(t.root.querySelector('[name="name"]').value,'Test');
  }finally{t.close();}
 });
 test('timer adapts from switch to light and climate capabilities',async()=>{

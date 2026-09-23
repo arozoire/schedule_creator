@@ -3,6 +3,7 @@ import { clean, messageFor, parseJson } from './editor.js';
 import { controllable, targetEntities, actionForm, readAction, blankCondition, conditionForm, readCondition, notificationForm, readNotification, slotsForm, readSlots } from './forms.js';
 
 const STYLE = '__SC_CSS__';
+const CARD_VERSION = '0.2.2';
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
@@ -19,13 +20,20 @@ class ScheduleCreatorCard extends HTMLElement {
     this.edit = null; this.draft = null; this.localError = null;
     this.shadowRoot.addEventListener('click', (e) => this.click(e));
     this.shadowRoot.addEventListener('submit', (e) => this.submit(e));
+    this.shadowRoot.addEventListener('keydown', (e) => {
+      if (e.target.name === 'entity_search' && e.key === 'Enter') e.preventDefault();
+    });
     this.shadowRoot.addEventListener('input', (e) => {
       if (!e.target.closest('form')) return;
       this.changedFields?.add(e.target.name);
       this.capture();
       if (e.target.name === 'entity_search') {
         const query = e.target.value.toLowerCase();
-        this.shadowRoot.querySelectorAll('[data-entity-label]').forEach((node) => { node.hidden = !node.dataset.entityLabel.includes(query); });
+        this.shadowRoot.querySelectorAll('[data-entity-label]').forEach((node) => {
+          const matches = node.dataset.entityLabel.includes(query);
+          node.hidden = !matches;
+          node.style.setProperty('display', matches ? '' : 'none', matches ? '' : 'important');
+        });
       }
     });
     this.shadowRoot.addEventListener('change', (e) => {
@@ -78,7 +86,11 @@ class ScheduleCreatorCard extends HTMLElement {
     }
     form.querySelectorAll('[name="entities"]').forEach((x) => { x.checked = this.draft.selectedEntities.includes(x.value); });
     const query = form.elements.entity_search?.value?.toLowerCase() || '';
-    form.querySelectorAll('[data-entity-label]').forEach((node) => { node.hidden = !node.dataset.entityLabel.includes(query); });
+    form.querySelectorAll('[data-entity-label]').forEach((node) => {
+      const matches = node.dataset.entityLabel.includes(query);
+      node.hidden = !matches;
+      node.style.setProperty('display', matches ? '' : 'none', matches ? '' : 'important');
+    });
   }
   render() {
     if (!this.config) return;
@@ -104,7 +116,7 @@ class ScheduleCreatorCard extends HTMLElement {
       ${editable ? `<div class="sc-controls">${button('newProfile', '＋ Profilo')}${profile ? `${button('editProfile', 'Modifica profilo', profile.id)}${button('toggleProfile', profile.active ? 'Disattiva' : 'Attiva', profile.id)}${button('deleteProfile', 'Elimina profilo', profile.id)}${button('newGroup', '＋ Gruppo')}` : ''}${group ? `${button('editGroup', 'Modifica gruppo', group.id)}${button('deleteGroup', 'Elimina gruppo', group.id)}${button('newSchedule', '＋ Schedule')}` : ''}${button('newTimer', '＋ Quick Timer')}</div>` : '<p>Vista in sola lettura: serve un amministratore per modificare.</p>'}
       ${this.edit && editable ? this.editor(config, profile, group) : ''}
       <section class="sc-operational"><h3>Stato operativo</h3>${(state.operational?.occurrences || []).map((x) => `<p>${esc(config.schedules?.find((s) => s.id === x.schedule_id)?.name || x.schedule_id)}: ${esc(x.state)}, condizione ${esc(x.condition_branch)}, termine ${esc(x.end_utc)}</p>`).join('') || '<p>Nessuna fascia attiva.</p>'}${(state.operational?.leases || []).map((x) => `<p>${esc(x.entity_id)}: ${esc(x.state)} (${esc(x.controller_type)})</p>`).join('')}${(state.quick_timers || []).map((x) => `<p>Timer ${esc(x.entity_id)}: <span data-expiry="${esc(x.expires_at)}"></span> (${esc(x.state)}) ${editable ? button('cancelTimer', 'Annulla', x.id) : ''}</p>`).join('')}<p>Motivo di eventuali rifiuti: stato non disponibile.</p></section>` : '';
-    this.shadowRoot.innerHTML = `<style>${STYLE}</style><style>[hidden]{display:none!important}.sc-check{display:flex!important;align-items:center;gap:5px}.sc-check input{width:auto!important}details{margin:8px 0}.sc-week{overflow-x:auto;grid-template-columns:repeat(7,minmax(90px,1fr))}.sc-controls,.sc-actions{display:flex;flex-wrap:wrap;gap:6px;margin:12px}.sc-controls button,.sc-actions button,.sc-entry button{border:1px solid var(--divider-color,#aaa);border-radius:7px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222);padding:7px;cursor:pointer}.sc-editor{padding:14px;border-top:1px solid var(--divider-color,#aaa);display:grid;gap:10px}.sc-editor label{display:grid;gap:4px}.sc-editor input,.sc-editor select,.sc-editor textarea{box-sizing:border-box;width:100%;max-width:100%;padding:7px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222);border:1px solid var(--divider-color,#aaa);border-radius:5px}.sc-editor fieldset{min-width:0}.sc-entities{max-height:160px;overflow:auto;display:grid;gap:4px}.sc-entities label,.sc-days label{display:inline-flex;align-items:center;gap:5px}.sc-entities input,.sc-days input{width:auto}.sc-days{display:flex;flex-wrap:wrap;gap:9px}.sc-operational{padding:12px}.sc-error{color:var(--error-color,#b33);padding:10px}.sc-entities label[hidden],[hidden]{display:none!important}</style><ha-card style="--pchip-color:${tint(profile?.color)}"><div class="card-header"><div class="hdr-row1"><span class="card-title">${esc(this.config.title || 'Schedule Creator')}</span></div><div class="hdr-row2">${chips}</div><div class="hdr-sep"></div></div>${status}${info ? `<p class="sc-error" role="alert">${esc(typeof info === 'string' ? info : messageFor(info))}</p>` : ''}${view}</ha-card>`;
+    this.shadowRoot.innerHTML = `<style>${STYLE}</style><style>[hidden]{display:none!important}.sc-check{display:flex!important;align-items:center;gap:5px}.sc-check input{width:auto!important}details{margin:8px 0}.sc-week{overflow-x:auto;grid-template-columns:repeat(7,minmax(90px,1fr))}.sc-controls,.sc-actions{display:flex;flex-wrap:wrap;gap:6px;margin:12px}.sc-controls button,.sc-actions button,.sc-entry button{border:1px solid var(--divider-color,#aaa);border-radius:7px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222);padding:7px;cursor:pointer}.sc-editor{padding:14px;border-top:1px solid var(--divider-color,#aaa);display:grid;gap:10px}.sc-editor label{display:grid;gap:4px}.sc-editor input,.sc-editor select,.sc-editor textarea{box-sizing:border-box;width:100%;max-width:100%;padding:7px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222);border:1px solid var(--divider-color,#aaa);border-radius:5px}.sc-editor fieldset{min-width:0}.sc-entities{max-height:160px;overflow:auto;display:grid;gap:4px}.sc-entities label,.sc-days label{display:inline-flex;align-items:center;gap:5px}.sc-entities input,.sc-days input{width:auto}.sc-days{display:flex;flex-wrap:wrap;gap:9px}.sc-operational{padding:12px}.sc-error{color:var(--error-color,#b33);padding:10px}.sc-entities label[hidden],[hidden]{display:none!important}.sc-version{font-size:.75em;opacity:.65;margin-left:auto}</style><ha-card style="--pchip-color:${tint(profile?.color)}"><div class="card-header"><div class="hdr-row1"><span class="card-title">${esc(this.config.title || 'Schedule Creator')}</span><span class="sc-version">v${CARD_VERSION}</span></div><div class="hdr-row2">${chips}</div><div class="hdr-sep"></div></div>${status}${info ? `<p class="sc-error" role="alert">${esc(typeof info === 'string' ? info : messageFor(info))}</p>` : ''}${view}</ha-card>`;
     this.restoreDraft(); this.updateClock();
     this.shadowRoot.querySelectorAll('details').forEach((node)=>{node.open=openSections.has(node.querySelector('summary')?.textContent);});
     const nextFocus = [...this.shadowRoot.querySelectorAll('[name]')].find((x)=>x.name===focusName);

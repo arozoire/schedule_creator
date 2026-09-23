@@ -8,7 +8,12 @@ export const clean = (value) => {
   return value;
 };
 
-export const messageFor = (error) => ({
+export const messageFor = (error) => {
+  const operation = error?.operation;
+  if (operation && (error?.code === 'unknown_command' || /method not implemented/i.test(error?.message || ''))) {
+    return `Home Assistant ha rifiutato ${operation} (${error?.code || error?.message}). Aggiorna l’integrazione Schedule Creator, riavvia completamente Home Assistant e riprova. Se persiste, comunica questo comando e controlla i log dell’integrazione.`;
+  }
+  return ({
   revision_conflict: 'Configurazione cambiata su un altro client. La bozza è conservata: confrontala e salva di nuovo.',
   unauthorized: 'Serve un account amministratore per modificare.',
   invalid_payload: 'Dati non validi: controlla entità, fasce e parametri delle azioni.',
@@ -20,7 +25,8 @@ export const messageFor = (error) => ({
   invalid_state: 'Il timer non è più attivo.',
   not_loaded: 'Integrazione non caricata: controlla Dispositivi e servizi.',
   storage_unavailable: 'Archivio non disponibile: controlla i log di Home Assistant.',
-})[error?.code] || error?.message || 'Operazione non riuscita. Controlla i log di Home Assistant.';
+  })[error?.code] || (operation ? `Operazione ${operation} non riuscita (${error?.code || error?.message || 'errore sconosciuto'}). Controlla i log di Home Assistant.` : error?.message || 'Operazione non riuscita. Controlla i log di Home Assistant.');
+};
 
 export function parseJson(text, label) {
   try { return JSON.parse(text); } catch { throw new Error(`${label}: JSON non valido.`); }

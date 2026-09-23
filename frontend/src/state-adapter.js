@@ -102,7 +102,7 @@ export class ScheduleCreatorStateAdapter {
       return true;
     } catch (error) {
       if (this.closed || generation !== this.generation) return false;
-      this.writeError = error;
+      this.writeError = { code: error?.code, message: error?.message, operation: `schedule_creator/${type}` };
       if (error.code === 'revision_conflict') {
         this.conflicted = true;
         await this.refresh();
