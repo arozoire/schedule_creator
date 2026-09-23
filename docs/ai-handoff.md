@@ -468,3 +468,9 @@ documentato che `hacstag` aggiorna solo il JS e il backend richiede update HACS
 e riavvio completo di HA. Test DOM aggiunto per l'errore, 13 test Node passati.
 Se persiste dopo installazione aggiornata e riavvio, chiedere codice errore WS
 e log dell'integrazione, senza attribuire il problema a una causa non verificata.
+
+PR [#30](https://github.com/arozoire/schedule_creator/pull/30), primo head
+`ffc1427b631d3ee81bc41e9d0004e8dc8a50b17d`; CI
+[run 35877542317](https://github.com/arozoire/schedule_creator/actions/runs/35877542317)
+conclusa `success` (frontend, HACS, scaffold). Ultimo aggiornamento handoff
+nel branch prima del merge: verificare CI del nuovo head, poi unire la PR.
