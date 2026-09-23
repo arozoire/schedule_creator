@@ -14,9 +14,10 @@ Serve Home Assistant 2026.9.2 o successivo con HACS gia installato.
    **Schedule Creator** e completa il modulo. Serve anche quando i file sono
    gia installati: crea il config entry e avvia il backend.
 4. In **Impostazioni → Dashboard → ⋮ → Risorse**, aggiungi una risorsa di tipo
-   **Modulo JavaScript** con URL esattamente
-   `/schedule_creator/frontend/schedule-creator-card.js`. Se la risorsa esiste
-   gia, non aggiungerla due volte. Ricarica la pagina/dashboard.
+   **Modulo JavaScript** con URL
+   `/schedule_creator/frontend/schedule-creator-card.js?v=0.2.2`. Se la risorsa
+   esiste gia, modificala senza duplicarla. Se HACS ha aggiunto `?hacstag=1`,
+   mantieni il parametro e aggiungi `&v=0.2.2` alla fine. Ricarica la pagina.
 5. Modifica una dashboard, scegli **Aggiungi scheda → Manuale** e incolla:
 
    ```yaml
@@ -40,7 +41,18 @@ weekly-schedule-card visual style. It does not register or modify the original
 card. After installing the integration and restarting Home Assistant, add a
 Lovelace resource of type **JavaScript module** with URL:
 
-`/schedule_creator/frontend/schedule-creator-card.js`
+`/schedule_creator/frontend/schedule-creator-card.js?v=0.2.2`
+
+When updating an existing installation, **edit the existing Lovelace resource**
+to this URL (do not add a second resource), then reload the dashboard page or
+restart the Home Assistant mobile app. The card header shows the loaded bundle
+version, for example `v0.2.2`. If the badge is absent or shows an earlier
+version, the browser is still using an older card asset. Update the integration
+through HACS and restart Home Assistant before changing the resource URL.
+The query string refreshes only the JavaScript card. A save error identifying
+`schedule_creator/schedule/create` as unimplemented requires checking that the
+backend integration files were also updated and Home Assistant was fully
+restarted; changing `hacstag` alone cannot register new WebSocket commands.
 
 Then add a manual dashboard card:
 

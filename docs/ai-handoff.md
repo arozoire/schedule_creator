@@ -430,3 +430,47 @@ per 0.2.1. Il proprietario pubblica tag e release dall'attuale main, poi
 riprova ricerca/gruppi (4), schedule switch ON/OFF (5) e timer (7).
 Prossimo lavoro dopo quei riscontri: revisione grafica. Nessuna pubblicazione
 della release né operazione sull'HA reale eseguita dall'agente.
+
+### Verifica della segnalazione dopo 0.2.1 — 0.2.2 (2026-09-23)
+
+Il proprietario vede ancora `automation.*` e `update.*` nel nuovo gruppo;
+la ricerca sembra inerte e Invio chiude l'editor. Confrontati i bundle dei tag:
+`0.2.0` usa l'elenco completo delle entità; `0.2.1` applica il filtro dei
+domini comandabili (`switch`, `input_boolean`, `light`, `climate`, `fan`,
+`cover`). L'osservazione sulle automazioni in un *nuovo* gruppo è compatibile
+con un bundle 0.2.0 ancora caricato nella dashboard; senza accesso al browser
+del proprietario non è possibile verificare quale asset sia in esecuzione.
+Il difetto su Invio è invece riprodotto nel codice 0.2.1: il campo ricerca è
+dentro il form e il tasto può inviarlo. Anche la visibilità dei risultati è
+resa esplicita con stile inline per prevalere sullo stile della card.
+
+Branch `codex/search-cache-fix`, base `main` dopo il tag `0.2.1`: blocco
+dell'invio del form con Invio nella ricerca, filtro immediato e dopo render,
+badge versione nel titolo (`v0.2.2`), manifest `0.2.2`, URL della risorsa
+Lovelace con `?v=0.2.2` nelle istruzioni. Aggiornare **la risorsa esistente**
+e ricaricare la dashboard dopo aggiornamento HACS e riavvio HA. La presenza
+del badge permette di distinguere il bundle caricato. `npm run build`,
+12 test Node (DOM incluso) e `git diff --check` passati. Registrare PR/CI al
+traguardo.
+Il proprietario pubblica la release; l'agente esegue il merge dopo CI verde.
+
+### Riscontro salvataggio schedule (stesso traguardo)
+
+Il proprietario ha individuato la risorsa con `?hacstag=1` e, dopo averla
+aggiornata, conferma che i domini esclusi spariscono e gli schedule mostrano
+solo entità del gruppo. Il salvataggio ora mostra «method not implemented.».
+Il repository registra `schedule_creator/schedule/create` e il test HA
+`test_ui_schedule_flow.py` copre creazione e azioni switch; senza risposta WS
+completa e log dell'istanza personale non è dimostrata la causa. La stringa
+grezza non era tradotta nella card. Aggiunti contesto dell'operazione e messaggio
+di recupero per comando sconosciuto/non implementato, conservando la bozza;
+documentato che `hacstag` aggiorna solo il JS e il backend richiede update HACS
+e riavvio completo di HA. Test DOM aggiunto per l'errore, 13 test Node passati.
+Se persiste dopo installazione aggiornata e riavvio, chiedere codice errore WS
+e log dell'integrazione, senza attribuire il problema a una causa non verificata.
+
+PR [#30](https://github.com/arozoire/schedule_creator/pull/30), primo head
+`ffc1427b631d3ee81bc41e9d0004e8dc8a50b17d`; CI
+[run 35877542317](https://github.com/arozoire/schedule_creator/actions/runs/35877542317)
+conclusa `success` (frontend, HACS, scaffold). Ultimo aggiornamento handoff
+nel branch prima del merge: verificare CI del nuovo head, poi unire la PR.
