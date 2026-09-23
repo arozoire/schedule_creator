@@ -417,3 +417,16 @@ non attribuirgli una causa backend non dimostrata. CI esistente aggiornata con
 
 Prossimo passo: pubblicare PR e verificare CI, merge autorizzato; il proprietario
 pubblica tag/release 0.2.1 e riprova punti 4, 5 e 7 prima della revisione grafica.
+
+### Consegna correzioni 0.2.1
+
+PR [#29](https://github.com/arozoire/schedule_creator/pull/29) unita a main.
+Head verificato: `e5eddb12e2be4d6e55945cdd39711e75146c349e`;
+merge: `a0d1a89f84e4919481ed7a556d5a429acabb21c0`.
+CI [35873055398](https://github.com/arozoire/schedule_creator/actions/runs/35873055398)
+completata con successo: frontend/bundle, HACS, backend, lint e tipi.
+188 test Python e 12 Node locali superati. Manifest e asset sono pronti
+per 0.2.1. Il proprietario pubblica tag e release dall'attuale main, poi
+riprova ricerca/gruppi (4), schedule switch ON/OFF (5) e timer (7).
+Prossimo lavoro dopo quei riscontri: revisione grafica. Nessuna pubblicazione
+della release né operazione sull'HA reale eseguita dall'agente.
