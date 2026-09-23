@@ -4,7 +4,12 @@ Schedule Creator is a native Home Assistant scheduling integration. It is being
 developed as the independent server-side backend for Weekly Schedule Card and does
 not depend on Scheduler Component.
 
-Current status: Phase 2 backend complete. The integration lifecycle, strict
+Current status: Phase 2 backend complete and phase 3A read-only Lovelace card
+available. Install version 0.1.0 from HACS as a custom integration and follow
+the [installation guide](docs/frontend.md). The card is read-only; profile,
+schedule and timer editing from the new card will follow in later phases.
+
+The integration lifecycle, strict
 version-one models, configuration/runtime/audit Stores and the side-effect-free
 journal recovery planner are operational and documented in
 [`docs/storage-schema.md`](docs/storage-schema.md). The authenticated
