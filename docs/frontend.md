@@ -1,5 +1,40 @@
 # Schedule Creator card — phase A
 
+## Installazione con HACS (versione 0.1.0)
+
+Serve Home Assistant 2026.9.2 o successivo con HACS gia installato.
+
+1. In **HACS**, apri il menu **⋮ → Repository personalizzati**. Inserisci
+   `https://github.com/arozoire/schedule_creator`, scegli **Integrazione** e
+   premi **Aggiungi**. Se il repository e gia presente, salta questo passo.
+2. Cerca **Schedule Creator** in HACS e scarica la release **v0.1.0**.
+   La card e inclusa nella stessa integrazione; non aggiungere un repository
+   dashboard separato. Riavvia Home Assistant dopo il download.
+3. In **Impostazioni → Dispositivi e servizi → Aggiungi integrazione**, cerca
+   **Schedule Creator** e completa il modulo. Serve anche quando i file sono
+   gia installati: crea il config entry e avvia il backend.
+4. In **Impostazioni → Dashboard → ⋮ → Risorse**, aggiungi una risorsa di tipo
+   **Modulo JavaScript** con URL esattamente
+   `/schedule_creator/frontend/schedule-creator-card.js`. Se la risorsa esiste
+   gia, non aggiungerla due volte. Ricarica la pagina/dashboard.
+5. Modifica una dashboard, scegli **Aggiungi scheda → Manuale** e incolla:
+
+   ```yaml
+   type: custom:schedule-creator-card
+   title: Schedule Creator
+   ```
+
+Se Home Assistant non mostra la scheda, apri direttamente l'URL della risorsa
+nel browser: deve restituire JavaScript, non 404. Controlla che l'integrazione
+sia stata configurata e avviata, quindi ricarica la pagina; sulla app mobile
+ricarica la dashboard o svuota la cache frontend. Se appare `not_loaded`,
+controlla **Dispositivi e servizi**: i soli file HACS non creano il config entry.
+Una configurazione nuova e vuota mostrera un calendario vuoto: l'editor degli
+schedule e previsto per la fase B. La vecchia weekly-schedule-card resta
+installata e puo stare nella stessa dashboard.
+
+## Contratto tecnico
+
 The integration includes a separate read-only Lovelace card derived from the
 weekly-schedule-card visual style. It does not register or modify the original
 card. After installing the integration and restarting Home Assistant, add a

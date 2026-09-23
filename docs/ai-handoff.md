@@ -34,7 +34,8 @@ editor CRUD e invalidazione config. Smoke HA reale ancora da eseguire.
 - Head PR #24 validato: `4bfe6f6e980eb692bb6441e14c535735eda04813`.
 - CI verde: https://github.com/arozoire/schedule_creator/actions/runs/35763823937
 - I 185 test erano il checkpoint fase 2, non un conteggio attuale.
-- Manifest `0.0.1`; nessuna nuova release.
+- Il proprietario ha autorizzato merge della PR #25 e release `v0.1.0` per la
+  prova personale via HACS. Versione manifest `0.1.0` in preparazione.
 
 Il backend gestisce arbitraggio, lease, snapshot, condizioni, azioni, ripristini,
 notifiche persistenti e Quick Timer. Le operazioni rimaste `sent` al riavvio
@@ -43,8 +44,8 @@ nel browser. Fine fascia senza azione finale non ripristina automaticamente;
 transizioni condizionali e precedenze seguono i modelli/runtime esistenti.
 
 **Vincoli:** lavoro/token contenuti; test mirati durante sviluppo e CI finale.
-Nessun merge, bump, tag, release o deploy sull'HA dell'utente senza richiesta.
-Il permesso di unire PR #24 non autorizza merge futuri.
+Il proprietario ha richiesto esplicitamente merge, bump, tag e release della
+sola versione 0.1.0. Nessun deploy sull'HA dell'utente o merge di PR future.
 
 ## Sorgente riproducibile e destinazione
 
