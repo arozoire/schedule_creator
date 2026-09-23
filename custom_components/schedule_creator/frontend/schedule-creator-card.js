@@ -166,14 +166,18 @@ class ScheduleCreatorCard extends HTMLElement {
 }
 
 class ScheduleCreatorCardEditor extends HTMLElement {
-  setConfig(config) { this.config = config; this.render(); }
-  set hass(hass) { this._hass = hass; this.render(); }
+  setConfig(config) {
+    this.config = config;
+    if (this.querySelector('input')?.value !== (config.title || '')) this.render();
+  }
+  set hass(hass) { this._hass = hass; }
   render() {
     if (!this.config) return;
     this.innerHTML = `<div style="padding:12px"><label>Card title <input type="text" value="${escapeHtml(this.config.title || '')}"></label><p>Schedules are read-only in this phase.</p></div>`;
-    this.querySelector('input').addEventListener('change', (event) => {
+    this.querySelector('input').addEventListener('input', (event) => {
+      this.config = { ...this.config, title: event.target.value };
       this.dispatchEvent(new CustomEvent('config-changed', {
-        detail: { config: { ...this.config, title: event.target.value } },
+        detail: { config: this.config },
         bubbles: true, composed: true,
       }));
     });
