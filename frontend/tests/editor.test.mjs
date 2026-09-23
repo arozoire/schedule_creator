@@ -1,16 +1,17 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { clean, actionFromFields } from '../src/editor.js';
+import { clean } from '../src/editor.js';
+import { readAction } from '../src/forms.js';
 import { ScheduleCreatorStateAdapter } from '../src/state-adapter.js';
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 test('nested changes preserve advanced fields and remove server IDs', () => {
   assert.deepEqual(clean({ id:'a', condition:{id:'b',children:[{id:'c',value:'on'}]},end_action:null }), {condition:{children:[{value:'on'}]},end_action:null});
 });
 test('action data exclude entity targets', () => {
-  const elements = { start_mode:{value:'simple'},start_action:{value:'set_percentage'},start_number:{value:'45'} };
-  assert.deepEqual(actionFromFields({elements},'start','fan'), {domain:'fan',action:'set_percentage',data:{percentage:45}});
-  elements.start_mode.value = 'advanced'; elements.start_json = { value:'{"domain":"fan","action":"turn_on","data":{"entity_id":"fan.a"}}' };
-  assert.throws(() => actionFromFields({elements},'start','fan'), /target/);
+  const elements = { start_pro:{checked:false},start_command:{value:'set_percentage'},start_percentage:{value:'45'} };
+  assert.deepEqual(readAction({elements},'start','fan'), {domain:'fan',action:'set_percentage',data:{percentage:45}});
+  elements.start_pro.checked = true; elements.start_json = { value:'{"domain":"fan","action":"turn_on","data":{"entity_id":"fan.a"}}' };
+  assert.throws(() => readAction({elements},'start','fan'), /target/);
 });
 test('writes use separate revisions and block double submits', async () => {
   const calls = []; let resolve;

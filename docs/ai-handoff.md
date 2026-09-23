@@ -393,3 +393,27 @@ bundle generato incluso. Il proprietario pubblica personalmente tag e release
 `0.2.0`; nessuna release pubblicata dall'agente. Dopo l'installazione HACS,
 restano le prove reali HA della checklist sopra. Gli editor avanzati JSON
 funzionano per i campi del modello ma non hanno ancora widget dedicati.
+
+
+### Correzioni dopo prova del proprietario — 0.2.1 (2026-09-23)
+
+Confermati dal proprietario: titolo, profilo e persistenza OK; blocchi su selezione
+entità, ricerca, schedule e azioni generiche. Timer non ancora provato. Grafica
+rinviata a dopo la correzione funzionale. Release sempre a cura del proprietario.
+
+Branch `codex/domain-editors-fix`, base `44f7f2948f0c577c558948253704b437ea81c3fd`.
+Correzioni: CSS ricerca, elenco comandabile e appartenenza al gruppo; nuovo
+`frontend/src/forms.js` per azioni/capability, fasce, condizioni e notifiche UI;
+JSON in sezioni Pro. Conservazione azioni opache e revisione della bozza; reset
+busy dopo disconnessione. Manifest 0.2.1 e bundle rigenerato.
+
+Verifiche locali: 12 test Node (inclusi DOM e CSS del bundle), 188 test Python,
+Ruff e diff whitespace passati. Test HA nuovo `tests/test_ui_schedule_flow.py`:
+creazione API, fuso Europe/Rome, switch ON/OFF ai confini, client chiuso. Servizi
+HA registrati nel test, nessun dispositivo fisico. Il singolo caso di mancata
+esecuzione nell'HA personale non ha log a disposizione: riprovare dopo i fix;
+non attribuirgli una causa backend non dimostrata. CI esistente aggiornata con
+`npm ci` per la dipendenza di test jsdom, nessuna dipendenza frontend runtime.
+
+Prossimo passo: pubblicare PR e verificare CI, merge autorizzato; il proprietario
+pubblica tag/release 0.2.1 e riprova punti 4, 5 e 7 prima della revisione grafica.

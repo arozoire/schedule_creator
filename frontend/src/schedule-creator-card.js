@@ -1,5 +1,6 @@
 import { ScheduleCreatorStateAdapter } from './state-adapter.js';
-import { clean, messageFor, parseJson, actionFromFields } from './editor.js';
+import { clean, messageFor, parseJson } from './editor.js';
+import { controllable, targetEntities, actionForm, readAction, blankCondition, conditionForm, readCondition, notificationForm, readNotification, slotsForm, readSlots } from './forms.js';
 
 const STYLE = '__SC_CSS__';
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
@@ -10,22 +11,6 @@ const area = (name, title, value, rows = 4) => `<label>${title}<textarea name="$
 const select = (name, title, options, current) => `<label>${title}<select name="${name}">${options.map(([value, label]) => `<option value="${esc(value)}" ${value === current ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label>`;
 const button = (name, label, id = '') => `<button type="button" data-command="${name}" data-id="${esc(id)}">${esc(label)}</button>`;
 const json = (value) => JSON.stringify(clean(value), null, 2);
-const defaultAction = (domain) => ({ domain, action: 'turn_on', data: {} });
-const defaultCondition = { operator: 'state_equals', entity_id: 'binary_sensor.example', value: 'on', lower: null, upper: null, children: [], minimum_duration_seconds: null, hysteresis: null };
-const optionsFor = (domain) => domain === 'climate' ? ['set_temperature', 'set_hvac_mode', 'turn_on', 'turn_off'] : domain === 'fan' ? ['turn_on', 'turn_off', 'set_percentage', 'set_preset_mode'] : ['turn_on', 'turn_off'];
-function actionEditor(prefix, domain, value, optional = false) {
-  const action = value || defaultAction(domain);
-  const supported = action.domain === domain && optionsFor(domain).includes(action.action) &&
-    Object.keys(action.data || {}).every((key) => ({ climate: ['temperature', 'hvac_mode'], fan: ['percentage', 'preset_mode'] }[domain] || []).includes(key));
-  const mode = optional && !value ? 'none' : supported ? 'simple' : 'advanced';
-  return `<fieldset><legend>${prefix === 'start' ? 'Azione iniziale' : prefix === 'end' ? 'Azione finale' : 'Azione timer'}</legend>
-    ${select(`${prefix}_mode`, 'Modalità', [...(optional ? [['none', 'Nessuna']] : []), ['simple', 'Comandi comuni'], ['advanced', 'JSON avanzato']], mode)}
-    ${select(`${prefix}_action`, 'Comando', optionsFor(domain).map((x) => [x, x]), supported ? action.action : 'turn_on')}
-    ${field(`${prefix}_number`, domain === 'fan' ? 'Percentuale (0–100)' : 'Temperatura °C', action.data?.temperature ?? action.data?.percentage ?? (domain === 'fan' ? 50 : 20), 'number')}
-    ${field(`${prefix}_text`, 'Modalità HVAC / preset', action.data?.hvac_mode ?? action.data?.preset_mode ?? '')}
-    ${area(`${prefix}_json`, 'Azione completa (JSON; target escluso)', json(action))}</fieldset>`;
-}
-
 class ScheduleCreatorCard extends HTMLElement {
   constructor() {
     super(); this.attachShadow({ mode: 'open' });
@@ -36,13 +21,33 @@ class ScheduleCreatorCard extends HTMLElement {
     this.shadowRoot.addEventListener('submit', (e) => this.submit(e));
     this.shadowRoot.addEventListener('input', (e) => {
       if (!e.target.closest('form')) return;
+      this.changedFields?.add(e.target.name);
       this.capture();
       if (e.target.name === 'entity_search') {
         const query = e.target.value.toLowerCase();
         this.shadowRoot.querySelectorAll('[data-entity-label]').forEach((node) => { node.hidden = !node.dataset.entityLabel.includes(query); });
       }
     });
-    this.shadowRoot.addEventListener('change', (e) => { if (e.target.closest('form')) { this.capture(); if (e.target.name === 'entity_id') this.render(); } });
+    this.shadowRoot.addEventListener('change', (e) => {
+      if (!e.target.closest('form')) return;
+      this.changedFields?.add(e.target.name);
+      const previousDomain = this.actionDomain;
+      if (e.target.name === 'entities' && this.edit?.[0] === 'schedule' && e.target.checked) {
+        const others = [...this.shadowRoot.querySelectorAll('[name="entities"]:checked')].filter((x)=>x!==e.target);
+        if (others.some((x)=>x.value.split('.')[0] !== e.target.value.split('.')[0])) {
+          e.target.checked = false;
+          this.localError = 'Uno schedule controlla entità dello stesso tipo. Crea uno schedule separato per gli altri dispositivi.';
+        }
+      }
+      this.capture();
+      const newDomain = (this.edit?.[0] === 'timer' ? this.draft.entity_id : this.draft.selectedEntities[0])?.split('.')[0];
+      if (newDomain && previousDomain && newDomain !== previousDomain) {
+        for (const key of Object.keys(this.draft)) if (/^(start|end|timer)_/.test(key) && !key.includes('notification')) delete this.draft[key];
+        this.actionReset = true;
+        this.localError = 'Tipo di dispositivo cambiato: scegli nuovamente le azioni.';
+      }
+      this.render();
+    });
   }
   static getStubConfig() { return { type: 'custom:schedule-creator-card' }; }
   static getConfigElement() { return document.createElement('schedule-creator-card-editor'); }
@@ -55,25 +60,32 @@ class ScheduleCreatorCard extends HTMLElement {
     const form = this.shadowRoot.querySelector('form[data-editor]');
     if (!form) return;
     this.draft = Object.fromEntries(new FormData(form));
+    for (const node of form.querySelectorAll('input[type="checkbox"]')) {
+      if (!['entities'].includes(node.name) && !node.name.endsWith('_days')) this.draft[node.name] = node.checked ? 'on' : '';
+    }
     this.draft.selectedEntities = [...form.querySelectorAll('[name="entities"]:checked')].map((x) => x.value);
-    this.draft.days = [...form.querySelectorAll('[name="days"]:checked')].map((x) => Number(x.value));
-    this.draft.enabled = !!form.elements.enabled?.checked;
+    this.slotDraft = readSlots(form);
+    this.conditionDraft = readCondition(form);
   }
   restoreDraft() {
     const form = this.shadowRoot.querySelector('form[data-editor]');
     if (!form || !this.draft) return;
-    for (const [name, value] of Object.entries(this.draft)) {
-      if (['selectedEntities', 'days', 'enabled'].includes(name)) continue;
-      if (form.elements[name] && !['entities', 'days'].includes(name)) form.elements[name].value = value;
+    for (const node of form.elements) {
+      if (!node.name || node.name === 'entities' || node.name.startsWith('slot_') || node.name.startsWith('condition')) continue;
+      if (this.draft[node.name] === undefined) continue;
+      if (node.type === 'checkbox') node.checked = this.draft[node.name] === 'on';
+      else node.value = this.draft[node.name];
     }
     form.querySelectorAll('[name="entities"]').forEach((x) => { x.checked = this.draft.selectedEntities.includes(x.value); });
-    form.querySelectorAll('[name="days"]').forEach((x) => { x.checked = this.draft.days.includes(Number(x.value)); });
-    if (form.elements.enabled) form.elements.enabled.checked = this.draft.enabled;
     const query = form.elements.entity_search?.value?.toLowerCase() || '';
     form.querySelectorAll('[data-entity-label]').forEach((node) => { node.hidden = !node.dataset.entityLabel.includes(query); });
   }
   render() {
     if (!this.config) return;
+    const focused = this.shadowRoot.activeElement;
+    const openSections = new Set([...this.shadowRoot.querySelectorAll('details[open]')].map((node)=>node.querySelector('summary')?.textContent));
+    const focusName = focused?.name;
+    const selection = focused?.selectionStart;
     const { state, error, loading, busy, writeError } = this.adapter;
     const config = state?.config || {};
     const profiles = config.profiles || [];
@@ -86,16 +98,19 @@ class ScheduleCreatorCard extends HTMLElement {
     const slots = DAYS.map((day, index) => `<div class="sc-day"><strong>${day}</strong>${schedules.flatMap((s) => (s.time_slots || []).filter((slot) => slot.weekdays.includes(index)).map((slot) => `<div class="sc-slot" style="--pchip-color:${tint(profile?.color)}">${esc(slot.start)}–${esc(slot.end)}<br>${esc(s.name)}${s.enabled ? '' : ' · off'}</div>`)).join('')}</div>`).join('');
     const status = error ? `<div class="status error" role="alert">${esc(messageFor(error))}</div>` : loading ? '<div class="status">Caricamento…</div>' : '';
     const info = this.localError || writeError;
-    const editable = this._hass?.user?.is_admin !== false;
+    const editable = this._hass?.user?.is_admin === true && writeError?.code !== 'unauthorized';
     const view = state ? `<div class="profile-status-bar">${profile ? `${esc(profile.name)} · ${profile.active ? 'attivo' : 'inattivo'} · ${esc(profile.profile_type)}` : 'Nessun profilo'} · ${state.runtime_summary?.active_leases ?? 0} lease attive · ${state.quick_timers?.length ?? 0} timer attivi</div>
       <div class="tab-bar">${tabs}</div>${schedules.length ? `<div class="sc-week">${slots}</div><div class="sc-heading">Schedule</div><ul class="sc-list">${schedules.map((s) => `<li class="sc-entry">${esc(s.name)} · ${esc(s.target_entity_ids.join(', '))}${s.enabled ? '' : ' · spento'} ${editable ? button('editSchedule', 'Modifica', s.id) + button('deleteSchedule', 'Elimina', s.id) : ''}</li>`).join('')}</ul>` : '<div class="sc-empty">Nessuno schedule in questa vista</div>'}
       ${editable ? `<div class="sc-controls">${button('newProfile', '＋ Profilo')}${profile ? `${button('editProfile', 'Modifica profilo', profile.id)}${button('toggleProfile', profile.active ? 'Disattiva' : 'Attiva', profile.id)}${button('deleteProfile', 'Elimina profilo', profile.id)}${button('newGroup', '＋ Gruppo')}` : ''}${group ? `${button('editGroup', 'Modifica gruppo', group.id)}${button('deleteGroup', 'Elimina gruppo', group.id)}${button('newSchedule', '＋ Schedule')}` : ''}${button('newTimer', '＋ Quick Timer')}</div>` : '<p>Vista in sola lettura: serve un amministratore per modificare.</p>'}
       ${this.edit && editable ? this.editor(config, profile, group) : ''}
       <section class="sc-operational"><h3>Stato operativo</h3>${(state.operational?.occurrences || []).map((x) => `<p>${esc(config.schedules?.find((s) => s.id === x.schedule_id)?.name || x.schedule_id)}: ${esc(x.state)}, condizione ${esc(x.condition_branch)}, termine ${esc(x.end_utc)}</p>`).join('') || '<p>Nessuna fascia attiva.</p>'}${(state.operational?.leases || []).map((x) => `<p>${esc(x.entity_id)}: ${esc(x.state)} (${esc(x.controller_type)})</p>`).join('')}${(state.quick_timers || []).map((x) => `<p>Timer ${esc(x.entity_id)}: <span data-expiry="${esc(x.expires_at)}"></span> (${esc(x.state)}) ${editable ? button('cancelTimer', 'Annulla', x.id) : ''}</p>`).join('')}<p>Motivo di eventuali rifiuti: stato non disponibile.</p></section>` : '';
-    this.shadowRoot.innerHTML = `<style>${STYLE}</style><style>.sc-week{overflow-x:auto;grid-template-columns:repeat(7,minmax(90px,1fr))}.sc-controls,.sc-actions{display:flex;flex-wrap:wrap;gap:6px;margin:12px}.sc-controls button,.sc-actions button,.sc-entry button{border:1px solid var(--divider-color,#aaa);border-radius:7px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222);padding:7px;cursor:pointer}.sc-editor{padding:14px;border-top:1px solid var(--divider-color,#aaa);display:grid;gap:10px}.sc-editor label{display:grid;gap:4px}.sc-editor input,.sc-editor select,.sc-editor textarea{box-sizing:border-box;width:100%;max-width:100%;padding:7px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222);border:1px solid var(--divider-color,#aaa);border-radius:5px}.sc-editor fieldset{min-width:0}.sc-entities{max-height:160px;overflow:auto;display:grid;gap:4px}.sc-entities label,.sc-days label{display:inline-flex;align-items:center;gap:5px}.sc-entities input,.sc-days input{width:auto}.sc-days{display:flex;flex-wrap:wrap;gap:9px}.sc-operational{padding:12px}.sc-error{color:var(--error-color,#b33);padding:10px}</style><ha-card style="--pchip-color:${tint(profile?.color)}"><div class="card-header"><div class="hdr-row1"><span class="card-title">${esc(this.config.title || 'Schedule Creator')}</span></div><div class="hdr-row2">${chips}</div><div class="hdr-sep"></div></div>${status}${info ? `<p class="sc-error" role="alert">${esc(typeof info === 'string' ? info : messageFor(info))}</p>` : ''}${view}</ha-card>`;
+    this.shadowRoot.innerHTML = `<style>${STYLE}</style><style>[hidden]{display:none!important}.sc-check{display:flex!important;align-items:center;gap:5px}.sc-check input{width:auto!important}details{margin:8px 0}.sc-week{overflow-x:auto;grid-template-columns:repeat(7,minmax(90px,1fr))}.sc-controls,.sc-actions{display:flex;flex-wrap:wrap;gap:6px;margin:12px}.sc-controls button,.sc-actions button,.sc-entry button{border:1px solid var(--divider-color,#aaa);border-radius:7px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222);padding:7px;cursor:pointer}.sc-editor{padding:14px;border-top:1px solid var(--divider-color,#aaa);display:grid;gap:10px}.sc-editor label{display:grid;gap:4px}.sc-editor input,.sc-editor select,.sc-editor textarea{box-sizing:border-box;width:100%;max-width:100%;padding:7px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#222);border:1px solid var(--divider-color,#aaa);border-radius:5px}.sc-editor fieldset{min-width:0}.sc-entities{max-height:160px;overflow:auto;display:grid;gap:4px}.sc-entities label,.sc-days label{display:inline-flex;align-items:center;gap:5px}.sc-entities input,.sc-days input{width:auto}.sc-days{display:flex;flex-wrap:wrap;gap:9px}.sc-operational{padding:12px}.sc-error{color:var(--error-color,#b33);padding:10px}.sc-entities label[hidden],[hidden]{display:none!important}</style><ha-card style="--pchip-color:${tint(profile?.color)}"><div class="card-header"><div class="hdr-row1"><span class="card-title">${esc(this.config.title || 'Schedule Creator')}</span></div><div class="hdr-row2">${chips}</div><div class="hdr-sep"></div></div>${status}${info ? `<p class="sc-error" role="alert">${esc(typeof info === 'string' ? info : messageFor(info))}</p>` : ''}${view}</ha-card>`;
     this.restoreDraft(); this.updateClock();
+    this.shadowRoot.querySelectorAll('details').forEach((node)=>{node.open=openSections.has(node.querySelector('summary')?.textContent);});
+    const nextFocus = [...this.shadowRoot.querySelectorAll('[name]')].find((x)=>x.name===focusName);
+    if (nextFocus) { nextFocus.focus(); if (selection !== null && selection !== undefined && ['text','search','textarea'].includes(nextFocus.type)) nextFocus.setSelectionRange(selection,selection); }
     if (!this.clock && this.isConnected) this.clock = setInterval(() => this.updateClock(), 1000);
-    this.shadowRoot.querySelectorAll('button').forEach((b) => { b.disabled = busy; });
+    this.shadowRoot.querySelectorAll('button,input,select,textarea').forEach((b) => { b.disabled = busy; });
   }
   updateClock() {
     this.shadowRoot.querySelectorAll('[data-expiry]').forEach((node) => {
@@ -103,42 +118,41 @@ class ScheduleCreatorCard extends HTMLElement {
       node.textContent = `${Math.floor(seconds / 3600)}h ${Math.floor(seconds % 3600 / 60)}m ${seconds % 60}s`;
     });
   }
-  entities(selected = [], domain = '') {
-    const states = Object.values(this._hass?.states || {}).filter((s) => !domain || s.entity_id.startsWith(`${domain}.`));
-    const ids = new Set(states.map((s) => s.entity_id));
-    for (const id of selected) if (!ids.has(id)) states.push({ entity_id: id, attributes: { friendly_name: 'Non disponibile' } });
-    return `<label>Ricerca entità<input type="search" name="entity_search" placeholder="Nome, dominio o ID"></label><div class="sc-entities">${states.sort((a,b) => a.entity_id.localeCompare(b.entity_id)).map((s) => `<label data-entity-label="${esc(`${s.entity_id} ${s.attributes?.friendly_name || ''}`.toLowerCase())}"><input type="checkbox" name="entities" value="${esc(s.entity_id)}" ${selected.includes(s.entity_id) ? 'checked' : ''}>${esc(s.attributes?.friendly_name || s.entity_id)} · ${esc(s.entity_id)}</label>`).join('')}</div>`;
+  entities(selected = [], allowed = null) {
+    const states = this._hass?.states || {};
+    const ids = [...new Set([...targetEntities(this._hass,allowed),...selected.filter((id)=>!allowed || allowed.includes(id))])];
+    return `<label>Ricerca entità<input type="search" name="entity_search" placeholder="Nome, dominio o ID"></label><div class="sc-entities">${ids.sort().map((id) => `<label data-entity-label="${esc(`${id} ${states[id]?.attributes?.friendly_name || ''}`.toLowerCase())}"><input type="checkbox" name="entities" value="${esc(id)}" ${selected.includes(id) ? 'checked' : ''}>${esc(states[id]?.attributes?.friendly_name || id)} · ${esc(id)}${controllable(this._hass,id)?'':' · non disponibile/supportata'}</label>`).join('')}</div>`;
   }
   editor(config, profile, group) {
     const [kind, id] = this.edit;
-    const item = id ? (config[`${kind}s`] || []).find((x) => x.id === id) : null;
-    if (id && !item) return '<p>Record eliminato su un altro client. La bozza rimane disponibile finché non chiudi l’editor.</p>';
+    const item = this.editRecord;
+    const d = this.draft || {};
     let content = '';
     if (kind === 'profile') content = `${field('name', 'Nome', item?.name)}${select('profile_type', 'Tipo', [['exclusive','Esclusivo'],['shared','Condiviso']], item?.profile_type || 'exclusive')}${field('icon','Icona',item?.icon)}${field('color','Colore HEX',item?.color)}${field('order','Ordine',item?.order ?? 0,'number')}`;
-    if (kind === 'group') content = `${field('name','Nome',item?.name)}${field('icon','Icona',item?.icon)}${field('color','Colore HEX',item?.color)}${field('order','Ordine',item?.order ?? 0,'number')}${this.entities(item?.entity_ids || [])}`;
+    if (kind === 'group') content = `${field('name','Nome',item?.name)}${field('icon','Icona',item?.icon)}${field('color','Colore HEX',item?.color)}${field('order','Ordine',item?.order ?? 0,'number')}${this.entities(d.selectedEntities || item?.entity_ids || [])}`;
     if (kind === 'schedule') {
-      const owner = config.groups.find((g) => g.id === (item?.group_id || group?.id));
-      const first = item?.time_slots?.[0] || { weekdays: [0,1,2,3,4], start: '08:00', end: '09:00' };
-      const domain = (item?.target_entity_ids?.[0] || owner?.entity_ids?.[0] || 'switch.example').split('.')[0];
-      content = `${field('name','Nome',item?.name)}<label><input name="enabled" type="checkbox" ${item?.enabled !== false ? 'checked' : ''}>Abilitato</label>${this.entities(item?.target_entity_ids || [],domain)}
-        <div class="sc-days">${DAYS.map((day, i) => `<label><input type="checkbox" name="days" value="${i}" ${first.weekdays.includes(i) ? 'checked' : ''}>${day}</label>`).join('')}</div>
-        ${field('start','Dalle',first.start,'time')}${field('end','Alle',first.end,'time')}
-        ${area('extra_slots','Altre fasce (JSON array, se presenti)',json((item?.time_slots || []).slice(1)),2)}
-        ${actionEditor('start',domain,item?.start_action)}${actionEditor('end',domain,item?.end_action,true)}
-        <p>Condizione falsa: azione finale se presente, altrimenti ripristino deciso dal motore. La fine fascia senza azione finale non invia comandi.</p>
-        ${area('condition','Albero condizioni (JSON o null). Operatori: state_equals, state_not_equals, numeric_greater, numeric_greater_or_equal, numeric_less, numeric_less_or_equal, numeric_range, available, and, or.',item?.condition ? json(item.condition) : 'null',7)}
-        ${button('conditionExample','Inserisci esempio di condizione')}
-        ${select('override_policy','Policy', [['cooperative','Cooperative'],['manual_override','Manual override']],item?.override_policy || 'cooperative')}
-        ${field('inclusion_dates','Date incluse, separate da virgola (AAAA-MM-GG)',(item?.inclusion_dates || []).join(', '))}
-        ${field('exclusion_dates','Date escluse, separate da virgola (AAAA-MM-GG)',(item?.exclusion_dates || []).join(', '))}
-        ${area('start_notification','Notifica iniziale (JSON o null)',item?.start_notification ? json(item.start_notification) : 'null',3)}
-        ${area('end_notification','Notifica finale (JSON o null)',item?.end_notification ? json(item.end_notification) : 'null',3)}
-        <p>Notifica JSON: {"action":"notify.mobile_app_example","title":"Titolo","message":"Testo"}.</p>`;
+      const owner = config.groups.find((g) => g.id === this.ownerGroup);
+      const ids = d.selectedEntities || item?.target_entity_ids || targetEntities(this._hass,owner?.entity_ids || []).slice(0,1);
+      this.actionDomain = ids[0]?.split('.')[0] || this.actionDomain;
+      const slots = this.slotDraft || item?.time_slots || [{weekdays:[0,1,2,3,4,5,6],start:'08:00',end:'09:00'}];
+      const condition = this.conditionDraft === undefined ? item?.condition : this.conditionDraft;
+      content = `${field('name','Nome',item?.name)}<label class="sc-check"><input name="enabled" type="checkbox" ${item?.enabled !== false ? 'checked' : ''}>Abilitato</label>
+        <p>Gruppo: ${esc(owner?.name || 'non disponibile')}. Scegli dispositivi dello stesso tipo.</p>${this.entities(ids,owner?.entity_ids || [])}
+        <p>Orari: ${esc(this._hass.config?.time_zone || 'fuso Home Assistant')}. Se la fine precede l’inizio, la fascia termina il giorno successivo.</p>${slotsForm(slots)}
+        ${actionForm('start','Azione iniziale',this._hass,ids,this.actionReset?null:item?.start_action,false,d)}${actionForm('end','Azione finale',this._hass,ids,this.actionReset?null:item?.end_action,true,d)}
+        <details><summary>Condizioni e opzioni</summary><h4>Condizione</h4>${conditionForm(condition)}<datalist id="sc-condition-entities">${Object.keys(this._hass.states||{}).map((id)=>`<option value="${esc(id)}">${esc(this._hass.states[id].attributes?.friendly_name||id)}</option>`).join('')}</datalist>
+        <p>Se falsa: azione finale se presente, altrimenti ripristino deciso dal motore. La fine fascia senza azione finale non invia comandi.</p>
+        ${select('override_policy','Comandi manuali', [['cooperative','Cooperativa'],['manual_override','Priorità al comando manuale']],item?.override_policy || 'cooperative')}
+        ${field('inclusion_dates','Date incluse (AAAA-MM-GG, separate da virgola)',(item?.inclusion_dates || []).join(', '))}
+        ${field('exclusion_dates','Date escluse (AAAA-MM-GG, separate da virgola)',(item?.exclusion_dates || []).join(', '))}
+        ${notificationForm('start_notification','Notifica iniziale',item?.start_notification,this._hass,d)}${notificationForm('end_notification','Notifica finale',item?.end_notification,this._hass,d)}</details>
+        <details><summary>Pro · configurazione JSON</summary><label class="sc-check"><input type="checkbox" name="pro_config_enabled">Usa JSON per condizioni, fasce e notifiche</label>${area('pro_config','Configurazione avanzata',json({time_slots:slots,condition:condition||null,start_notification:item?.start_notification||null,end_notification:item?.end_notification||null}),8)}</details>`;
     }
     if (kind === 'timer') {
-      const entities = Object.values(this._hass?.states || {});
-      const domain = (this.draft?.entity_id || entities.find((x) => ['switch','climate','fan'].includes(x.entity_id.split('.')[0]))?.entity_id || 'switch.example').split('.')[0];
-      content = `${select('entity_id','Entità',entities.map((s) => [s.entity_id, `${s.attributes?.friendly_name || s.entity_id} · ${s.entity_id}`]),this.draft?.entity_id)}${field('duration_seconds','Durata in secondi (1–604800)',300,'number')}${actionEditor('timer',domain,null)}`;
+      const ids = targetEntities(this._hass);
+      const selected = d.entity_id || ids[0];
+      this.actionDomain = selected?.split('.')[0];
+      content = `${select('entity_id','Entità',ids.map((id) => [id, `${this._hass.states[id].attributes?.friendly_name || id} · ${id}`]),selected)}${field('duration_seconds','Durata in secondi (1–604800)',300,'number')}${actionForm('timer','Azione timer',this._hass,selected?[selected]:[],null,false,d)}`;
     }
     return `<form data-editor="${esc(kind)}" class="sc-editor"><h3>${id ? 'Modifica' : 'Nuovo'} ${esc(kind)}</h3>${content}<div class="sc-actions"><button type="submit">Salva</button>${button('close','Chiudi')}</div></form>`;
   }
@@ -148,9 +162,38 @@ class ScheduleCreatorCard extends HTMLElement {
     if (buttonEl.dataset.group) { this.selectedGroup = buttonEl.dataset.group; this.edit = null; this.draft = null; this.render(); return; }
     const command = buttonEl.dataset.command, id = buttonEl.dataset.id;
     if (!command) return;
-    if (command === 'conditionExample') { const input = this.shadowRoot.querySelector('[name="condition"]'); input.value = JSON.stringify(defaultCondition, null, 2); this.capture(); return; }
+    if (['addSlot','removeSlot','addCondition','addConditionChild','removeCondition'].includes(command)) {
+      this.capture();
+      if (command === 'addSlot') this.slotDraft.push({weekdays:[0,1,2,3,4,5,6],start:'08:00',end:'09:00'});
+      if (command === 'removeSlot' && this.slotDraft.length>1) this.slotDraft.splice(Number(id),1);
+      if (command === 'addCondition') this.conditionDraft = blankCondition();
+      if (command === 'removeCondition' && id==='condition') this.conditionDraft = null;
+      else if (command === 'addConditionChild' || command === 'removeCondition') {
+        const path = id.split('.').slice(1).map(Number);
+        let node = this.conditionDraft;
+        const index = command==='removeCondition' ? path.pop() : null;
+        for (const i of path) node = node.children[i];
+        if (command === 'addConditionChild') node.children.push(blankCondition());
+        else if (node.children.length>2) node.children.splice(index,1);
+        else this.localError = 'Un gruppo E/O richiede almeno due regole. Rimuovi l’intero gruppo per eliminarle.';
+      }
+      this.render(); return;
+    }
     if (command === 'close') { this.edit = null; this.draft = null; this.localError = null; this.render(); return; }
-    if (/^(new|edit)/.test(command)) { this.edit = [command.replace(/^(new|edit)/,'').toLowerCase(), id || null]; this.draft = null; this.localError = null; this.render(); return; }
+    if (/^(new|edit)/.test(command)) {
+      const kind = command.replace(/^(new|edit)/,'').toLowerCase();
+      const config = this.adapter.state.config;
+      const profile = config.profiles.find((p)=>p.id===this.selectedProfile)||config.profiles[0];
+      const group = config.groups.find((g)=>g.id===this.selectedGroup)||config.groups.find((g)=>g.profile_id===profile?.id);
+      this.edit = [kind,id||null];
+      this.editRecord = id ? structuredClone(config[`${kind}s`].find((x)=>x.id===id)) : null;
+      this.ownerGroup = this.editRecord?.group_id || group?.id;
+      this.ownerProfile = this.editRecord?.profile_id || profile?.id;
+      this.editRevision = this.adapter.state.revision;
+      this.changedFields = new Set();
+      this.slotDraft = null; this.conditionDraft = undefined; this.actionReset = false; this.actionDomain = null;
+      this.draft = null; this.localError = null; this.render(); return;
+    }
     const types = { toggleProfile: 'profile/set_active', deleteProfile: 'profile/delete', deleteGroup: 'group/delete', deleteSchedule: 'schedule/delete', cancelTimer: 'quick_timer/cancel' };
     if (!types[command]) return;
     if (command.startsWith('delete') && !confirm('Eliminare questo elemento?')) return;
@@ -173,27 +216,42 @@ class ScheduleCreatorCard extends HTMLElement {
       if (kind === 'profile') payload = { name: data.name.trim(), profile_type: data.profile_type, icon: data.icon || null, color: data.color || null, order: Number(data.order) };
       if (kind === 'group') payload = { name: data.name.trim(), entity_ids: this.draft.selectedEntities, icon: data.icon || null, color: data.color || null, order: Number(data.order) };
       if (kind === 'schedule') {
-        const owner = config.groups.find((g) => g.id === (id ? config.schedules.find((s) => s.id === id)?.group_id : group?.id));
+        const owner = config.groups.find((g)=>g.id===this.ownerGroup);
         const domain = this.draft.selectedEntities[0]?.split('.')[0];
-        if (!domain || !this.draft.selectedEntities.every((x) => x.startsWith(`${domain}.`) && owner.entity_ids.includes(x))) throw new Error('Scegli entità dello stesso dominio appartenenti al gruppo.');
-        const extras = parseJson(data.extra_slots, 'Altre fasce');
-        if (!Array.isArray(extras) || !this.draft.days.length) throw new Error('Seleziona almeno un giorno e verifica le altre fasce.');
-        const dates = (str) => [...new Set(str.split(',').map((x) => x.trim()).filter(Boolean))].sort();
-        payload = { name: data.name.trim(), enabled: this.draft.enabled, target_entity_ids: this.draft.selectedEntities,
-          time_slots: [{ weekdays: this.draft.days.sort(), start: data.start, end: data.end }, ...clean(extras)],
-          start_action: actionFromFields(form,'start',domain), end_action: actionFromFields(form,'end',domain),
-          condition: parseJson(data.condition,'Condizione'), override_policy: data.override_policy,
-          inclusion_dates: dates(data.inclusion_dates), exclusion_dates: dates(data.exclusion_dates),
-          start_notification: parseJson(data.start_notification,'Notifica iniziale'), end_notification: parseJson(data.end_notification,'Notifica finale') };
+        if (!domain || !this.draft.selectedEntities.every((x)=>x.startsWith(`${domain}.`) && owner?.entity_ids.includes(x))) throw new Error('Scegli entità dello stesso tipo appartenenti al gruppo.');
+        const slots = readSlots(form);
+        if (!slots.length || slots.some((s)=>!s.weekdays.length || !s.start || !s.end || s.start===s.end)) throw new Error('Ogni fascia richiede almeno un giorno e orari diversi.');
+        const dates = (str)=>[...new Set(str.split(',').map((x)=>x.trim()).filter(Boolean))].sort();
+        payload = {name:data.name.trim(),enabled:form.elements.enabled.checked,target_entity_ids:this.draft.selectedEntities,
+          time_slots:slots,start_action:readAction(form,'start',domain),end_action:readAction(form,'end',domain),
+          condition:readCondition(form),override_policy:data.override_policy,inclusion_dates:dates(data.inclusion_dates),exclusion_dates:dates(data.exclusion_dates),
+          start_notification:readNotification(form,'start_notification'),end_notification:readNotification(form,'end_notification')};
+        if (form.elements.pro_config_enabled.checked) {
+          const pro = parseJson(data.pro_config,'Configurazione Pro');
+          if (!pro || Array.isArray(pro) || typeof pro!=='object' || Object.keys(pro).some((k)=>!['time_slots','condition','start_notification','end_notification'].includes(k))) throw new Error('Campi Pro non validi.');
+          Object.assign(payload,clean(pro));
+        }
+        for (const key of ['start_notification','end_notification']) if (payload[key] && !payload[key].message.trim()) throw new Error('Inserisci il messaggio della notifica oppure disabilitala.');
+        const validateCondition = (node) => {if (!node) return;if (['and','or'].includes(node.operator)) {if(node.children.length<2) throw new Error('Servono due regole per E/O.');node.children.forEach(validateCondition);} else if (!node.entity_id || !this._hass.states[node.entity_id]) throw new Error('Seleziona un’entità valida nella condizione.');};
+        validateCondition(payload.condition);
       }
-      if (kind === 'timer') { const domain = data.entity_id.split('.')[0]; payload = { entity_id: data.entity_id, duration_seconds: Number(data.duration_seconds), action: actionFromFields(form,'timer',domain) }; }
+      if (kind === 'timer') { const domain = data.entity_id.split('.')[0]; payload = {entity_id:data.entity_id,duration_seconds:Number(data.duration_seconds),action:readAction(form,'timer',domain)}; if (payload.duration_seconds<1 || payload.duration_seconds>604800) throw new Error('La durata deve essere tra 1 e 604800 secondi.'); }
       if (!payload) throw new Error('Editor non disponibile.');
       if (this.adapter.conflicted && !confirm('I dati sono cambiati su un altro client. Hai confrontato la bozza con i nuovi dati prima di salvare?')) return;
-      if (id) payload[`${kind}_id`] = id;
-      if (!id && kind === 'group') payload.profile_id = profile.id;
-      if (!id && kind === 'schedule') { payload.profile_id = profile.id; payload.group_id = group.id; }
+      if (id) {
+        if (kind === 'schedule' && !this.actionReset) {
+          for (const prefix of ['start','end']) {
+            if (![...this.changedFields].some((name)=>name.startsWith(`${prefix}_`) && !name.startsWith(`${prefix}_notification`))) delete payload[`${prefix}_action`];
+          }
+        }
+        for (const key of Object.keys(payload)) if (JSON.stringify(payload[key]) === JSON.stringify(clean(this.editRecord[key]))) delete payload[key];
+        if (!Object.keys(payload).length) { this.edit=null; this.draft=null; this.render(); return; }
+        payload[`${kind}_id`] = id;
+      }
+      if (!id && kind === 'group') payload.profile_id = this.ownerProfile;
+      if (!id && kind === 'schedule') { payload.profile_id = this.ownerProfile; payload.group_id = this.ownerGroup; }
       const type = kind === 'timer' ? 'quick_timer/create' : `${kind}/${id ? 'update' : 'create'}`;
-      const ok = await this.adapter.mutate(type,payload,{ runtime: kind === 'timer' });
+      const ok = await this.adapter.mutate(type,payload,{ runtime: kind === 'timer', expectedRevision: kind === 'timer' || this.adapter.conflicted ? undefined : this.editRevision });
       if (ok) { this.edit = null; this.draft = null; this.render(); }
     } catch (error) { this.localError = error.message; this.render(); }
   }
