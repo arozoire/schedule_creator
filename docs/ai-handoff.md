@@ -474,3 +474,22 @@ PR [#30](https://github.com/arozoire/schedule_creator/pull/30), primo head
 [run 35877542317](https://github.com/arozoire/schedule_creator/actions/runs/35877542317)
 conclusa `success` (frontend, HACS, scaffold). Ultimo aggiornamento handoff
 nel branch prima del merge: verificare CI del nuovo head, poi unire la PR.
+
+### Revisione grafica — 0.3.0 (2026-09-23)
+
+Il proprietario chiede di lavorare sulla grafica e rimanda gli altri bug a domani.
+Base `b8113ee5f3891e08ecd928142b969b2eaec7ef92`, branch
+`codex/card-visual-refresh`. PR #30 già unita; il salvataggio sull'HA personale
+resta da diagnosticare, non considerarlo risolto dalla revisione grafica.
+
+Sostituito CSS legacy inutilizzato e stile inline con foglio unico: profili,
+gruppi, toolbar, settimana desktop e agenda verticale sotto 600 px, schede
+schedule, editor e liste entità. Temi HA, focus tastiera, checkbox e controlli
+mobile; gestione e attività raccolte in sezioni espandibili. Nomi dispositivi
+separati dagli ID. Anteprima statica `frontend/preview.html` con dati fittizi
+e tema chiaro/scuro. Manifest e badge 0.3.0; release sempre al proprietario.
+
+Build e 14 test Node superati, inclusa persistenza della sezione attività
+dopo variazione timer. L'anteprima in Chromium locale non è disponibile in
+questo ambiente (estrazione/browser GPU falliti); preview riproducibile inclusa
+per controllo visivo. Verificare CI prima del merge.

@@ -30,7 +30,7 @@ test('group lists controllable entities and search really hides nonmatches',asyn
  assert.equal(t.root.querySelector('[name="entities"][value="sensor.temperature"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="automation.test"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="update.test"]'),null);
- assert.equal(t.root.querySelector('.sc-version').textContent,'v0.2.2');
+ assert.equal(t.root.querySelector('.sc-version').textContent,'v0.3.0');
  t.set('entity_search','lampada','input');
  const hidden=t.root.querySelector('[value="switch.outside"]').parentElement;
  assert.equal(hidden.hidden,true);
@@ -72,6 +72,15 @@ test('schedule write error identifies command, gives recovery steps and keeps ed
  assert.match(alert,/riavvia completamente Home Assistant/);
  assert.ok(t.root.querySelector('form[data-editor]'));
  assert.equal(t.root.querySelector('[name="name"]').value,'Test');
+ }finally{t.close();}
+});
+test('activity stays expanded as timer counts change',async()=>{
+ const t=setup();try {await tick();
+ const section=t.root.querySelector('.sc-operational');section.open=true;
+ t.snapshot.quick_timers=[{id:'timer',entity_id:'switch.a',state:'active',expires_at:new Date(Date.now()+60000).toISOString()}];
+ t.card.render();
+ assert.equal(t.root.querySelector('.sc-operational').open,true);
+ assert.match(t.root.querySelector('.sc-operational summary').textContent,/1 timer/);
  }finally{t.close();}
 });
 test('timer adapts from switch to light and climate capabilities',async()=>{
