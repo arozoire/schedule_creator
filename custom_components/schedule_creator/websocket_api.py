@@ -9,10 +9,10 @@ from homeassistant.components import websocket_api
 from homeassistant.components.websocket_api.connection import ActiveConnection
 from homeassistant.components.websocket_api.decorators import websocket_command
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.util.hass_dict import HassKey
 
-from .const import DOMAIN
+from .const import DOMAIN, EVENT_RUNTIME_UPDATED
 from .group_api import GROUP_COMMANDS
 from .models import LeaseState
 from .profile_api import PROFILE_COMMANDS
@@ -34,6 +34,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     if hass.data.get(_REGISTERED):
         return
     websocket_api.async_register_command(hass, websocket_get_state)
+    websocket_api.async_register_command(hass, websocket_subscribe_runtime)
     for command in PROFILE_COMMANDS:
         websocket_api.async_register_command(hass, command)
     for command in GROUP_COMMANDS:
@@ -107,4 +108,53 @@ def websocket_get_state(
         _LOGGER.exception("Unexpected error reading Schedule Creator state")
         connection.send_error(
             msg["id"], "internal_error", "Unable to read Schedule Creator state."
+        )
+
+
+@websocket_command({"type": "schedule_creator/subscribe_runtime"})
+@callback
+def websocket_subscribe_runtime(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Subscribe to committed runtime revisions; clients read snapshots separately."""
+
+    try:
+        entry = next(iter(hass.config_entries.async_entries(DOMAIN)), None)
+        if entry is None or entry.state is not ConfigEntryState.LOADED:
+            connection.send_error(
+                msg["id"], "not_loaded", "Schedule Creator is not loaded."
+            )
+            return
+        loaded_entry = cast("ScheduleCreatorConfigEntry", entry)
+        if (
+            not hasattr(loaded_entry, "runtime_data")
+            or not loaded_entry.runtime_data.loaded
+        ):
+            connection.send_error(
+                msg["id"], "not_loaded", "Schedule Creator is not loaded."
+            )
+            return
+        runtime = loaded_entry.runtime_data.storage.runtime.data
+
+        @callback
+        def forward(event: Event[dict[str, int]]) -> None:
+            connection.send_event(msg["id"], {"revision": event.data["revision"]})
+
+        connection.subscriptions[msg["id"]] = hass.bus.async_listen(
+            EVENT_RUNTIME_UPDATED, forward, run_immediately=True
+        )
+        connection.send_result(msg["id"], {"revision": runtime.revision})
+    except (StorageNotLoadedError, OSError):
+        _LOGGER.exception("Unable to subscribe to Schedule Creator runtime")
+        connection.send_error(
+            msg["id"], "storage_unavailable", "Schedule Creator storage is unavailable."
+        )
+    except Exception:  # Client errors must never expose raw exception details.
+        _LOGGER.exception("Unexpected error subscribing to Schedule Creator runtime")
+        connection.send_error(
+            msg["id"],
+            "internal_error",
+            "Unable to subscribe to Schedule Creator runtime.",
         )

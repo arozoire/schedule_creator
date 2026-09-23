@@ -34,7 +34,10 @@ from custom_components.schedule_creator.storage import (
     ScheduleCreatorStore,
     StorageNotLoadedError,
 )
-from custom_components.schedule_creator.websocket_api import websocket_get_state
+from custom_components.schedule_creator.websocket_api import (
+    websocket_get_state,
+    websocket_subscribe_runtime,
+)
 
 
 async def _create_entry(hass):
@@ -48,6 +51,11 @@ async def _create_entry(hass):
 
 async def _read(client):
     await client.send_json_auto_id({"type": "schedule_creator/get_state"})
+    return await client.receive_json(timeout=5)
+
+
+async def _subscribe_runtime(client):
+    await client.send_json_auto_id({"type": "schedule_creator/subscribe_runtime"})
     return await client.receive_json(timeout=5)
 
 
@@ -111,6 +119,27 @@ async def test_get_state_empty(
     assert storage.runtime.data is runtime_before
     assert storage.audit.data is audit_before
     assert _stored(hass_storage) == before
+
+
+async def test_subscribe_runtime_emits_committed_revision(hass, hass_ws_client):
+    """A runtime commit emits its revision without exposing runtime records."""
+    entry = await _create_entry(hass)
+    client = await hass_ws_client(hass)
+
+    assert await _subscribe_runtime(client) == {
+        "id": 1,
+        "type": "result",
+        "success": True,
+        "result": {"revision": 0},
+    }
+    await entry.runtime_data.storage.runtime.async_update(
+        lambda value: replace(value, revision=value.revision + 1)
+    )
+    assert await client.receive_json(timeout=5) == {
+        "id": 1,
+        "type": "event",
+        "event": {"revision": 1},
+    }
 
 
 async def test_get_state_populated(hass, hass_ws_client, hass_storage):
@@ -255,6 +284,12 @@ async def test_get_state_reload(hass, hass_ws_client):
             if call.args[1] is websocket_get_state
         ]
         assert len(registrations) == 1
+        subscriptions = [
+            call
+            for call in register.call_args_list
+            if call.args[1] is websocket_subscribe_runtime
+        ]
+        assert len(subscriptions) == 1
 
 
 async def test_get_state_storage_and_internal_errors(hass, hass_ws_client):

@@ -9,10 +9,10 @@ from dataclasses import dataclass, fields
 from datetime import UTC, datetime, timedelta
 from typing import Any, Never, Protocol, Self, cast, override
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.storage import Store
 
-from .const import DOMAIN
+from .const import DOMAIN, EVENT_RUNTIME_UPDATED
 from .models import (
     MODEL_SCHEMA_VERSION,
     AuditRecord,
@@ -704,6 +704,7 @@ class RuntimeRepository:
     """Persist every critical runtime transition immediately under one lock."""
 
     def __init__(self, hass: HomeAssistant, store: JsonStore | None = None) -> None:
+        self._hass = hass
         self._store = store or _native_store(hass, RUNTIME_STORE_KEY)
         self._lock = asyncio.Lock()
         self._loaded = False
@@ -738,7 +739,8 @@ class RuntimeRepository:
                 raise InvalidRevisionError("initial runtime revision must be zero")
             await self._store.async_save(initial.to_dict())
             self._data = initial
-            return initial
+        self._notify_updated(initial)
+        return initial
 
     async def async_update(self, mutation: RuntimeMutation) -> RuntimeStoreData:
         """Commit one authoritative runtime transition immediately."""
@@ -756,7 +758,8 @@ class RuntimeRepository:
                 raise InvalidRevisionError("runtime timestamp cannot move backwards")
             await self._store.async_save(updated.to_dict())
             self._data = updated
-            return updated
+        self._notify_updated(updated)
+        return updated
 
     async def async_update_expected(
         self, expected_revision: int, mutation: RuntimeMutation
@@ -778,7 +781,8 @@ class RuntimeRepository:
                 raise InvalidRevisionError("runtime timestamp cannot move backwards")
             await self._store.async_save(updated.to_dict())
             self._data = updated
-            return updated
+        self._notify_updated(updated)
+        return updated
 
     async def async_update_if_changed(
         self, mutation: OptionalRuntimeMutation
@@ -800,7 +804,14 @@ class RuntimeRepository:
                 raise InvalidRevisionError("runtime timestamp cannot move backwards")
             await self._store.async_save(updated.to_dict())
             self._data = updated
-            return updated
+        self._notify_updated(updated)
+        return updated
+
+    @callback
+    def _notify_updated(self, data: RuntimeStoreData) -> None:
+        """Notify live clients only after the authoritative write committed."""
+
+        self._hass.bus.async_fire(EVENT_RUNTIME_UPDATED, {"revision": data.revision})
 
 
 class AuditRepository:
