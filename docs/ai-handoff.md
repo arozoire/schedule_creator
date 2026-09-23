@@ -371,3 +371,14 @@ non verificati. Restano miglioramenti di UX agli editor JSON e una eventuale
 proiezione futura dei motivi di precedenza, attualmente non persistiti.
 Prossimo passo: PR + CI backend/frontend, correzione dei fallimenti, merge,
 bump e release autorizzati dalla richiesta dell'utente del 23 settembre.
+
+### PR e CI del traguardo (2026-09-23)
+
+Il commit pubblicato sul branch è `c0e08cd7482efb224acbdbbe5abf679177a0fb74`
+(tree `51e77187b9e2f43d6e14fc82e4bd0894fe8934d0`, identico alla build
+locale). PR funzionale [#28](https://github.com/arozoire/schedule_creator/pull/28),
+CI [run 35846042875](https://github.com/arozoire/schedule_creator/actions/runs/35846042875)
+(in corso al momento di questo aggiornamento). Fix titolo PR #26 unito a
+`main` nel commit `f02f69a86a456d1ff5d05256c4f02f36c9b20b7a` dopo CI verde.
+Prossimo passo preciso: verificare CI aggiornata, merge PR #28, tag/release
+`0.2.0` sul merge, poi smoke HA personale secondo checklist qui sopra.
