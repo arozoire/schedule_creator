@@ -493,3 +493,11 @@ Build e 14 test Node superati, inclusa persistenza della sezione attività
 dopo variazione timer. L'anteprima in Chromium locale non è disponibile in
 questo ambiente (estrazione/browser GPU falliti); preview riproducibile inclusa
 per controllo visivo. Verificare CI prima del merge.
+
+PR [#31](https://github.com/arozoire/schedule_creator/pull/31), primo head
+`51005697365ad635066b7083969432eec1f6d87f`. CI
+[run 35908261402](https://github.com/arozoire/schedule_creator/actions/runs/35908261402)
+conclusa `success` (frontend, HACS e Python). Questo aggiornamento handoff è
+il checkpoint finale del branch; controllare la CI del nuovo head e unire la
+PR. Il proprietario pubblica eventualmente la release dopo revisione della
+preview e prova HA, e domani riporta i bug con log e versione della card.
