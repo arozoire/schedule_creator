@@ -17,7 +17,7 @@ jobs:
           node-version: '24'
       - name: Validate frontend
         working-directory: frontend
-        run: npm run build && npm test
+        run: npm ci && npm run build && npm test
       - name: Check shipped bundle
         run: git diff --exit-code -- custom_components/schedule_creator/frontend/
 

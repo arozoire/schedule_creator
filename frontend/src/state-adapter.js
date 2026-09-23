@@ -83,7 +83,7 @@ export class ScheduleCreatorStateAdapter {
     return this.pending;
   }
 
-  async mutate(type, fields, { runtime = false } = {}) {
+  async mutate(type, fields, { runtime = false, expectedRevision } = {}) {
     if (this.busy || this.closed || !this.state) return false;
     const connection = this.connection;
     const generation = this.generation;
@@ -93,7 +93,7 @@ export class ScheduleCreatorStateAdapter {
     try {
       await connection.sendMessagePromise({
         type: `schedule_creator/${type}`,
-        expected_revision: runtime ? this.state.runtime_summary.revision : this.state.revision,
+        expected_revision: expectedRevision ?? (runtime ? this.state.runtime_summary.revision : this.state.revision),
         ...fields,
       });
       if (this.closed || generation !== this.generation) return false;
@@ -118,6 +118,7 @@ export class ScheduleCreatorStateAdapter {
 
   disconnect() {
     this.closed = true;
+    this.busy = false;
     this.generation += 1;
     this.dirty = false;
     this.running = false;
