@@ -382,3 +382,14 @@ CI [run 35846042875](https://github.com/arozoire/schedule_creator/actions/runs/3
 `main` nel commit `f02f69a86a456d1ff5d05256c4f02f36c9b20b7a` dopo CI verde.
 Prossimo passo preciso: verificare CI aggiornata, merge PR #28, tag/release
 `0.2.0` sul merge, poi smoke HA personale secondo checklist qui sopra.
+
+### Chiusura merge (2026-09-23)
+
+PR #26 e #28 unite in `main`. Merge finale della PR #28:
+`47b990891fb765634aa966d1d0534459c43ddb1c`. CI finale della PR #28:
+[run 35846224691](https://github.com/arozoire/schedule_creator/actions/runs/35846224691),
+esito `success`; 187 test Python e 7 Node locali superati. Manifest `0.2.0`,
+bundle generato incluso. Il proprietario pubblica personalmente tag e release
+`0.2.0`; nessuna release pubblicata dall'agente. Dopo l'installazione HACS,
+restano le prove reali HA della checklist sopra. Gli editor avanzati JSON
+funzionano per i campi del modello ma non hanno ancora widget dedicati.
