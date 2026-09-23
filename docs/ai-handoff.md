@@ -20,7 +20,12 @@ copiati perché l'import li renderebbe eseguibili e attiverebbe storage e
 automazioni legacy; la parità visiva completa e i controlli operativi rimangono
 per B/C. L'asset riusa chip, tab e palette, visualizzando fasce e gruppi.
 I test Node dell'adapter (3) e lint Python locale sono passati; smoke in HA reale
-ancora da fare. PR/SHA/CI finale saranno indicati sotto dopo pubblicazione.
+ancora da fare. PR in bozza: https://github.com/arozoire/schedule_creator/pull/25
+Commit iniziale pubblicato: `1666663c3cee1ea62bef5bd1455a233e2d15b0a1`.
+CI: https://github.com/arozoire/schedule_creator/actions/runs/35828241368
+(frontend e HACS verdi; mypy ha richiesto l'API asincrona attuale di HA per gli
+asset statici; corretta nel commit successivo). Prossimo passo dopo review/merge:
+tappa B, editor CRUD e invalidazione config. Smoke HA reale ancora da eseguire.
 
 - Backend fase 2 completato e unito con PR #23.
 - Subscription runtime completata e unita con PR #24.

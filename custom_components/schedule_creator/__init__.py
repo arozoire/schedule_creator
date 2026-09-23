@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
@@ -80,10 +81,14 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
     lifecycle_lock(hass)
     async_register_commands(hass)
     if hass.http is not None and not hass.data.get(FRONTEND_REGISTERED):
-        hass.http.register_static_path(
-            f"/{DOMAIN}/frontend",
-            str(Path(__file__).parent / "frontend"),
-            cache_headers=False,
+        await hass.http.async_register_static_paths(
+            [
+                StaticPathConfig(
+                    f"/{DOMAIN}/frontend",
+                    str(Path(__file__).parent / "frontend"),
+                    cache_headers=False,
+                )
+            ]
         )
         hass.data[FRONTEND_REGISTERED] = True
     return True
