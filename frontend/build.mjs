@@ -1,0 +1,11 @@
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+
+const source = (name) => readFileSync(new URL(`src/${name}`, import.meta.url), 'utf8');
+const css = source('weekly-layout.css');
+const adapter = source('state-adapter.js').replace('export class ScheduleCreatorStateAdapter', 'class ScheduleCreatorStateAdapter');
+const card = source('schedule-creator-card.js')
+  .replace("import { ScheduleCreatorStateAdapter } from './state-adapter.js';", '')
+  .replace("'__SC_CSS__'", JSON.stringify(css));
+const output = new URL('../custom_components/schedule_creator/frontend/', import.meta.url);
+mkdirSync(output, { recursive: true });
+writeFileSync(new URL('schedule-creator-card.js', output), `${adapter.trimEnd()}\n${card.trimEnd()}\n`);

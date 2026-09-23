@@ -3,6 +3,7 @@
 import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from homeassistant.config_entries import ConfigEntry
@@ -32,6 +33,7 @@ from .storage import ScheduleCreatorStorage
 from .websocket_api import async_register_commands
 
 LIFECYCLE_LOCK: HassKey[asyncio.Lock] = HassKey(f"{DOMAIN}.lifecycle_lock")
+FRONTEND_REGISTERED: HassKey[bool] = HassKey(f"{DOMAIN}.frontend_registered")
 
 
 @dataclass(slots=True)
@@ -77,6 +79,13 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
 
     lifecycle_lock(hass)
     async_register_commands(hass)
+    if hass.http is not None and not hass.data.get(FRONTEND_REGISTERED):
+        hass.http.register_static_path(
+            f"/{DOMAIN}/frontend",
+            str(Path(__file__).parent / "frontend"),
+            cache_headers=False,
+        )
+        hass.data[FRONTEND_REGISTERED] = True
     return True
 
 
