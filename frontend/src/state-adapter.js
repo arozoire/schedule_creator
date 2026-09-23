@@ -1,4 +1,4 @@
-// Read-only HA WebSocket adapter; no legacy helpers, services or automations.
+// HA WebSocket adapter. The server owns all actions, storage and revisions.
 export class ScheduleCreatorStateAdapter {
   constructor(onChange) {
     this.onChange = onChange;
@@ -11,6 +11,9 @@ export class ScheduleCreatorStateAdapter {
     this.dirty = false;
     this.running = false;
     this.closed = true;
+    this.busy = false;
+    this.writeError = null;
+    this.conflicted = false;
   }
 
   connect(hass) {
@@ -24,7 +27,7 @@ export class ScheduleCreatorStateAdapter {
     this.state = null;
     this.onChange();
     const generation = this.generation;
-    // Subscribe first, then read; the first notification is a revision only.
+    // Subscribe first, then read; config and runtime notifications both invalidate.
     Promise.resolve(connection.subscribeMessage(
       () => this.refresh(), { type: 'schedule_creator/subscribe_runtime' },
     )).then((unsubscribe) => {
@@ -45,7 +48,7 @@ export class ScheduleCreatorStateAdapter {
   refresh() {
     if (this.closed) return;
     this.dirty = true;
-    if (this.running) return;
+    if (this.running) return this.pending;
     const generation = this.generation;
     this.running = true;
     // A notification during a request schedules a second read. Responses from
@@ -76,7 +79,41 @@ export class ScheduleCreatorStateAdapter {
         if (this.dirty && !this.closed && generation === this.generation) this.refresh();
       }
     };
-    void drain();
+    this.pending = drain();
+    return this.pending;
+  }
+
+  async mutate(type, fields, { runtime = false } = {}) {
+    if (this.busy || this.closed || !this.state) return false;
+    const connection = this.connection;
+    const generation = this.generation;
+    this.busy = true;
+    this.writeError = null;
+    this.onChange();
+    try {
+      await connection.sendMessagePromise({
+        type: `schedule_creator/${type}`,
+        expected_revision: runtime ? this.state.runtime_summary.revision : this.state.revision,
+        ...fields,
+      });
+      if (this.closed || generation !== this.generation) return false;
+      await this.refresh();
+      this.conflicted = false;
+      return true;
+    } catch (error) {
+      if (this.closed || generation !== this.generation) return false;
+      this.writeError = error;
+      if (error.code === 'revision_conflict') {
+        this.conflicted = true;
+        await this.refresh();
+      }
+      return false;
+    } finally {
+      if (generation === this.generation) {
+        this.busy = false;
+        this.onChange();
+      }
+    }
   }
 
   disconnect() {

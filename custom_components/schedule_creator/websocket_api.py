@@ -12,9 +12,9 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.util.hass_dict import HassKey
 
-from .const import DOMAIN, EVENT_RUNTIME_UPDATED
+from .const import DOMAIN, EVENT_CONFIG_UPDATED, EVENT_RUNTIME_UPDATED
 from .group_api import GROUP_COMMANDS
-from .models import LeaseState
+from .models import LeaseState, OccurrenceState, QuickTimerState
 from .profile_api import PROFILE_COMMANDS
 from .quick_timer_api import QUICK_TIMER_COMMANDS
 from .schedule_api import SCHEDULE_COMMANDS
@@ -97,6 +97,42 @@ def websocket_get_state(
                 "quick_timers": len(runtime.quick_timers),
                 "recovery_instructions": len(runtime_data.recovery_plan),
             },
+            "quick_timers": [
+                {
+                    "id": timer.id,
+                    "entity_id": timer.entity_id,
+                    "state": timer.state.value,
+                    "expires_at": timer.expires_at.isoformat(),
+                    "action": {
+                        key: timer.action.to_dict()[key]
+                        for key in ("domain", "action", "data")
+                    },
+                }
+                for timer in runtime.quick_timers
+                if timer.state is QuickTimerState.ACTIVE
+            ],
+            "operational": {
+                "occurrences": [
+                    {
+                        "id": item.id,
+                        "schedule_id": item.frozen_schedule.id,
+                        "state": item.state.value,
+                        "condition_branch": item.condition_branch.value,
+                        "end_utc": item.end_utc.isoformat(),
+                    }
+                    for item in runtime.occurrences
+                    if item.state in {OccurrenceState.ACTIVE, OccurrenceState.SUSPENDED}
+                ],
+                "leases": [
+                    {
+                        "entity_id": lease.entity_id,
+                        "controller_type": lease.controller_type.value,
+                        "state": lease.state.value,
+                    }
+                    for lease in runtime.leases
+                    if lease.state in {LeaseState.ACTIVE, LeaseState.SUSPENDED}
+                ],
+            },
         }
         connection.send_result(msg["id"], result)
     except (StorageNotLoadedError, OSError):
@@ -142,9 +178,25 @@ def websocket_subscribe_runtime(
         def forward(event: Event[dict[str, int]]) -> None:
             connection.send_event(msg["id"], {"revision": event.data["revision"]})
 
-        connection.subscriptions[msg["id"]] = hass.bus.async_listen(
+        @callback
+        def forward_config(event: Event[dict[str, int]]) -> None:
+            connection.send_event(
+                msg["id"], {"config_revision": event.data["revision"]}
+            )
+
+        unsubscribe_runtime = hass.bus.async_listen(
             EVENT_RUNTIME_UPDATED, forward, run_immediately=True
         )
+        unsubscribe_config = hass.bus.async_listen(
+            EVENT_CONFIG_UPDATED, forward_config, run_immediately=True
+        )
+
+        @callback
+        def unsubscribe() -> None:
+            unsubscribe_runtime()
+            unsubscribe_config()
+
+        connection.subscriptions[msg["id"]] = unsubscribe
         connection.send_result(msg["id"], {"revision": runtime.revision})
     except (StorageNotLoadedError, OSError):
         _LOGGER.exception("Unable to subscribe to Schedule Creator runtime")

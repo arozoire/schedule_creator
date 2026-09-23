@@ -90,7 +90,8 @@ runtime revision is **0**, as defined by the existing model; reading cannot chan
 | `quick_timers` | All persisted Quick Timer records, regardless of lifecycle state |
 | `recovery_instructions` | Number of instructions in the current loaded entry's startup recovery plan; no plan execution or recomputation on read |
 
-No runtime records, snapshots, operation payloads or audit log are returned.
+Only the minimal active timer, occurrence and lease projections described below
+are returned; snapshots, operation payloads and audit log are excluded.
 Configuration names, entity IDs and configured action/notification parameters
 are part of the requested configuration, not live entity state. Configuration is
 not a credential store; future fields must preserve this read-access boundary.
@@ -298,3 +299,19 @@ chain. Cancel commits `cancelled` before that chain releases ownership and prepa
 a restore only when the timer action succeeded. A newer controller still supersedes
 the restore. Stale runtime revisions return `revision_conflict`; cancelling a
 non-active timer returns `invalid_state`.
+
+## Proiezioni UI e invalidazione config
+
+`get_state` include ora `quick_timers` (solo record `active`: `id`, `entity_id`,
+`state`, `expires_at`, `action` con dominio/comando/dati) e `operational`:
+`occurrences` in stato `active`/`suspended` con `id`, `schedule_id`, `state`,
+`condition_branch`, `end_utc`, e `leases` con `entity_id`, `controller_type`,
+`state`. Sono letture autenticate; non espongono snapshot, payload del journal,
+audit, attributi delle entità o eccezioni. I motivi di rifiuto non persistiti
+non sono deducibili dalla proiezione.
+
+`subscribe_runtime` invia anche un evento `{"config_revision": N}` dopo un
+commit della configurazione riuscito. Gli eventi precedenti `{"revision": N}`
+e la risposta iniziale restano invariati; il client deve rileggere `get_state`
+in entrambi i casi. Le revisioni config e runtime sono indipendenti. Le due
+subscription sul bus sono rilasciate insieme con l'unsubscribe WebSocket.

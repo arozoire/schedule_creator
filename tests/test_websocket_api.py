@@ -111,6 +111,8 @@ async def test_get_state_empty(
                     "quick_timers": 0,
                     "recovery_instructions": 0,
                 },
+                "quick_timers": [],
+                "operational": {"occurrences": [], "leases": []},
             },
         }
         for operation in (load, save, delay, service):
@@ -140,6 +142,35 @@ async def test_subscribe_runtime_emits_committed_revision(hass, hass_ws_client):
         "type": "event",
         "event": {"revision": 1},
     }
+
+
+async def test_config_commit_notifies_but_stale_write_does_not(hass, hass_ws_client):
+    """Config invalidation is emitted only after a durable commit."""
+    entry = await _create_entry(hass)
+    client = await hass_ws_client(hass)
+    await _subscribe_runtime(client)
+    config = entry.runtime_data.storage.config
+    current = config.data
+    await config.async_update(
+        current.revision, lambda value: replace(value, revision=value.revision + 1)
+    )
+    assert await client.receive_json(timeout=5) == {
+        "id": 1,
+        "type": "event",
+        "event": {"config_revision": current.revision + 1},
+    }
+    await client.send_json_auto_id(
+        {
+            "type": "schedule_creator/profile/create",
+            "expected_revision": current.revision,
+            "name": "Stale",
+            "profile_type": "shared",
+        }
+    )
+    assert (await client.receive_json(timeout=5))["error"][
+        "code"
+    ] == "revision_conflict"
+    assert config.data.revision == current.revision + 1
 
 
 async def test_get_state_populated(hass, hass_ws_client, hass_storage):
@@ -214,8 +245,7 @@ async def test_get_state_populated(hass, hass_ws_client, hass_storage):
             "revision": reconciled_runtime.revision,
             "occurrences": len(reconciled_runtime.occurrences),
             "active_leases": sum(
-                lease.state is LeaseState.ACTIVE
-                for lease in reconciled_runtime.leases
+                lease.state is LeaseState.ACTIVE for lease in reconciled_runtime.leases
             ),
             "suspended_leases": sum(
                 lease.state is LeaseState.SUSPENDED
@@ -224,6 +254,42 @@ async def test_get_state_populated(hass, hass_ws_client, hass_storage):
             "pending_operations": len(reconciled_runtime.pending_operations),
             "quick_timers": 1,
             "recovery_instructions": len(entry.runtime_data.recovery_plan),
+        },
+        "quick_timers": [
+            {
+                "id": item.id,
+                "entity_id": item.entity_id,
+                "state": item.state.value,
+                "expires_at": item.expires_at.isoformat(),
+                "action": {
+                    "domain": item.action.domain,
+                    "action": item.action.action,
+                    "data": dict(item.action.data),
+                },
+            }
+            for item in reconciled_runtime.quick_timers
+            if item.state.value == "active"
+        ],
+        "operational": {
+            "occurrences": [
+                {
+                    "id": item.id,
+                    "schedule_id": item.frozen_schedule.id,
+                    "state": item.state.value,
+                    "condition_branch": item.condition_branch.value,
+                    "end_utc": item.end_utc.isoformat(),
+                }
+                for item in reconciled_runtime.occurrences
+                if item.state.value in {"active", "suspended"}
+            ],
+            "leases": [
+                {
+                    "entity_id": item.entity_id,
+                    "controller_type": item.controller_type.value,
+                    "state": item.state.value,
+                }
+                for item in reconciled_runtime.leases
+            ],
         },
     }
     assert (
