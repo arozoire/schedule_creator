@@ -215,3 +215,170 @@ Distinguere piano/implementazione e mock/prova reale. Conservare decisioni e vin
 > Massimo riuso, patch mirate, test pertinenti e CI finale. Aggiorna l'handoff e
 > consegna una PR. Niente merge, bump, tag, release o deploy senza autorizzazione.
 > Non rifare il backend concluso; non implementare B/C prima di chiudere A.
+
+## Incarico successivo per Sol: frontend utilizzabile, funzioni 1–9 (2026-09-23)
+
+**Decisione del proprietario:** implementare tutte le funzioni 1–9 della lista
+discussa prima della prossima prova personale in HACS. La 0.1.0 è installabile,
+ma la card A è solo una vista e una configurazione nuova appare vuota. Non
+presentare di nuovo una release come prova funzionale prima di poter creare e
+gestire schedule e timer dalla UI. La funzione 10 (parità grafica completa,
+viste alternative) è fuori da questo incarico; mantenere una UI usabile su
+desktop e mobile. Non modificare `arozoire/weekly-schedule-card`.
+
+Stato alla consegna: `main` contiene la release pubblica con tag **`0.1.0`**
+(senza `v`), sul merge `3b3e377fecb93fb19e965406b5531cd6701592d6`.
+La PR #26 `codex/fix-card-title-editor` è aperta, testa la correzione del
+titolo e non è nella release. Prenderla come base dopo averne verificato stato
+e CI, oppure integrare la stessa correzione nel proprio branch senza
+duplicarla; non ignorarla. Il worktree locale può avere le due modifiche della
+PR #26 senza commit locale: conservarle. Leggere `docs/websocket-api.md`,
+`docs/frontend.md`, i modelli e gli eventuali `AGENTS.md`; verificare il main
+remoto una sola volta. Non fare merge, tag o release autonomi: consegnare PR
+verificabili e istruzioni di prova, poi attendere la scelta del proprietario
+per pubblicare la prossima versione.
+
+### Sequenza di sviluppo e prove automatiche
+
+1. **Fondamenta di scrittura per tutte le funzioni.** Estendere
+   `frontend/src/state-adapter.js` o un modulo vicino con chiamate WebSocket
+   `hass.connection.sendMessagePromise`, uno stato della bozza separato dallo
+   snapshot, `busy` per evitare doppi invii, refresh esplicito dopo successo e
+   riconnessione. Usare `get_state.revision` come `expected_revision` per
+   profili/gruppi/schedule e `runtime_summary.revision` solo per timer; non
+   mischiarli. Se `revision_conflict`, rileggere, mantenere la bozza e chiedere
+   conferma prima di sovrascrivere; su `unauthorized` lasciare la vista leggibile
+   ma disabilitare le azioni. Tradurre `invalid_payload`, `not_found`,
+   `ownership_mismatch`, `profile_in_use`, `group_in_use`, `invalid_state`,
+   `not_loaded`, `storage_unavailable` in errori comprensibili. Un successo di
+   commit config non garantisce che un successivo effetto runtime sia riuscito:
+   non dichiarare un'azione eseguita prima di verificarne lo stato.
+   **Prova:** scrittura riuscita, doppio click, conflitto tra due client,
+   sessione non admin, disconnessione durante una richiesta. Testare questa
+   infrastruttura dove verifica davvero un rischio, non un test per pulsante.
+2. **Funzione 1, profili.** UI per create/update/delete/set_active usando i
+   quattro endpoint `schedule_creator/profile/*` documentati. Nome, tipo
+   `exclusive`/`shared`, icona/colore/ordine; mostrare chiaramente quale è
+   attivo. Un profilo appena creato è inattivo. Mostrare l'errore se è in uso,
+   senza cancellazione a cascata. **Prova:** creare profilo, attivarlo,
+   cambiarne il nome, riaprire la pagina, disattivarlo; testare convivenza di
+   shared ed esclusività di exclusive.
+3. **Funzione 2, gruppi.** Create/update/delete con `profile_id`, nome,
+   `entity_ids`, icona/colore/ordine via `schedule_creator/group/*`.
+   Selezionare entità reali da `hass.states` con ricerca e mostrare dominio,
+   nome e ID; non memorizzare copie di stati. Un gruppo usato da schedule non
+   è eliminabile; rimuovere un'entità target va validato dal server.
+   **Prova:** creare un gruppo in un profilo, assegnare una entità di prova,
+   ricaricare e verificarne la persistenza; verificare errori di riferimento.
+4. **Funzioni 3 e 4, schedule e azioni.** CRUD
+   `schedule_creator/schedule/*`, abilitazione, giorni ISO 0–6 (lun–dom),
+   intervalli `HH:MM`, entità target nel gruppo scelto, nome, azione iniziale
+   obbligatoria e finale opzionale. Riusare selettori/stile upstream dove
+   possibile senza importare storage, servizi o automazioni legacy. Offrire
+   controlli intuitivi per switch (`turn_on`/`turn_off`), climate (temperatura/
+   modalità supportate) e fan (velocità/modalità supportate); costruire
+   `{domain, action, data}` compatibili con il dominio e senza `entity_id`,
+   `device_id` o `area_id` dentro `data`: il backend fornisce il target.
+   Ispezionare capability/servizi HA disponibili; quando un'azione non è
+   rappresentabile, mostrarla senza perdita e prevedere una modalità avanzata
+   di modifica esplicita oppure disabilitare la modifica di quel campo. Per
+   l'editing serializzare i nested senza `id`/`schema_version`/revisioni;
+   evitare perdita silenziosa di condizioni, notifiche, date e policy quando
+   si aggiorna solo una fascia o un nome. La fine fascia senza azione finale
+   non cambia lo stato corrente. **Prova:** switch su entità di prova con
+   fascia imminente, ON all'inizio, OFF finale, disattivazione e modifica,
+   riapertura card, riavvio HA; poi smoke climate e fan se disponibili.
+5. **Funzioni 5–7, configurazioni avanzate.** Editor di albero delle
+   condizioni conforme a `ConditionNode` (operatori/valori/figli, durata minima
+   e isteresi ove validi), `override_policy`, date incluse/escluse ISO,
+   notifiche opzionali a inizio/fine. L'editor deve preservare esattamente
+   i campi già presenti nei record letti; differenziare `null` da campo
+   inalterato nelle mutazioni. Esplicitare nella UI la semantica del backend:
+   condizione falsa applica l'azione di fine se presente, altrimenti segue il
+   ripristino definito dal motore; fine fascia senza azione finale non invia
+   comando. Non simulare condizioni o notifiche in JS. **Prova:** una condizione
+   vera/falsa su un'entità di prova, una data esclusa e una notifica; verificare
+   persistenza, esecuzione backend e modifica di una fascia senza perdere
+   campi avanzati. Segnalare puntualmente gli operatori non coperti prima di
+   dichiarare completo il punto 5.
+6. **Funzione 8, Quick Timer.** UI per entità, durata 1–604800 s, azione,
+   create/cancel, stato e countdown; usare revisione **runtime**. Prima di
+   considerarla completa, aggiungere al backend una proiezione di sola lettura
+   dei timer con ID, entità, stato, scadenza e soli campi necessari alla UI,
+   accessibile ai non admin come `get_state`; aggiornare contratto e test. La
+   risposta attuale `runtime_summary.quick_timers` è solo un conteggio e non
+   consente cancel né ripresa dopo refresh. Riusare la subscription runtime;
+   il countdown è visuale e non deve eseguire scadenza/ripristino. **Prova:**
+   start, chiusura/riapertura dashboard, timer ancora visibile, cancel per ID,
+   scadenza a browser chiuso, precedenza schedule e ripristino solo quando il
+   timer aveva realmente comandato l'entità.
+7. **Funzione 9, stato operativo.** Presentare in modo comprensibile profilo
+   attivo, schedule attivi, timer in corso, scadenze, rifiuti di precedenza e
+   problemi verificabili. L'API A offre solo conteggi di runtime; aggiungere
+   una proiezione minima di lettura (occurrence/lease e motivo o stato solo se
+   persistito e affidabile) documentando privacy e privilegi. Non esporre
+   snapshot completi, journal, audit o dettagli di errori interni; non
+   inventare motivi da conteggi. Se un motivo non è osservabile, mostrare
+   `stato non disponibile`. **Prova:** schedule attivo, timer vinto/perso,
+   refresh e secondo client; testo coerente con la proiezione server.
+8. **Aggiornamento tra client.** `subscribe_runtime` invalida solo runtime:
+   aggiungere un'invalidazione config minima al backend dopo commit riuscito,
+   con lifecycle/unsubscribe e compatibilità della subscription corrente.
+   Dopo salvataggi propri fare refresh; un secondo browser deve vedere la
+   modifica senza F5. Test focalizzati su commit, no-op/errore, reload e
+   disconnessione. Questo requisito completa le funzioni 1–9, non sostituisce
+   il controllo revisioni.
+
+### Consegna e prova personale
+
+Organizzare il lavoro in PR reviewabili, ad esempio: infrastruttura + 1–2;
+3–4 per il primo percorso completo; 5–7; 8–9 e proiezioni runtime.
+Nessuna release intermedia proposta come prodotto testabile se manca ancora
+il percorso profilo → gruppo → schedule → azione. Aggiornare ad ogni PR questo
+handoff con branch, commit, CI, limiti reali e prossimo passo. Compilare
+`frontend/src` nel bundle sotto `custom_components/`, mantenere HACS Integration
+e URL statico esistente. Test mirati sui contratti mutati, editor/adapter e
+proiezioni, una build e CI finale; smoke su HA reale del proprietario dopo
+pubblicazione, senza inventare che sia già stato fatto. Convivenza con la card
+originale, nessuna migrazione automatica e dispositivi di prova separati per
+evitare comandi concorrenti.
+
+Checklist per il proprietario alla consegna: aggiornare da HACS, riavviare HA,
+ricaricare la dashboard, creare profilo e gruppo con una entità di prova,
+programmare fascia breve con azione iniziale/finale, verificare comandi e
+persistenza dopo refresh/riavvio; poi condizione, data esclusa, notifica,
+timer con dashboard chiusa, annullamento e secondo client. Riportare log ed
+entità di prova se un passaggio fallisce. Il fix del titolo va incluso nella
+versione che sarà effettivamente installata per questa prova.
+
+### Traguardo implementazione 1–9 (2026-09-23)
+
+Branch `codex/frontend-1-9-complete` basato sulla testa della PR #26
+`04d33d07f7030500df83a30daba4244e2102a1bf` (fix titolo incluso),
+con piano ricopiato dal branch `codex/frontend-1-9-handoff`. Completati
+adapter di scrittura con revisioni distinte, blocco doppi invii e bozze
+conservate; UI di profili, gruppi, schedule, azioni comuni/avanzate, condizioni
+JSON con tutti gli operatori del modello, date/notifiche, Quick Timer e stato
+operativo; proiezioni di lettura minime e invalidazione config. File chiave:
+`frontend/src/{state-adapter,editor,schedule-creator-card}.js`,
+`custom_components/schedule_creator/{websocket_api,storage}.py`,
+`docs/{frontend,websocket-api}.md`. La card non usa storage/automazioni legacy.
+Verifiche locali: build frontend e 7 test Node mock, 187 test Python,
+Ruff, mypy, `compileall` e `git diff --check` passati con HA 2026.9.2.
+Versione manifest portata a 0.2.0. Controllare CI prima del merge.
+Lo smoke HA reale, le azioni fisiche e mobile sono ancora
+non verificati. Restano miglioramenti di UX agli editor JSON e una eventuale
+proiezione futura dei motivi di precedenza, attualmente non persistiti.
+Prossimo passo: PR + CI backend/frontend, correzione dei fallimenti, merge,
+bump e release autorizzati dalla richiesta dell'utente del 23 settembre.
+
+### PR e CI del traguardo (2026-09-23)
+
+Il commit pubblicato sul branch è `c0e08cd7482efb224acbdbbe5abf679177a0fb74`
+(tree `51e77187b9e2f43d6e14fc82e4bd0894fe8934d0`, identico alla build
+locale). PR funzionale [#28](https://github.com/arozoire/schedule_creator/pull/28),
+CI [run 35846042875](https://github.com/arozoire/schedule_creator/actions/runs/35846042875)
+(in corso al momento di questo aggiornamento). Fix titolo PR #26 unito a
+`main` nel commit `f02f69a86a456d1ff5d05256c4f02f36c9b20b7a` dopo CI verde.
+Prossimo passo preciso: verificare CI aggiornata, merge PR #28, tag/release
+`0.2.0` sul merge, poi smoke HA personale secondo checklist qui sopra.

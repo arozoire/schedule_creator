@@ -12,7 +12,7 @@ from typing import Any, Never, Protocol, Self, cast, override
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.storage import Store
 
-from .const import DOMAIN, EVENT_RUNTIME_UPDATED
+from .const import DOMAIN, EVENT_CONFIG_UPDATED, EVENT_RUNTIME_UPDATED
 from .models import (
     MODEL_SCHEMA_VERSION,
     AuditRecord,
@@ -651,6 +651,7 @@ class ConfigRepository:
     """Serialize complete configuration commits under one async lock."""
 
     def __init__(self, hass: HomeAssistant, store: JsonStore | None = None) -> None:
+        self._hass = hass
         self._store = store or _native_store(hass, CONFIG_STORE_KEY)
         self._lock = asyncio.Lock()
         self._loaded = False
@@ -697,7 +698,8 @@ class ConfigRepository:
                 )
             await self._store.async_save(updated.to_dict())
             self._data = updated
-            return updated
+        self._hass.bus.async_fire(EVENT_CONFIG_UPDATED, {"revision": updated.revision})
+        return updated
 
 
 class RuntimeRepository:
