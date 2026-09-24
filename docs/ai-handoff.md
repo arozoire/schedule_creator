@@ -1,5 +1,12 @@
 # AI handoff — stato attuale e piano futuro
 
+## Card Quick Timer separata — 0.3.8 (2026-09-24)
+
+Punto 3 dell'ordine concordato (punto 4 del piano storico). `frontend/src/quick-timer-card.js`
++ `quick-timer.css`, concatenati nello stesso bundle (`build.mjs`); stesso adapter e
+stesse API `quick_timer/create|cancel`, nessun backend nuovo. 4 test DOM in
+`frontend/tests/quick-timer.test.mjs`. Prossimo: card timeline per entità (B).
+
 ## Direzione grafica A e ritardo in uscita — 0.3.7 (2026-09-24)
 
 Il proprietario ha scelto la direzione **A "Agenda viva"** (mockup

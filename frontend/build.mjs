@@ -14,4 +14,5 @@ const card = module('schedule-creator-card.js')
 const output = new URL('../custom_components/schedule_creator/frontend/', import.meta.url);
 mkdirSync(output, { recursive: true });
 const parts = ['state-adapter.js', 'editor.js', 'forms.js', 'action-editor.js', 'schedule-editor.js', 'timeline.js'].map((name) => module(name).trimEnd());
-writeFileSync(new URL('schedule-creator-card.js', output), `${[...parts, card.trimEnd()].join('\n')}\n`);
+const quickTimer = module('quick-timer-card.js').replace("'__SC_QT_CSS__'", JSON.stringify(css + source('quick-timer.css')));
+writeFileSync(new URL('schedule-creator-card.js', output), `${[...parts, card.trimEnd(), quickTimer.trimEnd()].join('\n')}\n`);
