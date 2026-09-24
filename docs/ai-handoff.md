@@ -1,5 +1,42 @@
 # AI handoff — stato attuale e piano futuro
 
+## Settimana grafica, popup e posizione pagina — 0.3.3 (2026-09-24)
+
+Il proprietario chiede di tornare alla lettura della weekly-schedule-card,
+aprire schedule/gruppi/profili in popup ed eliminare i salti verso l'alto.
+Branch `codex/weekly-grid-dialogs`, base `347b8f61fbd9df737bdedbd8bb0bb8b1b1677287`
+(PR #34 unita, tag 0.3.2 presente). Consultato di nuovo l'upstream al commit
+`04a537d8a09c54555e13edad239a9e39adbbaf24`: riferimento visivo colonne giorni,
+asse ore e blocchi proporzionali; nessun motore legacy importato.
+
+Implementazione: sette colonne 00:00–24:00, fasce cliccabili con nome/orario,
+sovrapposizioni affiancate, mezzanotte divisa tra i giorni (anche domenica/lunedì).
+Lista amministrativa unica chiusa per default. Su mobile griglia scorribile
+orizzontalmente. È una settimana tipo: date speciali e condizioni non sono
+simulate nel calendario. Non dichiarare parità completa con tutte le viste upstream.
+
+Editor di profilo/gruppo/schedule/timer in `dialog` modale nativo persistente:
+Esc/Annulla/chiusura, focus nel popup, errori e diagnostica nel popup, bozza
+conservata su errore. Rimossi scrollIntoView e focus con scroll automatico;
+conservati scroll di popup, lista entità, timeline e contenitori esterni.
+Il nodo ha-card e il dialog non vengono distrutti a ogni render.
+
+File: `frontend/src/{schedule-creator-card,timeline}.js`, CSS, build/bundle e
+test. Build e 23 test Node passati (overnight, overlap, dialog persistente,
+regressioni salvataggio). Chromium reale con backend simulato: popup modale,
+scroll pagina e popup invariato su cambio azione/errore/Esc, salvataggio singolo,
+profilo e gruppo in popup; vista mobile 390px e screenshot controllati.
+Queste prove non sono una verifica dell'HA fisico. Preview riproducibile in
+`frontend/preview.html`. Eseguire CI sul commit finale prima del merge.
+
+Consegna unica 0.3.3; release sempre al proprietario. Prova HA successiva:
+aprire la card su dashboard già scorsa, modificare checkbox/selettori e salvare;
+verificare posizione invariata e popup utilizzabili su desktop/mobile.
+Sul problema aggiornamenti: la precedente risposta su `cache_headers=False`
+non dimostra da sola un aggiornamento automatico affidabile del JS, né che HACS
+gestisca `hacstag` per questa route custom. Il punto 2 del piano resta aperto;
+non dichiararlo completato da questa revisione grafica.
+
 ## Riscontro HA: `group/update` fallisce nel ripristino form (2026-09-24)
 
 Il proprietario ha inviato i **Dettagli errore** da card 0.3.1 e HA 2026.9.3:

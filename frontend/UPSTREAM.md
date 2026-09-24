@@ -1,5 +1,14 @@
 # Origin of the visual design
 
+## 0.3.3 visual alignment
+
+Revisited the same pinned upstream source for its seven day columns, time axis,
+proportional blocks and popup editing. Schedule Creator now uses that layout
+concept with its own backend data and native modal dialogs. `timeline.js` is a
+new weekly projection with overnight splitting and overlap lanes. The current
+CSS has evolved from the initial copy described below; no legacy runtime is
+imported. Alternate row views and full upstream feature parity are not claimed.
+
 Source: `arozoire/weekly-schedule-card`, commit
 `04a537d8a09c54555e13edad239a9e39adbbaf24` (version 1.5.3).
 

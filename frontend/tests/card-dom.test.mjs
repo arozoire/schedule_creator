@@ -30,7 +30,7 @@ test('group lists controllable entities and search really hides nonmatches',asyn
  assert.equal(t.root.querySelector('[name="entities"][value="sensor.temperature"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="automation.test"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="update.test"]'),null);
- assert.equal(t.root.querySelector('.sc-version').textContent,'v0.3.2');
+ assert.equal(t.root.querySelector('.sc-version').textContent,'v0.3.3');
  t.set('entity_search','lampada','input');
  const hidden=t.root.querySelector('[value="switch.outside"]').parentElement;
  assert.equal(hidden.hidden,true);
@@ -98,7 +98,7 @@ test('local action failure exposes phase and stack, keeps draft and permits retr
  const details=t.root.querySelector('.sc-error-details textarea').value;
  assert.match(details,/Fase: lettura azione iniziale/);
  assert.match(details,/Traccia:\nError: Method not implemented/);
- assert.match(details,/Schedule Creator: 0.3.2/);
+ assert.match(details,/Schedule Creator: 0.3.3/);
  assert.match(t.root.querySelector('.sc-error').textContent,/La bozza è conservata/);
  t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
  assert.equal(t.writes.length,1);
@@ -128,6 +128,26 @@ test('activity stays expanded as timer counts change',async()=>{
  t.card.render();
  assert.equal(t.root.querySelector('.sc-operational').open,true);
  assert.match(t.root.querySelector('.sc-operational summary').textContent,/1 timer/);
+ }finally{t.close();}
+});
+test('editors use one persistent dialog, preserve scroll and close on Escape',async()=>{
+ const t=setup();try {await tick();
+ const surface=t.root.querySelector('ha-card');const dialog=t.root.querySelector('dialog');
+ for(const command of ['newProfile','newGroup','newSchedule']) {
+   t.click(command);
+   assert.equal(dialog.open,true);
+   assert.ok(dialog.querySelector('form[data-editor]'));
+   assert.equal(surface.querySelector('form'),null);
+   t.set('name','Bozza','input');dialog.scrollTop=180;
+   t.card.render();
+   assert.equal(t.root.querySelector('dialog'),dialog);
+   assert.equal(t.root.querySelector('ha-card'),surface);
+   assert.equal(dialog.scrollTop,180);
+   assert.equal(dialog.querySelector('[name="name"]').value,'Bozza');
+   dialog.dispatchEvent(new t.dom.window.Event('cancel',{cancelable:true}));
+   assert.equal(t.card.edit,null);
+   assert.equal(dialog.open,false);
+ }
  }finally{t.close();}
 });
 test('timer adapts from switch to light and climate capabilities',async()=>{
