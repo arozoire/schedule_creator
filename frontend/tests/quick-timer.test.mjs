@@ -78,3 +78,12 @@ test('non-admin users only see timers', async () => {
     assert.match(t.root.textContent, /Serve un amministratore/);
   } finally { t.close(); }
 });
+
+test('an active timer tells which state it restores', async () => {
+  const timer = {id: 'tm', entity_id: 'light.sofa', state: 'active', expires_at: new Date(Date.now() + 60000).toISOString(), action: {domain: 'light', action: 'turn_off', data: {}}, previous: {state: 'on', attributes: {brightness: 128}}};
+  const t = setup({entity: 'light.sofa'}, {timers: [timer]});
+  try {
+    await tick();
+    assert.match(t.root.querySelector('.qt-previous').textContent, /torna a Acceso · 50%/);
+  } finally { t.close(); }
+});

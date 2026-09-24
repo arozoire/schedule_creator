@@ -1,3 +1,5 @@
+.qt-previous { font-size: .8rem; color: var(--sc-muted); }
+.qt-previous strong { color: var(--primary-text-color, #202a35); }
 /* Quick Timer card: reuses the action editor styles of the main card. */
 .qt-body.sc-editor { margin: 0; padding: 0; border: 0; background: transparent; gap: 14px; }
 .qt-head { display: flex; align-items: center; gap: 12px; }

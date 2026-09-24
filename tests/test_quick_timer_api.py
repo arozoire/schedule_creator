@@ -85,3 +85,30 @@ async def test_quick_timer_revision_conflict(hass, hass_ws_client) -> None:
     )
 
     assert response["error"]["code"] == "revision_conflict"
+
+
+async def test_active_timer_reports_the_state_it_restores(hass, hass_ws_client) -> None:
+    """get_state exposes the snapshot state and a safe attribute subset."""
+    await _create_entry(hass)
+    hass.states.async_set(
+        "light.desk", "on", {"brightness": 90, "friendly_name": "Desk", "secret": 1}
+    )
+    client = await hass_ws_client(hass)
+
+    with patch.object(type(hass.services), "async_call", AsyncMock()):
+        created = await _request(
+            client,
+            {
+                "type": "schedule_creator/quick_timer/create",
+                "expected_revision": 0,
+                "entity_id": "light.desk",
+                "duration_seconds": 300,
+                "action": {"domain": "light", "action": "turn_off", "data": {}},
+            },
+        )
+        assert created["success"] is True
+        await hass.async_block_till_done()
+        state = await _request(client, {"type": "schedule_creator/get_state"})
+
+    timer = state["result"]["quick_timers"][0]
+    assert timer["previous"] == {"state": "on", "attributes": {"brightness": 90}}

@@ -3,10 +3,10 @@ import { weeklySegments } from './timeline.js';
 import { clean, messageFor, parseJson, diagnosticFor } from './editor.js';
 import { controllable, targetEntities, notificationForm, readNotification } from './forms.js';
 import { blankCondition, conditionForm, readCondition, slotsForm, readSlots, magnetSnap, toMinutes, toTime, DAY_SHORTCUTS, iconPicker, colorPicker } from './schedule-editor.js';
-import { actionForm, readAction, describeAction, pretty } from './action-editor.js';
+import { actionForm, readAction, describeAction, describeState, pretty } from './action-editor.js';
 
 const STYLE = '__SC_CSS__';
-const CARD_VERSION = '0.3.9';
+const CARD_VERSION = '0.3.10';
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
@@ -202,7 +202,7 @@ class ScheduleCreatorCard extends HTMLElement {
       return item.condition_branch==='false' || item.state==='suspended' ? 'is-paused' : 'is-running';
     };
     const time=minute=>`${String(Math.floor(minute/60)).padStart(2,'0')}:${String(minute%60).padStart(2,'0')}`;
-    const slots = `<div class="sc-timeline-head"><span>Ora</span>${DAYS.map((day,index)=>`<strong class="${index===now.weekday?'is-today':''}">${day}${index===now.weekday?' · oggi':''}</strong>`).join('')}</div><div class="sc-timeline-grid"><div class="sc-time-axis">${Array.from({length:13},(_,i)=>`<span style="top:${i/12*100}%">${time(i*120)}</span>`).join('')}</div>${DAYS.map((day,index)=>`<div class="sc-day-track ${index===now.weekday?'is-today':''}" aria-label="${day}">${segments[index].map(({schedule,start,end,lane,lanes})=>{
+    const slots = `<div class="sc-timeline-head"><span>Ora</span>${DAYS.map((day,index)=>`<strong class="${index===now.weekday?'is-today':''}">${day}${index===now.weekday?'<span class="sc-today-tag"> · oggi</span>':''}</strong>`).join('')}</div><div class="sc-timeline-grid"><div class="sc-time-axis">${Array.from({length:13},(_,i)=>`<span style="top:${i/12*100}%">${time(i*120)}</span>`).join('')}</div>${DAYS.map((day,index)=>`<div class="sc-day-track ${index===now.weekday?'is-today':''}" data-day="${index}" aria-label="${day}" title="${this._hass?.user?.is_admin===true && group ? 'Clicca uno spazio libero per aggiungere uno schedule' : ''}">${segments[index].map(({schedule,start,end,lane,lanes})=>{
       const label=`${schedule.name} · ${day} ${time(start)}–${time(end)}${schedule.enabled?'':' · Disabilitato'}`;
       const live=index===now.weekday && start<=now.minutes && now.minutes<end ? runningState(schedule.id) : '';
       return `<button type="button" class="sc-time-block ${schedule.enabled?'':'is-off'} ${live}" data-command="editSchedule" data-id="${esc(schedule.id)}" aria-label="${esc(label)}" title="${esc(label)}" style="top:${start/1440*100}%;height:${(end-start)/1440*100}%;left:${lane/lanes*100}%;width:${100/lanes}%;--block-color:${colorFor(schedule)}"><span>${esc(schedule.name)}</span><small>${time(start)}–${time(end)}</small></button>`;
@@ -216,7 +216,7 @@ class ScheduleCreatorCard extends HTMLElement {
     const view = state ? `<div class="profile-status-bar">${profile ? `<span class="sc-badge ${profile.active ? 'is-active' : ''}">${profile.active ? 'Profilo attivo' : 'Profilo inattivo'}</span><span>${esc(profile.profile_type === 'exclusive' ? 'Esclusivo' : 'Condiviso')}</span>` : 'Crea un profilo per iniziare'}<span>· ${state.quick_timers?.length ?? 0} timer attivi</span></div>
       ${this.nowTiles(config, occurrences, state.quick_timers || [])}
       <div class="sc-toolbar"><h2>Settimana${group ? ` · ${esc(group.name)}` : ''}</h2>${groups.length ? `<nav class="tab-bar" aria-label="Gruppi">${tabs}</nav>` : ''}</div>
-      ${schedules.length ? `<section class="sc-timeline" data-scroll="timeline" aria-label="Programmazione settimanale">${slots}</section>${legend}<details data-section="schedules" class="sc-schedules"><summary>Gestisci schedule (${schedules.length})</summary><ul class="sc-list">${schedules.map((schedule) => `<li class="sc-entry" style="--block-color:${colorFor(schedule)}"><div class="sc-entry-copy"><strong>${esc(schedule.name)}</strong><span class="sc-meta">${esc(schedule.target_entity_ids.map((id)=>this._hass.states[id]?.attributes?.friendly_name || id).join(', '))} · ${schedule.enabled ? '' : 'disabilitato · '}${schedule.time_slots?.length ?? 0} ${schedule.time_slots?.length === 1 ? 'fascia' : 'fasce'}</span></div>${editable ? `<div class="sc-entry-actions">${button('editSchedule','Modifica',schedule.id)}${button('deleteSchedule','Elimina',schedule.id)}</div>` : ''}</li>`).join('')}</ul></details>` : `<div class="sc-empty"><strong>${!profile ? 'Inizia dal tuo primo profilo' : !group ? 'Aggiungi un gruppo di dispositivi' : 'La settimana è ancora libera'}</strong>${!profile ? 'Organizza la casa per abitudini, ambienti o stagioni.' : !group ? 'Riunisci i dispositivi che vuoi programmare.' : 'Crea uno schedule e scegli giorni, orari e azioni.'}</div>`}
+      ${schedules.length ? `<section class="sc-timeline" data-scroll="timeline" aria-label="Programmazione settimanale">${slots}</section>${legend}<details data-section="schedules" class="sc-schedules"><summary>Gestisci schedule (${schedules.length})</summary><ul class="sc-list">${schedules.map((schedule) => `<li class="sc-entry" style="--block-color:${colorFor(schedule)}"><div class="sc-entry-copy"><strong>${esc(schedule.name)}</strong><span class="sc-meta">${esc(schedule.target_entity_ids.map((id)=>this._hass.states[id]?.attributes?.friendly_name || id).join(', '))} · ${schedule.enabled ? '' : 'disabilitato · '}${schedule.time_slots?.length ?? 0} ${schedule.time_slots?.length === 1 ? 'fascia' : 'fasce'}</span></div>${editable ? `<div class="sc-entry-actions">${button('editSchedule','Modifica',schedule.id)}${button('deleteSchedule','Elimina',schedule.id)}</div>` : ''}</li>`).join('')}</ul></details>` : `<${editable ? `button type="button" data-command="${!profile ? 'newProfile' : !group ? 'newGroup' : 'newSchedule'}"` : 'div'} class="sc-empty"><strong>${!profile ? 'Inizia dal tuo primo profilo' : !group ? 'Aggiungi un gruppo di dispositivi' : 'La settimana è ancora libera'}</strong>${!profile ? 'Organizza la casa per abitudini, ambienti o stagioni.' : !group ? 'Riunisci i dispositivi che vuoi programmare.' : 'Tocca qui o su un orario del calendario per creare uno schedule.'}</${editable ? 'button' : 'div'}>`}
       ${editable ? `<details class="sc-management" data-section="management" ${!profile || !group ? 'open' : ''}><summary>Gestisci profili e gruppi</summary><div class="sc-controls">${button('newProfile','＋ Profilo')}${profile ? `${button('editProfile','Modifica profilo',profile.id)}${button('toggleProfile',profile.active ? 'Disattiva profilo' : 'Attiva profilo',profile.id)}${button('deleteProfile','Elimina profilo',profile.id)}${button('newGroup','＋ Gruppo')}` : ''}${group ? `${button('editGroup','Modifica gruppo',group.id)}${button('deleteGroup','Elimina gruppo',group.id)}` : ''}</div></details>` : '<p class="sc-meta">Vista in sola lettura: serve un amministratore per modificare.</p>'}
       ${profiles.length ? this.overview(config, profiles) : ''}
       ${editable ? `<details class="sc-maintenance" data-section="maintenance"><summary>Manutenzione · backup e RESET</summary><p class="sc-meta">Il backup salva profili, gruppi e schedule in un file JSON. Il ripristino li sostituisce e lascia i profili disattivati. RESET cancella tutti i dati di Schedule Creator.</p><div class="sc-controls">${button('exportBackup','Salva backup')}${button('newRestore','Ripristina backup')}${button('newReset','RESET…')}</div></details>` : ''}
@@ -275,6 +275,12 @@ class ScheduleCreatorCard extends HTMLElement {
     }).join('');
     return `<details class="sc-overview" data-section="overview"><summary>Panoramica profili e interazioni</summary><ul class="sc-overview-list">${rows}</ul><p class="sc-meta"><strong>Esclusivo</strong>: attivandolo si disattivano gli altri profili esclusivi. <strong>Condiviso</strong>: resta attivo insieme agli altri. Solo i profili attivi eseguono i loro schedule. Se due fasce comandano la stessa entità vince quella iniziata per ultima; a parità un Quick Timer prevale su uno schedule con condizione, che prevale su uno normale. L’ordine serve solo a disporre profili e gruppi.</p><h4>Entità comandate da più profili</h4>${shared.length ? `<ul class="sc-overview-list">${shared.join('')}</ul>` : '<p class="sc-meta">Nessuna: ogni entità è programmata da un solo profilo.</p>'}</details>`;
   }
+  canAddSchedule() {
+    const config = this.adapter.state?.config;
+    if (!config || this._hass?.user?.is_admin !== true) return false;
+    const profile = config.profiles.find((p) => p.id === this.selectedProfile) || [...config.profiles].sort(byOrder)[0];
+    return config.groups.some((g) => g.profile_id === profile?.id);
+  }
   nowTiles(config, occurrences, timers) {
     const friendly = (id) => this._hass.states[id]?.attributes?.friendly_name || id;
     const zone = this._hass?.config?.time_zone || undefined;
@@ -288,7 +294,7 @@ class ScheduleCreatorCard extends HTMLElement {
       const detail = paused ? 'La condizione non è soddisfatta' : waiting ? 'Un altro schedule o timer ha la priorità' : `Fino alle ${clock(item.end_utc)}${schedule.condition ? ' · condizione vera' : ''}`;
       return `<button type="button" class="sc-now-tile ${kind}" data-command="editSchedule" data-id="${esc(schedule.id)}"><span class="sc-now-label">${label} · ${esc(schedule.target_entity_ids.map(friendly).join(', '))}</span><strong>${esc(describeAction(schedule.start_action) || schedule.name)}</strong><span class="sc-now-detail">${esc(detail)}</span></button>`;
     });
-    const timerTiles = timers.map((timer) => `<div class="sc-now-tile is-timer"><span class="sc-now-label">Timer · ${esc(friendly(timer.entity_id))}</span><strong>${esc(describeAction(timer.action))}</strong><span class="sc-now-detail">Resta <span data-expiry="${esc(timer.expires_at)}"></span></span></div>`);
+    const timerTiles = timers.map((timer) => `<div class="sc-now-tile is-timer"><span class="sc-now-label">Timer · ${esc(friendly(timer.entity_id))}</span><strong>${esc(describeAction(timer.action))}</strong><span class="sc-now-detail">Resta <span data-expiry="${esc(timer.expires_at)}"></span>${timer.previous ? ` · poi ${esc(describeState(timer.previous, timer.entity_id.split('.')[0]))}` : ''}</span></div>`);
     const all = [...tiles, ...timerTiles].filter(Boolean);
     return all.length ? `<div class="sc-now">${all.join('')}</div>` : '<p class="sc-now-empty">Nessuna fascia in corso adesso.</p>';
   }
@@ -496,6 +502,14 @@ class ScheduleCreatorCard extends HTMLElement {
     return `<form data-editor="${esc(kind)}" class="sc-editor"><h3 id="sc-editor-title">${subtitle ? `<small>${esc(subtitle)}</small>` : ''}${({profile:id?'Modifica profilo':'Nuovo profilo',group:id?'Modifica gruppo':'Nuovo gruppo',schedule:id?'Modifica schedule':'Nuovo schedule',timer:'Quick Timer',restore:'Ripristina backup',reset:'RESET completo'})[kind]}</h3>${content}<div class="sc-actions"><button type="submit" class="sc-save ${kind === 'reset' ? 'sc-danger' : ''}">${({restore:'Ripristina',reset:'Cancella tutto',schedule:'Salva schedule'})[kind] || 'Salva'}</button>${button('close','Annulla')}</div></form>`;
   }
   async click(event) {
+    const track = event.target.closest?.('.sc-day-track');
+    if (track && !event.target.closest('.sc-time-block') && !this.adapter.busy && track.dataset.day !== undefined && this.canAddSchedule()) {
+      // Clicking free space starts a one-hour slot at that half hour, like weekly-schedule-card.
+      const rect = track.getBoundingClientRect();
+      const minutes = Math.min(1380, Math.max(0, Math.floor((event.clientY - rect.top) / (rect.height || 1) * 48) * 30));
+      this.openEditor('newSchedule', '', {weekdays: [Number(track.dataset.day)], start: toTime(minutes), end: toTime(minutes + 60)});
+      return;
+    }
     const buttonEl = event.target.closest('button'); if (!buttonEl || this.adapter.busy) return;
     if (buttonEl.dataset.profile) { this.selectedProfile = buttonEl.dataset.profile; this.selectedGroup = null; this.edit = null; this.draft = null; this.render(); return; }
     if (buttonEl.dataset.group) { this.selectedGroup = buttonEl.dataset.group; this.edit = null; this.draft = null; this.render(); return; }
@@ -555,7 +569,12 @@ class ScheduleCreatorCard extends HTMLElement {
     }
     if (command === 'suggestName') { this.capture(); this.updateSuggestions(true); return; }
     if (command === 'exportBackup') { await this.exportBackup(); return; }
-    if (/^(new|edit)/.test(command)) {
+    if (/^(new|edit)/.test(command)) { this.openEditor(command, id); return; }
+    const types = { toggleProfile: 'profile/set_active', deleteProfile: 'profile/delete', deleteGroup: 'group/delete', deleteSchedule: 'schedule/delete', cancelTimer: 'quick_timer/cancel' };
+    return this.runCommand(command, id, types);
+  }
+  openEditor(command, id, slot = null) {
+    {
       if(this._hass?.user?.is_admin !== true) return;
       this.editorOpener={command,id};
       this.adapter.writeError=null;
@@ -571,10 +590,11 @@ class ScheduleCreatorCard extends HTMLElement {
       this.editRevision = this.adapter.state.revision;
       this.changedFields = new Set();
       this.slotDraft = null; this.conditionDraft = undefined; this.actionReset = false; this.actionDomain = null;
+      if (slot) this.slotDraft = [slot];
       this.draft = null; this.localError = null; this.localErrorDetails = null; this.render();
-      return;
     }
-    const types = { toggleProfile: 'profile/set_active', deleteProfile: 'profile/delete', deleteGroup: 'group/delete', deleteSchedule: 'schedule/delete', cancelTimer: 'quick_timer/cancel' };
+  }
+  async runCommand(command, id, types) {
     if (!types[command]) return;
     if (command.startsWith('delete') && !confirm('Eliminare questo elemento?')) return;
     const payload = command === 'toggleProfile' ? { profile_id: id, active: !this.adapter.state.config.profiles.find((p) => p.id === id)?.active } :

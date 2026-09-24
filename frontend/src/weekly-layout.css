@@ -569,9 +569,8 @@ details[open] > summary {
 }
 .sc-timeline-head, .sc-timeline-grid {
   display: grid;
-  grid-template-columns: 44px repeat(7,minmax(68px,1fr));
-  gap: 5px;
-  min-width: 555px;
+  grid-template-columns: 38px repeat(7,minmax(0,1fr));
+  gap: 4px;
 }
 .sc-timeline-head { margin-bottom: 10px; text-align: center; font-size: .74rem; color: var(--sc-muted); }
 .sc-time-axis, .sc-day-track { position: relative; height: 576px; }
@@ -809,3 +808,32 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
   .sc-head-actions button { flex-grow: 1; }
 }
 .sc-dialog-brand { font-size: .75rem; font-weight: 700; color: var(--sc-muted); letter-spacing: .04em; text-transform: uppercase; }
+
+/* 0.3.10: lighter header, fluid week, clickable free space */
+.sc-head { gap: 10px; margin-bottom: 12px; }
+.sc-logo { width: 34px; height: 34px; border-radius: 10px; }
+.sc-logo svg { width: 18px; height: 18px; }
+.sc-head .card-title { font-size: 1.05rem; }
+.sc-sub { font-size: .74rem; }
+.sc-head .sc-version { padding: 2px 7px; font-size: .66rem; }
+.sc-head-actions { margin-left: auto; gap: 6px; }
+.sc-head-actions button, .sc-head-actions button[data-command="newSchedule"] { min-height: 30px; padding: 4px 12px; border-radius: 15px; font-size: .78rem; font-weight: 600; }
+.sc-segmented { padding: 3px; border-radius: 12px; }
+.sc-segmented .profile-chip { min-height: 30px; padding: 4px 10px; font-size: .82rem; }
+.sc-day-track { cursor: copy; }
+.sc-time-block { cursor: pointer; }
+button.sc-empty { display: block; width: 100%; font: inherit; cursor: pointer; }
+button.sc-empty:hover { border-color: var(--sc-accent); }
+@container (max-width: 520px) {
+  .sc-time-block small { display: none; }
+  .sc-time-block { padding: 2px 3px; font-size: .6rem; }
+  .sc-timeline-head { font-size: .66rem; }
+  .sc-timeline-head strong.is-today { font-size: .66rem; }
+}
+@media (max-width: 600px) { .sc-head-actions { width: auto; } .sc-head-actions button { flex-grow: 0; } }
+@container (max-width: 520px) {
+  .sc-today-tag { display: none; }
+  .sc-now { gap: 6px; }
+  .sc-now-tile { padding: 10px 12px; gap: 3px; border-radius: 12px; }
+  .sc-now-tile strong { font-size: 1rem; }
+}
