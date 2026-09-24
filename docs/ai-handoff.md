@@ -1,5 +1,12 @@
 # AI handoff — stato attuale e piano futuro
 
+## Card timeline per entità — 0.3.9 (2026-09-24)
+
+Punto 4 dell'ordine concordato: `frontend/src/timeline-card.js` + `timeline-card.css`
+(`custom:schedule-creator-timeline-card`), sola lettura, tutti i profili attivi.
+Ordine concordato ora completato (A, ritardo in uscita, Quick Timer, timeline).
+Aperti: prove HA del proprietario; eventuale editor visuale della timeline.
+
 ## Card Quick Timer separata — 0.3.8 (2026-09-24)
 
 Punto 3 dell'ordine concordato (punto 4 del piano storico). `frontend/src/quick-timer-card.js`
