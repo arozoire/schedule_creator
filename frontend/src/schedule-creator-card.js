@@ -3,7 +3,7 @@ import { clean, messageFor, parseJson, diagnosticFor } from './editor.js';
 import { controllable, targetEntities, actionForm, readAction, blankCondition, conditionForm, readCondition, notificationForm, readNotification, slotsForm, readSlots } from './forms.js';
 
 const STYLE = '__SC_CSS__';
-const CARD_VERSION = '0.3.1';
+const CARD_VERSION = '0.3.2';
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
@@ -83,14 +83,17 @@ class ScheduleCreatorCard extends HTMLElement {
   restoreDraft() {
     const form = this.shadowRoot.querySelector('form[data-editor]');
     if (!form || !this.draft) return;
-    for (const node of form.elements) {
-      if (!node.name || node.name === 'entities' || node.name.startsWith('slot_') || node.name.startsWith('condition')) continue;
-      if (this.draft[node.name] === undefined) continue;
-      if (node.type === 'checkbox') node.checked = this.draft[node.name] === 'on';
-      else node.value = this.draft[node.name];
+    // The form.elements collection may include HA controls whose name getter
+    // throws; the editor only creates native input/select/textarea fields.
+    for (const node of form.querySelectorAll('input[name],select[name],textarea[name]')) {
+      const name = node.getAttribute('name');
+      if (name === 'entities' || name.startsWith('slot_') || name.startsWith('condition')) continue;
+      if (this.draft[name] === undefined) continue;
+      if (node.type === 'checkbox') node.checked = this.draft[name] === 'on';
+      else node.value = this.draft[name];
     }
     form.querySelectorAll('[name="entities"]').forEach((x) => { x.checked = this.draft.selectedEntities.includes(x.value); });
-    const query = form.elements.entity_search?.value?.toLowerCase() || '';
+    const query = form.querySelector('input[name="entity_search"]')?.value?.toLowerCase() || '';
     form.querySelectorAll('[data-entity-label]').forEach((node) => {
       const matches = node.dataset.entityLabel.includes(query);
       node.hidden = !matches;

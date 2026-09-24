@@ -30,7 +30,7 @@ test('group lists controllable entities and search really hides nonmatches',asyn
  assert.equal(t.root.querySelector('[name="entities"][value="sensor.temperature"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="automation.test"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="update.test"]'),null);
- assert.equal(t.root.querySelector('.sc-version').textContent,'v0.3.1');
+ assert.equal(t.root.querySelector('.sc-version').textContent,'v0.3.2');
  t.set('entity_search','lampada','input');
  const hidden=t.root.querySelector('[value="switch.outside"]').parentElement;
  assert.equal(hidden.hidden,true);
@@ -48,6 +48,18 @@ test('group lists controllable entities and search really hides nonmatches',asyn
  const style=t.dom.window.document.createElement('style');style.textContent=[...t.root.querySelectorAll('style')].map((n)=>n.textContent).join('');t.dom.window.document.head.append(style);
  const holder=t.dom.window.document.createElement('div');holder.className='sc-entities';holder.innerHTML=hidden.outerHTML;t.dom.window.document.body.append(holder);
  assert.equal(t.dom.window.getComputedStyle(holder.firstChild).display,'none');
+ }finally{t.close();}
+});
+test('updating a group survives unsupported name getters on other form controls',async()=>{
+ const t=setup();try {await tick();t.click('editGroup');
+ const outside=t.root.querySelector('[name="entities"][value="switch.outside"]');
+ outside.checked=true;outside.dispatchEvent(new t.dom.window.Event('input',{bubbles:true}));
+ Object.defineProperty(t.dom.window.HTMLButtonElement.prototype,'name',{configurable:true,get(){throw new Error('Method not implemented.');}});
+ t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
+ assert.equal(t.writes.length,1,t.root.querySelector('.sc-error-details textarea')?.value);
+ assert.equal(t.writes[0].type,'schedule_creator/group/update');
+ assert.deepEqual(t.writes[0].entity_ids,['switch.a','switch.outside']);
+ assert.equal(t.root.querySelector('.sc-error'),null);
  }finally{t.close();}
 });
 test('schedule only offers group members and sends ON/OFF without temperature or JSON',async()=>{
@@ -86,7 +98,7 @@ test('local action failure exposes phase and stack, keeps draft and permits retr
  const details=t.root.querySelector('.sc-error-details textarea').value;
  assert.match(details,/Fase: lettura azione iniziale/);
  assert.match(details,/Traccia:\nError: Method not implemented/);
- assert.match(details,/Schedule Creator: 0.3.1/);
+ assert.match(details,/Schedule Creator: 0.3.2/);
  assert.match(t.root.querySelector('.sc-error').textContent,/La bozza è conservata/);
  t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
  assert.equal(t.writes.length,1);

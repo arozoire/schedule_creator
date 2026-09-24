@@ -1,8 +1,35 @@
 # AI handoff — stato attuale e piano futuro
 
+## Riscontro HA: `group/update` fallisce nel ripristino form (2026-09-24)
+
+Il proprietario ha inviato i **Dettagli errore** da card 0.3.1 e HA 2026.9.3:
+operazione `schedule_creator/group/update`, conferma server **non ricevuta**,
+`Method not implemented.`. Lo stack punta esattamente a `restoreDraft()` quando
+legge `node.name` durante `render()` chiamato da `ScheduleCreatorStateAdapter.mutate`.
+Quindi il comando WS non è stato inviato in quella prova; il bug non dipende dalla
+registrazione backend, dalla cache o dal riavvio.
+
+Branch `codex/fix-ha-form-restore`, base main dopo PR #33
+`4d835e88cbb4e0679538d2afdaeca52edc5dc0c7`. La routine passava su tutti
+gli elementi di `form.elements`, compresi controlli con getter `name` non
+implementato nella runtime HA. Ora ripristina solo input/select/textarea nativi
+creati dall'editor, leggendo `getAttribute('name')` e cercando la ricerca entità
+nel DOM nativo. Test DOM con getter `name` che lancia la stessa eccezione:
+prima falliva, dopo invia `group/update` con le entità scelte. Per questa nuova
+correzione manifest, badge, bundle e URL documentato avanzano alla sola **0.3.2**.
+Eseguire build/test, CI finale e merge; la release è del proprietario.
+
+Prova personale dopo la release: badge v0.3.2, aggiungere una seconda entità al
+gruppo, salvare al primo clic, ricaricare e verificarne la persistenza. Poi
+creare lo schedule switch con azioni ON/OFF e verificare comando fisico all'orario:
+la precedente segnalazione `schedule/create` potrebbe avere la stessa causa nel
+render, ma l'esecuzione su dispositivo reale rimane da confermare. Se appare un
+errore diverso, inviare i nuovi Dettagli errore prima di assegnare la causa.
+
 ## Piano attivo dopo 0.3.1 (2026-09-24)
 
-Questa sezione è il punto di ingresso per la prossima IA. Le sezioni successive
+Questa sezione, insieme al riscontro HA appena sopra, è il punto di ingresso
+per la prossima IA. Le sezioni successive
 sono lo storico: i vecchi divieti di merge, le autorizzazioni a pubblicare release
 e le esclusioni temporanee del RESET non descrivono l'incarico attuale.
 Richiesta corrente: **registrare il piano**, senza implementare ora le nuove
@@ -18,9 +45,10 @@ più recente, poi verificare main e gli eventuali AGENTS.md prima delle modifich
   CI finale [35982919513](https://github.com/arozoire/schedule_creator/actions/runs/35982919513)
   conclusa `success`. Build e 19 test Node, più Chromium con WS simulato;
   questi ultimi non sono una prova sull'HA personale.
-- Corretto il clic Salva perso al blur. **La causa di “Method not implemented.”
-  sull'HA del proprietario resta aperta**: ora sono disponibili Dettagli errore
-  copiabili. Non attribuirla di nuovo alla cache senza evidenza.
+- Corretto il clic Salva perso al blur; la diagnostica ha poi localizzato il
+  getter `name` non implementato durante il render. La correzione 0.3.2 attende
+  la prova HA sul gruppo e sullo schedule switch. Non attribuire l'errore alla
+  cache o al backend senza nuove evidenze.
 - Filtri dei domini e appartenenza al gruppo confermati dal proprietario;
   titolo, profili e persistenza avevano già avuto riscontro positivo.
   Non classificare come completati i percorsi fisici non ancora provati.
@@ -33,12 +61,12 @@ più recente, poi verificare main e gli eventuali AGENTS.md prima delle modifich
 
 ### 1 — Correggere i bug segnalati dal proprietario
 
-Priorità bloccante: creazione schedule switch. Acquisire testo di **Dettagli
-errore**, versione HA/card, passaggi e risultato atteso. Riprodurre la fase
-identificata (modulo, azione, WebSocket o aggiornamento vista); correggere la
-causa e aggiungere una regressione mirata. Non scambiare l'eccezione iniettata
-nei test per la riproduzione del guasto reale. Conservare bozze e distinguere
-errore prima dell'invio da errore dopo conferma, evitando duplicazioni.
+Priorità bloccante: verificare su HA 2026.9.3 il salvataggio del gruppo e la
+creazione dello schedule switch dopo il fix 0.3.2 documentato sopra. Se resta
+un errore, acquisire nuovi **Dettagli errore**, versione HA/card, passaggi e
+risultato atteso; riprodurre la nuova fase, correggere e aggiungere una
+regressione mirata. Conservare bozze e distinguere errore prima dell'invio da
+errore dopo conferma, evitando duplicazioni.
 
 Per ogni nuova segnalazione registrare sintomo, stato (da riprodurre/in corso/
 corretto nel codice/confermato su HA), PR e prova. File iniziali:
@@ -148,8 +176,8 @@ Ordine suggerito dopo i punti richiesti, salvo il backup utile prima del RESET:
 
 ### Come proseguire e aggiornare l'handoff
 
-Prima azione operativa: leggere il prossimo riscontro HA sulla 0.3.1 e chiudere
-il punto 1 se riproducibile. Se mancano i dettagli, registrare il blocco e svolgere
+Prima azione operativa: leggere il prossimo riscontro HA sulla 0.3.2 e chiudere
+il punto 1 dopo conferma reale. Se mancano i dettagli, registrare il blocco e svolgere
 lo studio del punto 2 senza inventare una causa del bug. PR per traguardo coerente,
 non per micro-modifica; build quando cambia il bundle, test sulle parti mutate,
 CI finale prevista dal repository. Per questa PR documentale: diff controllato,
