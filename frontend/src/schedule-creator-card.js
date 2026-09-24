@@ -1,10 +1,11 @@
 import { ScheduleCreatorStateAdapter } from './state-adapter.js';
 import { weeklySegments } from './timeline.js';
 import { clean, messageFor, parseJson, diagnosticFor } from './editor.js';
-import { controllable, targetEntities, actionForm, readAction, blankCondition, conditionForm, readCondition, notificationForm, readNotification, slotsForm, readSlots } from './forms.js';
+import { controllable, targetEntities, blankCondition, conditionForm, readCondition, notificationForm, readNotification, slotsForm, readSlots } from './forms.js';
+import { actionForm, readAction, describeAction } from './action-editor.js';
 
 const STYLE = '__SC_CSS__';
-const CARD_VERSION = '0.3.3';
+const CARD_VERSION = '0.3.5';
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
@@ -13,6 +14,25 @@ const area = (name, title, value, rows = 4) => `<label>${title}<textarea name="$
 const select = (name, title, options, current) => `<label>${title}<select name="${name}">${options.map(([value, label]) => `<option value="${esc(value)}" ${value === current ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label>`;
 const button = (name, label, id = '') => `<button type="button" data-command="${name}" data-id="${esc(id)}">${esc(label)}</button>`;
 const json = (value) => JSON.stringify(clean(value), null, 2);
+const byOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0) || String(a.name).localeCompare(String(b.name));
+const daysLabel = (days) => {
+  const d = [...days].sort((a, b) => a - b), key = d.join('');
+  if (key === '0123456') return 'Tutti i giorni';
+  if (key === '01234') return 'Lun–Ven';
+  if (key === '56') return 'Weekend';
+  return d.length > 2 && d.every((v, i) => !i || v === d[i - 1] + 1) ? `${DAYS[d[0]]}–${DAYS[d.at(-1)]}` : d.map((i) => DAYS[i]).join(', ');
+};
+const newer = (a, b) => {
+  const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
+  for (let i = 0; i < 3; i += 1) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+  return false;
+};
+// Backend and card versions come from the same manifest at build time.
+export function versionAdvice(backend) {
+  if (backend === CARD_VERSION) return '';
+  if (!backend || newer(CARD_VERSION, backend)) return `La card v${CARD_VERSION} è aggiornata, ma Home Assistant esegue ancora l’integrazione ${backend ? `v${backend}` : 'precedente'}. Riavvia Home Assistant (Impostazioni → Sistema → Riavvia) per attivare il nuovo backend.`;
+  return `L’integrazione v${backend} è attiva, ma questa pagina usa ancora la card v${CARD_VERSION}. Ricarica la pagina; nell’app mobile usa “Ricarica” o svuota la cache del frontend.`;
+}
 class ScheduleCreatorCard extends HTMLElement {
   constructor() {
     super(); this.attachShadow({ mode: 'open' });
@@ -30,8 +50,11 @@ class ScheduleCreatorCard extends HTMLElement {
     });
     this.shadowRoot.addEventListener('input', (e) => {
       if (!e.target.closest('form')) return;
-      this.changedFields?.add(e.target.name);
+      this.syncRange(e.target);
+      const name = e.target.getAttribute('name') || e.target.dataset.mirror;
+      this.changedFields?.add(name);
       this.capture();
+      if (name && name !== 'name' && !/_notification_(title|message)$/.test(name)) this.updateSuggestions();
       if (e.target.name === 'entity_search') {
         const query = e.target.value.toLowerCase();
         this.shadowRoot.querySelectorAll('[data-entity-label]').forEach((node) => {
@@ -43,7 +66,9 @@ class ScheduleCreatorCard extends HTMLElement {
     });
     this.shadowRoot.addEventListener('change', (e) => {
       if (!e.target.closest('form')) return;
-      this.changedFields?.add(e.target.name);
+      if (e.target.dataset.role === 'backup-file') { this.readBackupFile(e.target); return; }
+      if (e.target.dataset.mirror || e.target.type === 'range') return;
+      this.changedFields?.add(e.target.getAttribute('name'));
       const previousDomain = this.actionDomain;
       if (e.target.name === 'entities' && this.edit?.[0] === 'schedule' && e.target.checked) {
         const others = [...this.shadowRoot.querySelectorAll('[name="entities"]:checked')].filter((x)=>x!==e.target);
@@ -56,7 +81,7 @@ class ScheduleCreatorCard extends HTMLElement {
       // A text/time field emits change on blur, just before a click on Save.
       // Replacing the form here removes the clicked button before submission.
       // Only selectors and checkboxes can change which controls are displayed.
-      if (!e.target.matches('select,input[type="checkbox"]')) return;
+      if (!e.target.matches('select,input[type="checkbox"],input[type="radio"]')) return;
       const newDomain = (this.edit?.[0] === 'timer' ? this.draft.entity_id : this.draft.selectedEntities[0])?.split('.')[0];
       if (newDomain && previousDomain && newDomain !== previousDomain) {
         for (const key of Object.keys(this.draft)) if (/^(start|end|timer)_/.test(key) && !key.includes('notification')) delete this.draft[key];
@@ -82,7 +107,7 @@ class ScheduleCreatorCard extends HTMLElement {
   capture() {
     const form = this.shadowRoot.querySelector('form[data-editor]');
     if (!form) return;
-    this.draft = Object.fromEntries(new FormData(form));
+    this.draft = Object.fromEntries([...new FormData(form)].filter(([, value]) => typeof value === 'string'));
     for (const node of form.querySelectorAll('input[type="checkbox"]')) {
       if (!['entities'].includes(node.name) && !node.name.endsWith('_days')) this.draft[node.name] = node.checked ? 'on' : '';
     }
@@ -97,11 +122,13 @@ class ScheduleCreatorCard extends HTMLElement {
     // throws; the editor only creates native input/select/textarea fields.
     for (const node of form.querySelectorAll('input[name],select[name],textarea[name]')) {
       const name = node.getAttribute('name');
-      if (name === 'entities' || name.startsWith('slot_') || name.startsWith('condition')) continue;
+      if (name === 'entities' || name.startsWith('slot_') || name.startsWith('condition') || node.type === 'file') continue;
       if (this.draft[name] === undefined) continue;
       if (node.type === 'checkbox') node.checked = this.draft[name] === 'on';
-      else node.value = this.draft[name];
+      else if (node.type === 'radio') node.checked = this.draft[name] === node.value;
+      else { node.value = this.draft[name]; this.syncRange(node); }
     }
+    form.querySelectorAll('.sc-choice').forEach((node) => node.classList.toggle('is-selected', !!node.querySelector('input:checked')));
     form.querySelectorAll('[name="entities"]').forEach((x) => { x.checked = this.draft.selectedEntities.includes(x.value); });
     const query = form.querySelector('input[name="entity_search"]')?.value?.toLowerCase() || '';
     form.querySelectorAll('[data-entity-label]').forEach((node) => {
@@ -126,9 +153,9 @@ class ScheduleCreatorCard extends HTMLElement {
     const pageX=window.scrollX, pageY=window.scrollY;
     const { state, error, loading, busy, writeError } = this.adapter;
     const config = state?.config || {};
-    const profiles = config.profiles || [];
+    const profiles = [...(config.profiles || [])].sort(byOrder);
     const profile = profiles.find((p) => p.id === this.selectedProfile) || profiles[0];
-    const groups = (config.groups || []).filter((g) => g.profile_id === profile?.id);
+    const groups = (config.groups || []).filter((g) => g.profile_id === profile?.id).sort(byOrder);
     const group = groups.find((g) => g.id === this.selectedGroup) || groups[0];
     const schedules = (config.schedules || []).filter((s) => s.profile_id === profile?.id && (!group || s.group_id === group.id));
     const chips = profiles.map((p) => `<button type="button" class="profile-chip ${p.id === profile?.id ? 'viewed' : ''} ${p.active ? 'active-op' : ''}" style="--pchip-color:${tint(p.color)}" aria-pressed="${p.id === profile?.id}" data-profile="${esc(p.id)}">${esc(p.name)}</button>`).join('');
@@ -141,15 +168,18 @@ class ScheduleCreatorCard extends HTMLElement {
       const label=`${schedule.name} · ${day} ${time(start)}–${time(end)}${schedule.enabled?'':' · Disabilitato'}`;
       return `<button type="button" class="sc-time-block ${schedule.enabled?'':'is-off'}" data-command="editSchedule" data-id="${esc(schedule.id)}" aria-label="${esc(label)}" title="${esc(label)}" style="top:${start/1440*100}%;height:${(end-start)/1440*100}%;left:${lane/lanes*100}%;width:${100/lanes}%;--block-color:${colorFor(schedule)}"><span>${esc(schedule.name)}</span><small>${time(start)}–${time(end)}</small></button>`;
     }).join('')}</div>`).join('')}</div>`;
-    const status = error ? `<div class="status error" role="alert">${esc(messageFor(error))}</div>` : loading ? '<div class="status">Caricamento…</div>' : '';
+    const advice = state ? versionAdvice(state.integration_version) : '';
+    const status = `${error ? `<div class="status error" role="alert">${esc(messageFor(error))}</div>` : loading ? '<div class="status">Caricamento…</div>' : ''}${advice ? `<div class="status sc-warning" role="status">${esc(advice)}</div>` : ''}${this.notice && !this.edit ? `<div class="status sc-notice" role="status">${esc(this.notice)}</div>` : ''}`;
     const info = this.localError || writeError;
     const errorDetails = this.localError ? this.localErrorDetails : writeError ? diagnosticFor(writeError, {cardVersion:CARD_VERSION,haVersion:this._hass.config?.version}) : null;
     const editable = this._hass?.user?.is_admin === true && writeError?.code !== 'unauthorized';
     const view = state ? `<div class="profile-status-bar">${profile ? `<span class="sc-badge ${profile.active ? 'is-active' : ''}">${profile.active ? 'Profilo attivo' : 'Profilo inattivo'}</span><span>${esc(profile.profile_type === 'exclusive' ? 'Esclusivo' : 'Condiviso')}</span>` : 'Crea un profilo per iniziare'}<span>· ${state.quick_timers?.length ?? 0} timer attivi</span></div>
       ${groups.length ? `<nav class="tab-bar" aria-label="Gruppi">${tabs}</nav>` : ''}
       <div class="sc-toolbar"><div><h2>${esc(group?.name || 'La tua settimana')}</h2><p>${schedules.length} schedule · ${esc(this._hass.config?.time_zone || 'Fuso Home Assistant')}</p></div>${editable ? `<div class="sc-controls">${group ? button('newSchedule','＋ Schedule') : ''}${button('newTimer','Quick Timer')}</div>` : ''}</div>
-      ${schedules.length ? `<section class="sc-timeline" data-scroll="timeline" aria-label="Programmazione settimanale">${slots}</section><p class="sc-meta">Settimana tipo · seleziona una fascia per modificarla. Date speciali e condizioni sono nelle opzioni dello schedule.</p><details data-section="schedules"><summary>Gestisci schedule (${schedules.length})</summary><ul class="sc-list">${schedules.map((schedule) => `<li class="sc-entry"><div class="sc-entry-copy"><strong>${esc(schedule.name)}</strong><p class="sc-meta">${esc(schedule.target_entity_ids.map((id)=>this._hass.states[id]?.attributes?.friendly_name || id).join(', '))}</p><p class="sc-meta">${schedule.enabled ? 'Abilitato' : 'Disabilitato'} · ${schedule.time_slots?.length ?? 0} fasce</p></div>${editable ? `<div class="sc-entry-actions">${button('editSchedule','Modifica',schedule.id)}${button('deleteSchedule','Elimina',schedule.id)}</div>` : ''}</li>`).join('')}</ul></details>` : `<div class="sc-empty"><strong>${!profile ? 'Inizia dal tuo primo profilo' : !group ? 'Aggiungi un gruppo di dispositivi' : 'La settimana è ancora libera'}</strong>${!profile ? 'Organizza la casa per abitudini, ambienti o stagioni.' : !group ? 'Riunisci i dispositivi che vuoi programmare.' : 'Crea uno schedule e scegli giorni, orari e azioni.'}</div>`}
+      ${schedules.length ? `<section class="sc-timeline" data-scroll="timeline" aria-label="Programmazione settimanale">${slots}</section><p class="sc-meta">Settimana tipo · seleziona una fascia per modificarla. Date speciali e condizioni sono nelle opzioni dello schedule.</p><details data-section="schedules" class="sc-schedules"><summary>Gestisci schedule (${schedules.length})</summary><ul class="sc-list">${schedules.map((schedule) => `<li class="sc-entry" style="--block-color:${colorFor(schedule)}"><div class="sc-entry-copy"><strong>${esc(schedule.name)}</strong><span class="sc-meta">${esc(schedule.target_entity_ids.map((id)=>this._hass.states[id]?.attributes?.friendly_name || id).join(', '))} · ${schedule.enabled ? '' : 'disabilitato · '}${schedule.time_slots?.length ?? 0} ${schedule.time_slots?.length === 1 ? 'fascia' : 'fasce'}</span></div>${editable ? `<div class="sc-entry-actions">${button('editSchedule','Modifica',schedule.id)}${button('deleteSchedule','Elimina',schedule.id)}</div>` : ''}</li>`).join('')}</ul></details>` : `<div class="sc-empty"><strong>${!profile ? 'Inizia dal tuo primo profilo' : !group ? 'Aggiungi un gruppo di dispositivi' : 'La settimana è ancora libera'}</strong>${!profile ? 'Organizza la casa per abitudini, ambienti o stagioni.' : !group ? 'Riunisci i dispositivi che vuoi programmare.' : 'Crea uno schedule e scegli giorni, orari e azioni.'}</div>`}
       ${editable ? `<details class="sc-management" data-section="management" ${!profile || !group ? 'open' : ''}><summary>Gestisci profili e gruppi</summary><div class="sc-controls">${button('newProfile','＋ Profilo')}${profile ? `${button('editProfile','Modifica profilo',profile.id)}${button('toggleProfile',profile.active ? 'Disattiva profilo' : 'Attiva profilo',profile.id)}${button('deleteProfile','Elimina profilo',profile.id)}${button('newGroup','＋ Gruppo')}` : ''}${group ? `${button('editGroup','Modifica gruppo',group.id)}${button('deleteGroup','Elimina gruppo',group.id)}` : ''}</div></details>` : '<p class="sc-meta">Vista in sola lettura: serve un amministratore per modificare.</p>'}
+      ${profiles.length ? this.overview(config, profiles) : ''}
+      ${editable ? `<details class="sc-maintenance" data-section="maintenance"><summary>Manutenzione · backup e RESET</summary><p class="sc-meta">Il backup salva profili, gruppi e schedule in un file JSON. Il ripristino li sostituisce e lascia i profili disattivati. RESET cancella tutti i dati di Schedule Creator.</p><div class="sc-controls">${button('exportBackup','Salva backup')}${button('newRestore','Ripristina backup')}${button('newReset','RESET…')}</div></details>` : ''}
       <details class="sc-operational" data-section="operational"><summary>Attività · ${state.operational?.occurrences?.length ?? 0} fasce in corso · ${state.quick_timers?.length ?? 0} timer</summary>${(state.operational?.occurrences || []).map((x) => `<p>${esc(config.schedules?.find((s) => s.id === x.schedule_id)?.name || x.schedule_id)}: ${esc(x.state)}, condizione ${esc(x.condition_branch)}, termine ${esc(x.end_utc)}</p>`).join('') || '<p>Nessuna fascia attiva.</p>'}${(state.operational?.leases || []).map((x) => `<p>${esc(x.entity_id)}: ${esc(x.state)} (${esc(x.controller_type)})</p>`).join('')}${(state.quick_timers || []).map((x) => `<p>Timer ${esc(this._hass.states[x.entity_id]?.attributes?.friendly_name || x.entity_id)}: <span data-expiry="${esc(x.expires_at)}"></span> ${editable ? button('cancelTimer','Annulla timer',x.id) : ''}</p>`).join('')}</details>` : '';
     const errorMarkup = `${info ? `<p class="sc-error" role="alert">${esc(typeof info === 'string' ? info : messageFor(info))}</p>` : ''}${errorDetails ? `<details class="sc-error-details" data-section="error-details"><summary>Dettagli errore</summary><p>Seleziona e copia questo testo per segnalare il problema.</p><textarea readonly aria-label="Dettagli errore da copiare" rows="10">${esc(errorDetails)}</textarea></details>` : ''}`;
     const surface=this.shadowRoot.querySelector('ha-card');
@@ -157,7 +187,7 @@ class ScheduleCreatorCard extends HTMLElement {
     surface.innerHTML = `<div class="card-header"><div class="hdr-row1"><span class="card-title">${esc(this.config.title || 'Schedule Creator')}</span><span class="sc-version">v${CARD_VERSION}</span></div><p class="sc-eyebrow">Profili</p><div class="hdr-row2" aria-label="Profili">${chips}</div></div>${status}${this.edit ? '' : errorMarkup}${view}`;
     if(this.edit && editable) {
       const wasOpen=this.dialog.open;
-      this.dialog.innerHTML = `<div class="sc-dialog-heading"><strong>Schedule Creator</strong><button type="button" data-command="close" aria-label="Chiudi editor">✕</button></div>${errorMarkup}${this.editor(config,profile,group)}`;
+      this.dialog.innerHTML = `<div class="sc-dialog-heading"><strong>Schedule Creator</strong><button type="button" data-command="close" aria-label="Chiudi editor">✕</button></div>${errorMarkup}${this.notice ? `<div class="status sc-notice" role="status">${esc(this.notice)}</div>` : ''}${this.editor(config,profile,group)}`;
       if(!wasOpen) {
         if(this.dialog.showModal) this.dialog.showModal(); else this.dialog.setAttribute('open','');
         this.dialog.querySelector('input[name="name"],select[name="entity_id"]')?.focus({preventScroll:true});
@@ -167,6 +197,7 @@ class ScheduleCreatorCard extends HTMLElement {
       this.dialog.innerHTML='';
     }
     this.restoreDraft(); this.updateClock();
+    if (this.edit?.[0] === 'schedule') this.updateSuggestions();
     this.shadowRoot.querySelectorAll('details').forEach((node)=>{if (hadDetails) node.open=openSections.has(node.dataset.section || node.querySelector('summary')?.textContent);});
     const nextFocus = focusName ? [...this.shadowRoot.querySelectorAll('[name]')].find((x)=>x.getAttribute('name')===focusName && (focusValue===null || x.value===focusValue)) : focusCommand ? [...this.dialog.querySelectorAll('[data-command]')].find(x=>x.dataset.command===focusCommand && x.dataset.id===focusId) : null;
     if (nextFocus) { nextFocus.focus({preventScroll:true}); if (selection !== null && selection !== undefined && ['text','search','textarea'].includes(nextFocus.type)) nextFocus.setSelectionRange(selection,selection); }
@@ -178,6 +209,103 @@ class ScheduleCreatorCard extends HTMLElement {
     if(window.scrollX!==pageX || window.scrollY!==pageY) window.scrollTo(pageX,pageY);
     if (!this.clock && this.isConnected) this.clock = setInterval(() => this.updateClock(), 1000);
     this.shadowRoot.querySelectorAll('button,input,select,textarea').forEach((b) => { b.disabled = busy; });
+  }
+  overview(config, profiles) {
+    const friendly = (id) => this._hass.states[id]?.attributes?.friendly_name || id;
+    const owners = new Map();
+    for (const schedule of config.schedules || []) for (const id of schedule.target_entity_ids) {
+      if (!owners.has(id)) owners.set(id, new Set());
+      owners.get(id).add(schedule.profile_id);
+    }
+    const byId = Object.fromEntries(profiles.map((p) => [p.id, p]));
+    const shared = [...owners].filter(([, ids]) => ids.size > 1).map(([id, ids]) => {
+      const list = [...ids].map((pid) => byId[pid]).filter(Boolean);
+      // Two exclusive profiles are never active together; any other pair can be.
+      const together = list.some((a, i) => list.slice(i + 1).some((b) => a.profile_type !== 'exclusive' || b.profile_type !== 'exclusive'));
+      const now = list.filter((p) => p.active).length > 1;
+      return `<li><strong>${esc(friendly(id))}</strong> · ${list.map((p) => esc(p.name)).join(', ')}<span class="sc-meta">${now ? 'Più profili attivi ora: vince la fascia iniziata per ultima.' : together ? 'Possono essere attivi insieme: se le fasce si sovrappongono vince quella iniziata per ultima.' : 'Profili esclusivi: mai attivi insieme, nessun conflitto.'}</span></li>`;
+    });
+    const rows = profiles.map((p) => {
+      const groups = (config.groups || []).filter((g) => g.profile_id === p.id).length;
+      const schedules = (config.schedules || []).filter((x) => x.profile_id === p.id);
+      const entities = new Set(schedules.flatMap((x) => x.target_entity_ids)).size;
+      return `<li class="sc-overview-row" style="--pchip-color:${tint(p.color)}"><span class="sc-dot"></span><strong>${esc(p.name)}</strong><span class="sc-badge ${p.active ? 'is-active' : ''}">${p.active ? 'Attivo' : 'Inattivo'}</span><span class="sc-meta">${p.profile_type === 'exclusive' ? 'Esclusivo' : 'Condiviso'} · ${groups} gruppi · ${schedules.length} schedule · ${entities} entità</span></li>`;
+    }).join('');
+    return `<details class="sc-overview" data-section="overview"><summary>Panoramica profili e interazioni</summary><ul class="sc-overview-list">${rows}</ul><p class="sc-meta"><strong>Esclusivo</strong>: attivandolo si disattivano gli altri profili esclusivi. <strong>Condiviso</strong>: resta attivo insieme agli altri. Solo i profili attivi eseguono i loro schedule. Se due fasce comandano la stessa entità vince quella iniziata per ultima; a parità un Quick Timer prevale su uno schedule con condizione, che prevale su uno normale. L’ordine serve solo a disporre profili e gruppi.</p><h4>Entità comandate da più profili</h4>${shared.length ? `<ul class="sc-overview-list">${shared.join('')}</ul>` : '<p class="sc-meta">Nessuna: ogni entità è programmata da un solo profilo.</p>'}</details>`;
+  }
+  syncRange(node) {
+    const root = node?.closest?.('.sc-range');
+    if (!root) return;
+    const range = root.querySelector('input[type="range"]'), mirror = root.querySelector('[data-mirror]');
+    if (node === mirror) { if (mirror.value !== '' && Number.isFinite(Number(mirror.value))) range.value = mirror.value; }
+    else if (mirror) mirror.value = range.value;
+    const min = Number(range.min), max = Number(range.max);
+    range.style.setProperty('--sc-fill', `${max > min ? (Number(range.value) - min) / (max - min) * 100 : 0}%`);
+  }
+  suggestion(form) {
+    const ids = this.draft?.selectedEntities || [...form.querySelectorAll('[name="entities"]:checked')].map((x) => x.value);
+    const domain = ids[0]?.split('.')[0];
+    if (!domain) return null;
+    const attempt = (prefix) => { try { return readAction(form, prefix, domain); } catch { return null; } };
+    const start = attempt('start'), end = attempt('end');
+    const slots = readSlots(form), slot = slots[0];
+    const who = `${this._hass.states[ids[0]]?.attributes?.friendly_name || ids[0]}${ids.length > 1 ? ` +${ids.length - 1}` : ''}`;
+    const when = slot?.weekdays.length ? `${daysLabel(slot.weekdays)} ${slot.start}–${slot.end}${slots.length > 1 ? ` (+${slots.length - 1})` : ''}` : '';
+    return {
+      name: [who, describeAction(start), when].filter(Boolean).join(' · '),
+      start_notification_message: `${who}: ${describeAction(start) || 'avvio'}${slot ? ` alle ${slot.start}` : ''}`,
+      end_notification_message: end ? `${who}: ${describeAction(end)}${slot ? ` alle ${slot.end}` : ''}` : `${who}: fascia terminata${slot ? ` alle ${slot.end}` : ''}`,
+    };
+  }
+  // Suggested texts replace a field only while it still holds the previous suggestion.
+  updateSuggestions(force = false) {
+    const form = this.shadowRoot.querySelector('form[data-editor="schedule"]');
+    if (!form) return;
+    const suggested = this.suggestion(form);
+    if (!suggested) return;
+    const fill = (key, value) => {
+      const node = [...form.querySelectorAll('input')].find((x) => x.getAttribute('name') === key);
+      // Existing schedules keep their texts; an empty notification is filled
+      // only after it is enabled in this editor session.
+      const phase = key.split('_notification_')[1] ? key.split('_notification_')[0] : null;
+      const fresh = !this.edit?.[1] || (phase && this.changedFields?.has(`${phase}_notification_enabled`));
+      const auto = this.auto[key] ?? (fresh ? '' : undefined);
+      if (!node || (!(force && key === 'name') && node.value !== auto)) return;
+      node.value = value; this.auto[key] = value;
+      if (this.draft) this.draft[key] = value;
+    };
+    fill('name', suggested.name);
+    const title = form.querySelector('input[name="name"]')?.value?.trim() || suggested.name;
+    for (const phase of ['start', 'end']) {
+      fill(`${phase}_notification_title`, title);
+      fill(`${phase}_notification_message`, suggested[`${phase}_notification_message`]);
+    }
+  }
+  async exportBackup() {
+    this.localError = null; this.notice = null;
+    try {
+      const backup = await this.adapter.connection.sendMessagePromise({type: 'schedule_creator/backup/export'});
+      const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], {type: 'application/json'}));
+      const link = document.createElement('a');
+      link.href = url; link.download = `schedule-creator-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.append(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      this.notice = `Backup salvato: ${backup.config.profiles.length} profili, ${backup.config.groups.length} gruppi, ${backup.config.schedules.length} schedule.`;
+    } catch (error) {
+      this.localError = messageFor({...error, operation: 'schedule_creator/backup/export'});
+    }
+    this.render();
+  }
+  async readBackupFile(input) {
+    this.localError = null; this.restoreData = null;
+    try {
+      const backup = JSON.parse(await input.files[0].text());
+      if (backup?.format !== 'schedule_creator.backup' || !backup.config) throw new Error('Il file non è un backup di Schedule Creator.');
+      this.restoreData = backup;
+    } catch (error) {
+      this.localError = error instanceof SyntaxError ? 'Il file non contiene JSON valido.' : error.message;
+    }
+    this.render();
   }
   updateClock() {
     this.shadowRoot.querySelectorAll('[data-expiry]').forEach((node) => {
@@ -195,15 +323,15 @@ class ScheduleCreatorCard extends HTMLElement {
     const item = this.editRecord;
     const d = this.draft || {};
     let content = '';
-    if (kind === 'profile') content = `${field('name', 'Nome', item?.name)}${select('profile_type', 'Tipo', [['exclusive','Esclusivo'],['shared','Condiviso']], item?.profile_type || 'exclusive')}${field('icon','Icona',item?.icon)}${field('color','Colore HEX',item?.color)}${field('order','Ordine',item?.order ?? 0,'number')}`;
-    if (kind === 'group') content = `${field('name','Nome',item?.name)}${field('icon','Icona',item?.icon)}${field('color','Colore HEX',item?.color)}${field('order','Ordine',item?.order ?? 0,'number')}${this.entities(d.selectedEntities || item?.entity_ids || [])}`;
+    if (kind === 'profile') content = `${field('name', 'Nome', item?.name)}${select('profile_type', 'Tipo', [['exclusive','Esclusivo'],['shared','Condiviso']], item?.profile_type || 'exclusive')}${field('icon','Icona',item?.icon)}${field('color','Colore HEX',item?.color)}${field('order','Posizione nell’elenco (0 = primo)',item?.order ?? 0,'number')}<p>Serve solo a ordinare l’elenco: non cambia priorità né esecuzione.</p>`;
+    if (kind === 'group') content = `${field('name','Nome',item?.name)}${field('icon','Icona',item?.icon)}${field('color','Colore HEX',item?.color)}${field('order','Posizione nell’elenco (0 = primo)',item?.order ?? 0,'number')}<p>Serve solo a ordinare l’elenco: non cambia priorità né esecuzione.</p>${this.entities(d.selectedEntities || item?.entity_ids || [])}`;
     if (kind === 'schedule') {
       const owner = config.groups.find((g) => g.id === this.ownerGroup);
       const ids = d.selectedEntities || item?.target_entity_ids || targetEntities(this._hass,owner?.entity_ids || []).slice(0,1);
       this.actionDomain = ids[0]?.split('.')[0] || this.actionDomain;
       const slots = this.slotDraft || item?.time_slots || [{weekdays:[0,1,2,3,4,5,6],start:'08:00',end:'09:00'}];
       const condition = this.conditionDraft === undefined ? item?.condition : this.conditionDraft;
-      content = `${field('name','Nome',item?.name)}<label class="sc-check"><input name="enabled" type="checkbox" ${item?.enabled !== false ? 'checked' : ''}>Abilitato</label>
+      content = `<div class="sc-name-row">${field('name','Nome',item?.name)}${button('suggestName','Suggerisci')}</div><label class="sc-check"><input name="enabled" type="checkbox" ${item?.enabled !== false ? 'checked' : ''}>Abilitato</label>
         <p>Gruppo: ${esc(owner?.name || 'non disponibile')}. Scegli dispositivi dello stesso tipo.</p>${this.entities(ids,owner?.entity_ids || [])}
         <p>Orari: ${esc(this._hass.config?.time_zone || 'fuso Home Assistant')}. Se la fine precede l’inizio, la fascia termina il giorno successivo.</p>${slotsForm(slots)}
         ${actionForm('start','Azione iniziale',this._hass,ids,this.actionReset?null:item?.start_action,false,d)}${actionForm('end','Azione finale',this._hass,ids,this.actionReset?null:item?.end_action,true,d)}
@@ -215,13 +343,22 @@ class ScheduleCreatorCard extends HTMLElement {
         ${notificationForm('start_notification','Notifica iniziale',item?.start_notification,this._hass,d)}${notificationForm('end_notification','Notifica finale',item?.end_notification,this._hass,d)}</details>
         <details><summary>Pro · configurazione JSON</summary><label class="sc-check"><input type="checkbox" name="pro_config_enabled">Usa JSON per condizioni, fasce e notifiche</label>${area('pro_config','Configurazione avanzata',json({time_slots:slots,condition:condition||null,start_notification:item?.start_notification||null,end_notification:item?.end_notification||null}),8)}</details>`;
     }
+    if (kind === 'restore') {
+      const b = this.restoreData?.config;
+      const missing = b ? [...new Set([...(b.groups || []).flatMap((g) => g.entity_ids || []), ...(b.schedules || []).flatMap((x) => x.target_entity_ids || [])])].filter((id) => !this._hass.states[id]) : [];
+      content = `<p>Il ripristino <strong>sostituisce</strong> tutti i profili, gruppi e schedule attuali con quelli del file. I profili ripristinati restano <strong>disattivati</strong>: attivali quando vuoi che eseguano i comandi. Timer e fasce in corso non fanno parte del backup.</p><label>File di backup (.json)<input type="file" accept="application/json,.json" data-role="backup-file"></label>${b ? `<div class="sc-summary"><strong>Contenuto del file</strong><p>${(b.profiles || []).length} profili · ${(b.groups || []).length} gruppi · ${(b.schedules || []).length} schedule</p><p>Salvato il ${esc(String(this.restoreData.exported_at || '').replace('T', ' ').slice(0, 16) || 'data sconosciuta')} con la versione ${esc(this.restoreData.integration_version || 'sconosciuta')}.</p>${missing.length ? `<p class="sc-error">Entità non presenti in questo Home Assistant: ${esc(missing.join(', '))}. Gli schedule collegati non potranno comandarle.</p>` : ''}</div>` : '<p>Scegli un file creato con “Salva backup”.</p>'}`;
+    }
+    if (kind === 'reset') {
+      const timers = this.adapter.state.quick_timers?.length ?? 0;
+      content = `<p>RESET cancella <strong>tutti</strong> i dati di Schedule Creator: ${config.profiles.length} profili, ${config.groups.length} gruppi, ${config.schedules.length} schedule, ${timers} timer attivi, fasce in corso e storico operazioni. L’integrazione resta installata e vuota.</p><p>I dispositivi restano nello stato in cui si trovano: nessun comando di spegnimento o ripristino viene inviato. Dispositivi, entità, automazioni e la vecchia weekly-schedule-card non vengono toccati.</p><p>Prima di procedere puoi salvare un backup.</p><div class="sc-controls">${button('exportBackup','Salva backup')}</div>${field('confirm','Scrivi RESET per confermare','')}`;
+    }
     if (kind === 'timer') {
       const ids = targetEntities(this._hass);
       const selected = d.entity_id || ids[0];
       this.actionDomain = selected?.split('.')[0];
       content = `${select('entity_id','Entità',ids.map((id) => [id, `${this._hass.states[id].attributes?.friendly_name || id} · ${id}`]),selected)}${field('duration_seconds','Durata in secondi (1–604800)',300,'number')}${actionForm('timer','Azione timer',this._hass,selected?[selected]:[],null,false,d)}`;
     }
-    return `<form data-editor="${esc(kind)}" class="sc-editor"><h3 id="sc-editor-title">${({profile:id?'Modifica profilo':'Nuovo profilo',group:id?'Modifica gruppo':'Nuovo gruppo',schedule:id?'Modifica schedule':'Nuovo schedule',timer:'Quick Timer'})[kind]}</h3>${content}<div class="sc-actions"><button type="submit">Salva</button>${button('close','Annulla')}</div></form>`;
+    return `<form data-editor="${esc(kind)}" class="sc-editor"><h3 id="sc-editor-title">${({profile:id?'Modifica profilo':'Nuovo profilo',group:id?'Modifica gruppo':'Nuovo gruppo',schedule:id?'Modifica schedule':'Nuovo schedule',timer:'Quick Timer',restore:'Ripristina backup',reset:'RESET completo'})[kind]}</h3>${content}<div class="sc-actions"><button type="submit" ${kind === 'reset' ? 'class="sc-danger"' : ''}>${({restore:'Ripristina',reset:'Cancella tutto'})[kind] || 'Salva'}</button>${button('close','Annulla')}</div></form>`;
   }
   async click(event) {
     const buttonEl = event.target.closest('button'); if (!buttonEl || this.adapter.busy) return;
@@ -247,6 +384,8 @@ class ScheduleCreatorCard extends HTMLElement {
       this.render(); return;
     }
     if (command === 'close') { this.closeEditor(); return; }
+    if (command === 'suggestName') { this.capture(); this.updateSuggestions(true); return; }
+    if (command === 'exportBackup') { await this.exportBackup(); return; }
     if (/^(new|edit)/.test(command)) {
       if(this._hass?.user?.is_admin !== true) return;
       this.editorOpener={command,id};
@@ -257,6 +396,7 @@ class ScheduleCreatorCard extends HTMLElement {
       const group = config.groups.find((g)=>g.id===this.selectedGroup)||config.groups.find((g)=>g.profile_id===profile?.id);
       this.edit = [kind,id||null];
       this.editRecord = id ? structuredClone(config[`${kind}s`].find((x)=>x.id===id)) : null;
+      this.auto = {}; this.restoreData = null; this.notice = null;
       this.ownerGroup = this.editRecord?.group_id || group?.id;
       this.ownerProfile = this.editRecord?.profile_id || profile?.id;
       this.editRevision = this.adapter.state.revision;
@@ -278,7 +418,7 @@ class ScheduleCreatorCard extends HTMLElement {
     event.preventDefault(); if (this.adapter.busy) return;
     this.localError = null; this.localErrorDetails = null;
     const [kind,id] = this.edit;
-    const type = kind === 'timer' ? 'quick_timer/create' : `${kind}/${id ? 'update' : 'create'}`;
+    const type = ({timer:'quick_timer/create',restore:'backup/import',reset:'reset'})[kind] || `${kind}/${id ? 'update' : 'create'}`;
     let phase = 'lettura del modulo';
     try {
       this.capture();
@@ -286,7 +426,15 @@ class ScheduleCreatorCard extends HTMLElement {
       const config = this.adapter.state.config;
       let payload;
       phase = 'validazione del nome';
-      if (kind !== 'timer' && !data.name?.trim()) throw new Error('Inserisci un nome prima di salvare.');
+      if (!['timer','restore','reset'].includes(kind) && !data.name?.trim()) throw new Error('Inserisci un nome prima di salvare.');
+      if (kind === 'restore') {
+        if (!this.restoreData) throw new Error('Scegli prima un file di backup.');
+        payload = {backup: this.restoreData};
+      }
+      if (kind === 'reset') {
+        if (data.confirm?.trim() !== 'RESET') throw new Error('Scrivi RESET in maiuscolo per confermare la cancellazione.');
+        payload = {confirm: 'RESET'};
+      }
       phase = 'preparazione dei dati';
       if (kind === 'profile') payload = { name: data.name.trim(), profile_type: data.profile_type, icon: data.icon || null, color: data.color || null, order: Number(data.order) };
       if (kind === 'group') payload = { name: data.name.trim(), entity_ids: this.draft.selectedEntities, icon: data.icon || null, color: data.color || null, order: Number(data.order) };
@@ -335,6 +483,10 @@ class ScheduleCreatorCard extends HTMLElement {
       if (!id && kind === 'schedule') { payload.profile_id = this.ownerProfile; payload.group_id = this.ownerGroup; }
       phase = 'salvataggio e aggiornamento della vista';
       const ok = await this.adapter.mutate(type,payload,{ runtime: kind === 'timer', expectedRevision: kind === 'timer' || this.adapter.conflicted ? undefined : this.editRevision });
+      if (ok && ['restore','reset'].includes(kind)) {
+        this.selectedProfile = null; this.selectedGroup = null;
+        this.notice = kind === 'reset' ? 'RESET completato: Schedule Creator è vuoto.' : 'Backup ripristinato. I profili sono disattivati: attivali per eseguire gli schedule.';
+      }
       if (ok) this.closeEditor();
     } catch (error) {
       this.localError = messageFor(error);

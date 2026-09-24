@@ -19,6 +19,8 @@ MAX_CONDITION_NODES = 64
 TARGET_SELECTOR_KEYS = frozenset(
     {"area_id", "device_id", "entity_id", "floor_id", "label_id", "target"}
 )
+# Pseudo-action: data is a desired entity state reproduced through scene.apply.
+APPLY_STATE_ACTION = "apply_state"
 
 _OBJECT_ID_PATTERN = r"(?!_)[\da-z_]+(?<!_)"
 _DOMAIN_PATTERN = r"(?!.+__)" + _OBJECT_ID_PATTERN
@@ -565,6 +567,10 @@ class TargetAction(VersionedModel):
                 "target_action.data",
                 f"must not contain target selectors: {', '.join(forbidden)}",
             )
+        if action == APPLY_STATE_ACTION and (
+            not isinstance(data.get("state"), str) or not data["state"]
+        ):
+            _fail("target_action.data.state", "is required for apply_state")
         object.__setattr__(self, "data", data)
 
     @classmethod

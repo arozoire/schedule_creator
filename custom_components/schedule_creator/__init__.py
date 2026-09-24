@@ -3,13 +3,12 @@
 import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from homeassistant.components.http.server import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.loader import async_get_integration
 from homeassistant.util.hass_dict import HassKey
 
 from .actions import (
@@ -24,7 +23,8 @@ from .boundaries import (
 )
 from .completions import CompletionCoordinator
 from .condition_runtime import ConditionCoordinator
-from .const import DOMAIN
+from .const import DOMAIN, INTEGRATION_VERSION
+from .frontend_loader import async_register_frontend
 from .horizon import HorizonRefreshCoordinator
 from .journal import RecoveryInstruction, build_recovery_plan
 from .reconciliation import async_reconcile_horizon
@@ -34,7 +34,6 @@ from .storage import ScheduleCreatorStorage
 from .websocket_api import async_register_commands
 
 LIFECYCLE_LOCK: HassKey[asyncio.Lock] = HassKey(f"{DOMAIN}.lifecycle_lock")
-FRONTEND_REGISTERED: HassKey[bool] = HassKey(f"{DOMAIN}.frontend_registered")
 
 
 @dataclass(slots=True)
@@ -79,18 +78,12 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
     """Register the global read API independently of config-entry reloads."""
 
     lifecycle_lock(hass)
+    # The version of the Python code actually running, not the file on disk:
+    # the card compares it with its own version to suggest reload or restart.
+    integration = await async_get_integration(hass, DOMAIN)
+    hass.data[INTEGRATION_VERSION] = str(integration.version or "")
     async_register_commands(hass)
-    if hass.http is not None and not hass.data.get(FRONTEND_REGISTERED):
-        await hass.http.async_register_static_paths(
-            [
-                StaticPathConfig(
-                    f"/{DOMAIN}/frontend",
-                    str(Path(__file__).parent / "frontend"),
-                    cache_headers=False,
-                )
-            ]
-        )
-        hass.data[FRONTEND_REGISTERED] = True
+    await async_register_frontend(hass)
     return True
 
 

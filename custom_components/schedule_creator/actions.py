@@ -14,6 +14,7 @@ from homeassistant.helpers.event import async_track_point_in_utc_time
 
 from .journal import JournalCoordinator
 from .models import (
+    APPLY_STATE_ACTION,
     ConditionBranch,
     EntityLease,
     FrozenJsonValue,
@@ -288,7 +289,7 @@ def _sendable_target_action(
 
 
 def _service_request(
-    operation: PendingOperation,
+    operation: PendingOperation, entity_id: str
 ) -> tuple[str, str, dict[str, Any]]:
     domain = operation.payload.get("domain")
     action = operation.payload.get("action")
@@ -299,6 +300,10 @@ def _service_request(
         or not isinstance(data, Mapping)
     ):
         raise ValueError("invalid target-action payload")
+    if action == APPLY_STATE_ACTION:
+        # A desired state (e.g. climate mode, temperature, fan and swing) is
+        # reproduced by HA with the service calls each domain needs.
+        return "scene", "apply", {"entities": {entity_id: dict(data)}}
     return domain, action, dict(data)
 
 
@@ -356,7 +361,9 @@ async def async_execute_target_actions(
             )
             continue
         try:
-            domain, action, data = _service_request(operation)
+            if operation.entity_id is None:
+                raise ValueError("missing target entity")
+            domain, action, data = _service_request(operation, operation.entity_id)
         except ValueError:
             await journal.async_fail_final(
                 operation.id, now=wall_clock, error_code="invalid_payload"
@@ -369,7 +376,11 @@ async def async_execute_target_actions(
                 domain,
                 action,
                 service_data=data,
-                target={"entity_id": operation.entity_id},
+                target=(
+                    None
+                    if operation.payload.get("action") == APPLY_STATE_ACTION
+                    else {"entity_id": operation.entity_id}
+                ),
                 blocking=True,
             )
         except (HomeAssistantError, TimeoutError):

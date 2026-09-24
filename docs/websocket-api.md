@@ -315,3 +315,43 @@ commit della configurazione riuscito. Gli eventi precedenti `{"revision": N}`
 e la risposta iniziale restano invariati; il client deve rileggere `get_state`
 in entrambi i casi. Le revisioni config e runtime sono indipendenti. Le due
 subscription sul bus sono rilasciate insieme con l'unsubscribe WebSocket.
+
+## Stato desiderato `apply_state` (0.3.5)
+
+Un'azione può usare `"action": "apply_state"` con `data` = stato desiderato
+dell'entità, per esempio
+`{"domain":"climate","action":"apply_state","data":{"state":"cool","temperature":23,"fan_mode":"quiet","swing_mode":"off"}}`.
+`state` è obbligatorio. Il motore esegue `scene.apply` sulla sola entità di
+destinazione: Home Assistant invia modalità, temperatura, ventola, preset e swing
+con i servizi del dominio, come per il ripristino degli snapshot. La card lo usa
+per climate (inizio, fine e Quick Timer); luci, tende e ventole restano sui
+servizi nativi (`turn_on` con `brightness_pct`, `set_cover_position`, ecc.).
+Le azioni già salvate con `set_temperature`/`set_hvac_mode` restano valide.
+
+`get_state` include `integration_version`: la versione del codice Python in
+esecuzione (letta all'avvio), confrontata dalla card con la propria.
+
+## Backup, ripristino e RESET (0.3.5)
+
+Tutti i comandi richiedono un amministratore.
+
+| Command | Required fields | Result |
+|---|---|---|
+| `schedule_creator/backup/export` | — | `format` = `schedule_creator.backup`, `format_version` 1, `integration_version`, `exported_at`, `config` con `schema_version`, `profiles`, `groups`, `schedules` |
+| `schedule_creator/backup/import` | `expected_revision`, `backup` | Nuova `revision` e conteggi `profiles`, `groups`, `schedules` |
+| `schedule_creator/reset` | `expected_revision`, `confirm` = `"RESET"` | Nuova `revision` della configurazione vuota |
+
+Il backup non contiene runtime, lease, snapshot né comandi pendenti. L'import
+valida tutto il modello prima di scrivere (`invalid_format`, `incompatible_backup`
+o `invalid_payload` senza modifiche parziali), sostituisce profili, gruppi e
+schedule in un unico commit e lascia **tutti i profili disattivati**.
+
+RESET scarica il config entry (ferma coordinatori e callback), azzera prima il
+runtime (occorrenze, lease, snapshot, journal, timer) e poi la configurazione,
+quindi riavvia il config entry vuoto. Le revisioni continuano a crescere, quindi
+le bozze aperte prima del RESET ricevono `revision_conflict`. Un'interruzione tra
+le due scritture lascia la configurazione precedente, che viene ripianificata al
+riavvio: mai comandi vecchi senza il loro schedule. I dispositivi restano nello
+stato corrente; un comando già inviato non è revocabile. Dispositivi, entità HA,
+automazioni e dati della weekly-schedule-card non vengono toccati. Un secondo
+RESET concorrente riceve `reset_running`.

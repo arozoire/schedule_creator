@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { JSDOM, VirtualConsole } from 'jsdom';
 const bundle = readFileSync(new URL('../../custom_components/schedule_creator/frontend/schedule-creator-card.js',import.meta.url),'utf8');
 const tick=()=>new Promise((r)=>setImmediate(r));
-const services={switch:{turn_on:{},turn_off:{}},light:{turn_on:{},turn_off:{}},climate:{set_temperature:{},set_hvac_mode:{},set_fan_mode:{}},fan:{turn_on:{},turn_off:{},set_percentage:{},set_preset_mode:{}},automation:{trigger:{}},update:{install:{}}};
+const services={cover:{open_cover:{},close_cover:{},set_cover_position:{}},switch:{turn_on:{},turn_off:{}},light:{turn_on:{},turn_off:{}},climate:{set_temperature:{},set_hvac_mode:{},set_fan_mode:{}},fan:{turn_on:{},turn_off:{},set_percentage:{},set_preset_mode:{}},automation:{trigger:{}},update:{install:{}}};
 function setup() {
   const dom=new JSDOM('<body></body>',{runScripts:'dangerously',virtualConsole:new VirtualConsole()});
   dom.window.structuredClone=structuredClone;
@@ -15,6 +15,7 @@ function setup() {
     ['light.rgb',{supported_color_modes:['rgb','color_temp'],min_color_temp_kelvin:2000,max_color_temp_kelvin:6500}],
     ['climate.room',{hvac_modes:['heat','cool','off'],fan_modes:['low','high'],supported_features:9,min_temp:7,max_temp:30}],
     ['fan.room',{supported_features:9,preset_modes:['eco']}],
+    ['cover.blind',{friendly_name:'Tenda',supported_features:15,current_position:20}],
   ].map(([id,attributes])=>[id,{entity_id:id,attributes,state:'off'}]));
   const snapshot={revision:3,config:{profiles:[{id:'p',name:'Home',active:true}],groups:[{id:'g',profile_id:'p',name:'Room',entity_ids:['switch.a']}],schedules:[]},runtime_summary:{revision:6},quick_timers:[],operational:{}};
   const writes=[];
@@ -22,15 +23,17 @@ function setup() {
   const card=dom.window.document.createElement('schedule-creator-card');card.setConfig({});card.hass=hass;dom.window.document.body.append(card);
   const root=card.shadowRoot;
   const click=(name)=>root.querySelector(`[data-command="${name}"]`).click();
+  const pick=(name,value)=>{const node=root.querySelector(`[name="${name}"][value="${value}"]`);assert.ok(node,`missing ${name}=${value}`);node.checked=true;node.dispatchEvent(new dom.window.Event('change',{bubbles:true}));};
+  const submit=()=>root.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));
   const set=(name,value,event='change')=>{const node=root.querySelector(`[name="${name}"]`);assert.ok(node,`missing ${name}`);if(node.type==='checkbox')node.checked=value;else node.value=value;node.dispatchEvent(new dom.window.Event(event,{bubbles:true}));};
-  return {dom,card,hass,snapshot,writes,root,click,set,close:()=>{card.remove();dom.window.close();}};
+  return {dom,card,hass,snapshot,writes,root,click,set,pick,submit,close:()=>{card.remove();dom.window.close();}};
 }
 test('group lists controllable entities and search really hides nonmatches',async()=>{
  const t=setup();try {await tick();t.click('newGroup');
  assert.equal(t.root.querySelector('[name="entities"][value="sensor.temperature"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="automation.test"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="update.test"]'),null);
- assert.equal(t.root.querySelector('.sc-version').textContent,'v0.3.3');
+ assert.equal(t.root.querySelector('.sc-version').textContent,'v0.3.5');
  t.set('entity_search','lampada','input');
  const hidden=t.root.querySelector('[value="switch.outside"]').parentElement;
  assert.equal(hidden.hidden,true);
@@ -66,7 +69,7 @@ test('schedule only offers group members and sends ON/OFF without temperature or
  const t=setup();try {await tick();t.click('newSchedule');
  assert.deepEqual([...t.root.querySelectorAll('[name="entities"]')].map((n)=>n.value),['switch.a']);
  assert.equal(t.root.querySelector('[name="start_temperature"]'),null);
- t.set('name','Test','input');t.set('end_command','turn_off');
+ t.set('name','Test','input');t.pick('end_mode','off');
  t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
  assert.equal(t.writes.length,1,t.root.textContent);
  assert.deepEqual(t.writes[0].start_action,{domain:'switch',action:'turn_on',data:{}});
@@ -91,14 +94,15 @@ test('schedule write error identifies command, gives recovery steps and keeps ed
 });
 test('local action failure exposes phase and stack, keeps draft and permits retry',async()=>{
  const t=setup();try {await tick();t.click('newSchedule');t.set('name','Presa test','input');
- Object.defineProperty(t.root.querySelector('[name="start_command"]'),'value',{get(){throw new Error('Method not implemented.');}});
+ const form=t.root.querySelector('form');const elements=form.elements;
+ Object.defineProperty(form,'elements',{configurable:true,get(){return new Proxy(elements,{get(target,key){if(key==='start_mode')throw new Error('Method not implemented.');const value=target[key];return typeof value==='function'?value.bind(target):value;}});}});
  t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
  assert.equal(t.writes.length,0);
  assert.equal(t.root.querySelector('[name="name"]').value,'Presa test');
  const details=t.root.querySelector('.sc-error-details textarea').value;
  assert.match(details,/Fase: lettura azione iniziale/);
  assert.match(details,/Traccia:\nError: Method not implemented/);
- assert.match(details,/Schedule Creator: 0.3.3/);
+ assert.match(details,/Schedule Creator: 0.3.5/);
  assert.match(t.root.querySelector('.sc-error').textContent,/La bozza è conservata/);
  t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
  assert.equal(t.writes.length,1);
@@ -106,7 +110,7 @@ test('local action failure exposes phase and stack, keeps draft and permits retr
  }finally{t.close();}
 });
 test('empty schedule name is explained before any write',async()=>{
- const t=setup();try {await tick();t.click('newSchedule');
+ const t=setup();try {await tick();t.click('newSchedule');t.set('name','','input');
  t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
  assert.equal(t.writes.length,0);
  assert.match(t.root.querySelector('.sc-error').textContent,/Inserisci un nome/);
@@ -154,14 +158,118 @@ test('timer adapts from switch to light and climate capabilities',async()=>{
  const t=setup();try {await tick();t.click('newTimer');
  t.set('entity_id','switch.a');assert.equal(t.root.querySelector('[name="timer_temperature"]'),null);
  t.set('entity_id','light.rgb');t.set('timer_brightness_pct','42','input');t.set('timer_color_mode','rgb');t.set('timer_color','#ff0000','input');
- t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
+ assert.equal(t.root.querySelector('[data-mirror="timer_brightness_pct"]').value,'42');
+ t.submit();await tick();
  assert.deepEqual(t.writes[0].action,{domain:'light',action:'turn_on',data:{brightness_pct:42,rgb_color:[255,0,0]}});
- t.click('newTimer');t.set('entity_id','climate.room');t.set('timer_command','set_hvac_mode');
- assert.deepEqual([...t.root.querySelector('[name="timer_hvac_mode"]').options].map((n)=>n.value),['heat','cool','off']);
+ t.click('newTimer');t.set('entity_id','climate.room');
+ assert.deepEqual([...t.root.querySelectorAll('[name="timer_mode"]')].map((n)=>n.value),['heat','cool','off']);
+ assert.ok(t.root.querySelector('[name="timer_temperature"]'));
+ t.pick('timer_mode','off');
  assert.equal(t.root.querySelector('[name="timer_temperature"]'),null);
- t.set('timer_command','set_fan_mode');t.set('timer_fan_mode','high');
- t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
- assert.deepEqual(t.writes[1].action,{domain:'climate',action:'set_fan_mode',data:{fan_mode:'high'}});
+ assert.equal(t.root.querySelector('[name="timer_fan_mode"]'),null);
+ t.pick('timer_mode','cool');t.set('timer_temperature','23','input');t.pick('timer_fan_mode','high');
+ t.submit();await tick();
+ assert.deepEqual(t.writes[1].action,{domain:'climate',action:'apply_state',data:{state:'cool',temperature:23,fan_mode:'high'}});
+ }finally{t.close();}
+});
+test('climate schedule sets a desired state at start and turns off at end',async()=>{
+ const t=setup();try {await tick();
+ t.snapshot.config.groups[0].entity_ids=['climate.room'];t.card.render();t.click('newSchedule');
+ const temperature=t.root.querySelector('[name="start_temperature"]');
+ assert.equal(temperature.min,'7');assert.equal(temperature.max,'30');
+ t.pick('start_mode','cool');
+ const mirror=t.root.querySelector('[data-mirror="start_temperature"]');mirror.value='24';mirror.dispatchEvent(new t.dom.window.Event('input',{bubbles:true}));
+ assert.equal(t.root.querySelector('[name="start_temperature"]').value,'24');
+ t.pick('start_fan_mode','low');t.pick('end_mode','off');
+ assert.match(t.root.querySelector('[name="name"]').value,/Freddo 24°/);
+ t.submit();await tick();
+ assert.equal(t.writes.length,1,t.root.textContent);
+ assert.deepEqual(t.writes[0].start_action,{domain:'climate',action:'apply_state',data:{state:'cool',temperature:24,fan_mode:'low'}});
+ assert.deepEqual(t.writes[0].end_action,{domain:'climate',action:'apply_state',data:{state:'off'}});
+ }finally{t.close();}
+});
+test('existing climate set_temperature opens in the visual editor',async()=>{
+ const t=setup();try {await tick();
+ t.snapshot.config.groups[0].entity_ids=['climate.room'];
+ t.snapshot.config.schedules=[{id:'s',profile_id:'p',group_id:'g',name:'Clima',enabled:true,target_entity_ids:['climate.room'],time_slots:[{weekdays:[0],start:'08:00',end:'09:00'}],start_action:{id:'a',domain:'climate',action:'set_temperature',data:{temperature:21,hvac_mode:'heat'}},end_action:{id:'b',domain:'climate',action:'set_hvac_mode',data:{hvac_mode:'off'}},condition:null,override_policy:'cooperative',inclusion_dates:[],exclusion_dates:[],start_notification:null,end_notification:null}];
+ t.card.render();t.click('editSchedule');
+ assert.equal(t.root.querySelector('[name="start_mode"]:checked').value,'heat');
+ assert.equal(t.root.querySelector('[name="start_temperature"]').value,'21');
+ assert.equal(t.root.querySelector('[name="end_mode"]:checked').value,'off');
+ assert.equal(t.root.querySelector('[name="start_pro"]').checked,false);
+ assert.equal(t.root.querySelector('[name="name"]').value,'Clima');
+ }finally{t.close();}
+});
+test('cover schedule uses a percentage slider',async()=>{
+ const t=setup();try {await tick();
+ t.snapshot.config.groups[0].entity_ids=['cover.blind'];t.card.render();t.click('newSchedule');
+ assert.equal(t.root.querySelector('[name="start_mode"]:checked').value,'position');
+ assert.equal(t.root.querySelector('[name="start_position"]').value,'20');
+ t.set('start_position','70','input');t.pick('end_mode','close');t.submit();await tick();
+ assert.deepEqual(t.writes[0].start_action,{domain:'cover',action:'set_cover_position',data:{position:70}});
+ assert.deepEqual(t.writes[0].end_action,{domain:'cover',action:'close_cover',data:{}});
+ }finally{t.close();}
+});
+test('name and notification texts are suggested until the user edits them',async()=>{
+ const t=setup();try {await tick();t.click('newSchedule');
+ const name=()=>t.root.querySelector('[name="name"]').value;
+ assert.equal(name(),'Lampada test · Accendi · Tutti i giorni 08:00–09:00');
+ t.set('slot_0_start','07:30','input');
+ assert.equal(name(),'Lampada test · Accendi · Tutti i giorni 07:30–09:00');
+ t.set('name','Mio nome','input');t.set('slot_0_start','06:00','input');
+ assert.equal(name(),'Mio nome');
+ t.click('suggestName');
+ assert.equal(name(),'Lampada test · Accendi · Tutti i giorni 06:00–09:00');
+ t.set('start_notification_enabled',true);
+ assert.equal(t.root.querySelector('[name="start_notification_message"]').value,'Lampada test: Accendi alle 06:00');
+ assert.equal(t.root.querySelector('[name="start_notification_title"]').value,name());
+ t.submit();await tick();
+ assert.equal(t.writes[0].start_notification.message,'Lampada test: Accendi alle 06:00');
+ }finally{t.close();}
+});
+test('version mismatch explains reload or restart',async()=>{
+ const t=setup();try {await tick();
+ assert.match(t.root.querySelector('.sc-warning').textContent,/Riavvia Home Assistant/);
+ t.card.adapter.state={...structuredClone(t.snapshot),integration_version:'0.3.5'};t.card.render();
+ assert.equal(t.root.querySelector('.sc-warning'),null);
+ t.card.adapter.state.integration_version='0.4.0';t.card.render();
+ assert.match(t.root.querySelector('.sc-warning').textContent,/Ricarica la pagina/);
+ }finally{t.close();}
+});
+test('RESET requires typing RESET and sends the confirmed revision',async()=>{
+ const t=setup();try {await tick();t.click('newReset');
+ assert.match(t.root.querySelector('dialog').textContent,/1 profili, 1 gruppi, 0 schedule/);
+ t.set('confirm','reset','input');t.submit();await tick();
+ assert.equal(t.writes.length,0);assert.match(t.root.querySelector('.sc-error').textContent,/RESET in maiuscolo/);
+ t.set('confirm','RESET','input');t.submit();await tick();
+ assert.deepEqual(t.writes[0],{type:'schedule_creator/reset',expected_revision:3,confirm:'RESET'});
+ assert.match(t.root.querySelector('.sc-notice').textContent,/RESET completato/);
+ }finally{t.close();}
+});
+test('restore previews the backup file and imports it',async()=>{
+ const t=setup();try {await tick();t.click('newRestore');
+ t.submit();await tick();assert.equal(t.writes.length,0);
+ const backup={format:'schedule_creator.backup',format_version:1,integration_version:'0.3.5',exported_at:'2026-09-24T10:00:00Z',config:{schema_version:1,profiles:[{id:'p2'}],groups:[{id:'g2',entity_ids:['switch.missing']}],schedules:[]}};
+ await t.card.readBackupFile({files:[{text:async()=>JSON.stringify(backup)}]});
+ const text=t.root.querySelector('dialog').textContent;
+ assert.match(text,/1 profili · 1 gruppi · 0 schedule/);assert.match(text,/switch\.missing/);
+ t.submit();await tick();
+ assert.equal(t.writes[0].type,'schedule_creator/backup/import');assert.deepEqual(t.writes[0].backup,backup);
+ }finally{t.close();}
+});
+test('profile overview explains which profiles share entities',async()=>{
+ const t=setup();try {await tick();
+ const state=structuredClone(t.snapshot);
+ state.config.profiles.push({id:'p2',name:'Vacanza',active:false,profile_type:'exclusive',order:0});
+ state.config.profiles[0].order=1;state.config.profiles[0].profile_type='shared';
+ state.config.groups.push({id:'g2',profile_id:'p2',name:'Tutto',entity_ids:['switch.a']});
+ const base={enabled:true,target_entity_ids:['switch.a'],time_slots:[{weekdays:[0],start:'08:00',end:'09:00'}],start_action:{domain:'switch',action:'turn_on',data:{}},end_action:null};
+ state.config.schedules=[{...base,id:'s1',profile_id:'p',group_id:'g',name:'A'},{...base,id:'s2',profile_id:'p2',group_id:'g2',name:'B'}];
+ t.card.adapter.state=state;t.card.render();
+ assert.deepEqual([...t.root.querySelectorAll('.profile-chip')].map((n)=>n.textContent),['Vacanza','Home']);
+ const overview=t.root.querySelector('.sc-overview').textContent;
+ assert.match(overview,/Lampada test · (Home, Vacanza|Vacanza, Home)/);
+ assert.match(overview,/Possono essere attivi insieme/);
  }finally{t.close();}
 });
 test('condition tree, multiple slots and notifications can be saved using controls',async()=>{
