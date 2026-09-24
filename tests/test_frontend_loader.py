@@ -51,7 +51,8 @@ async def test_loader_imports_bundle_by_content_hash(
         f"{frontend_loader.STATIC_URL}/{frontend_loader.BUNDLE_NAME}?v=x"
     )
     assert served.status == 200
-    assert "schedule-creator-card" in await served.text()
+    # The static route serves the (patched) bundle directory unchanged.
+    assert await served.text() == "console.log('version two');\n"
 
 
 async def test_get_state_reports_running_integration_version(hass, hass_ws_client):
