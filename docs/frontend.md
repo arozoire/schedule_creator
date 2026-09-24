@@ -58,6 +58,26 @@ della cache. Il primo passaggio alla 0.3.5 richiede ancora riavvio e refresh.
 
 ## Contratto tecnico
 
+### Card Quick Timer separata 0.3.8
+
+Nello stesso file JS (nessuna risorsa in più) c'è `custom:schedule-creator-quick-timer-card`,
+come la quick-timer card della weekly-schedule-card:
+
+```yaml
+type: custom:schedule-creator-quick-timer-card
+entity: climate.camera        # facoltativo: senza, la card mostra una lista cercabile
+title: Timer                  # facoltativo
+presets: [5, 15, 30, 60]      # facoltativo, minuti
+```
+
+Mostra lo stato attuale, "Durante il timer" (stessi controlli dell'editor:
+modalità climate, temperatura −/+, ventola, luminosità, posizione…), "Per quanto"
+(durate rapide, cursore e minuti, oppure "Fino alle" un orario) e un pulsante che
+riassume l'azione ("Freddo 23° per 30 minuti"). Con un timer attivo mostra il
+conto alla rovescia e "Annulla"; alla scadenza il backend ripristina lo stato
+precedente. I timer sono gli stessi della card principale; utenti non admin li
+vedono soltanto. Editor visuale: titolo, entità, durate rapide.
+
 ### Grafica "Agenda viva" 0.3.7
 
 Scelta del proprietario tra tre direzioni (mockup: https://claude.ai/artifact/RuCLR9CE1dnWvoVjGhw7Z8).

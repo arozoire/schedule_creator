@@ -6,7 +6,7 @@ import { blankCondition, conditionForm, readCondition, slotsForm, readSlots, mag
 import { actionForm, readAction, describeAction, pretty } from './action-editor.js';
 
 const STYLE = '__SC_CSS__';
-const CARD_VERSION = '0.3.7';
+const CARD_VERSION = '0.3.8';
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
