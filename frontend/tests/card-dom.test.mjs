@@ -30,7 +30,7 @@ test('group lists controllable entities and search really hides nonmatches',asyn
  assert.equal(t.root.querySelector('[name="entities"][value="sensor.temperature"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="automation.test"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="update.test"]'),null);
- assert.equal(t.root.querySelector('.sc-version').textContent,'v0.3.0');
+ assert.equal(t.root.querySelector('.sc-version').textContent,'v0.3.1');
  t.set('entity_search','lampada','input');
  const hidden=t.root.querySelector('[value="switch.outside"]').parentElement;
  assert.equal(hidden.hidden,true);
@@ -68,10 +68,45 @@ test('schedule write error identifies command, gives recovery steps and keeps ed
  t.hass.connection.sendMessagePromise=(msg)=>msg.type==='schedule_creator/schedule/create' ? Promise.reject({message:'method not implemented.'}) : original(msg);
  t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
  const alert=t.root.querySelector('.sc-error').textContent;
- assert.match(alert,/schedule_creator\/schedule\/create/);
- assert.match(alert,/riavvia completamente Home Assistant/);
+ assert.match(alert,/Dettagli errore/);
+ const details=t.root.querySelector('.sc-error-details textarea').value;
+ assert.match(details,/schedule_creator\/schedule\/create/);
+ assert.match(details,/Fase: invio comando WebSocket/);
+ assert.doesNotMatch(alert,/riavvia/);
  assert.ok(t.root.querySelector('form[data-editor]'));
  assert.equal(t.root.querySelector('[name="name"]').value,'Test');
+ }finally{t.close();}
+});
+test('local action failure exposes phase and stack, keeps draft and permits retry',async()=>{
+ const t=setup();try {await tick();t.click('newSchedule');t.set('name','Presa test','input');
+ Object.defineProperty(t.root.querySelector('[name="start_command"]'),'value',{get(){throw new Error('Method not implemented.');}});
+ t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
+ assert.equal(t.writes.length,0);
+ assert.equal(t.root.querySelector('[name="name"]').value,'Presa test');
+ const details=t.root.querySelector('.sc-error-details textarea').value;
+ assert.match(details,/Fase: lettura azione iniziale/);
+ assert.match(details,/Traccia:\nError: Method not implemented/);
+ assert.match(details,/Schedule Creator: 0.3.1/);
+ assert.match(t.root.querySelector('.sc-error').textContent,/La bozza è conservata/);
+ t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
+ assert.equal(t.writes.length,1);
+ assert.equal(t.root.querySelector('.sc-error-details'),null);
+ }finally{t.close();}
+});
+test('empty schedule name is explained before any write',async()=>{
+ const t=setup();try {await tick();t.click('newSchedule');
+ t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
+ assert.equal(t.writes.length,0);
+ assert.match(t.root.querySelector('.sc-error').textContent,/Inserisci un nome/);
+ }finally{t.close();}
+});
+test('blurring the name before Save preserves the form and its submit button',async()=>{
+ const t=setup();try {await tick();t.click('newSchedule');
+ const form=t.root.querySelector('form');const submit=form.querySelector('[type="submit"]');
+ t.set('name','Presa test','change');
+ assert.equal(t.root.querySelector('form'),form);
+ assert.equal(t.root.querySelector('[type="submit"]'),submit);
+ assert.equal(t.card.draft.name,'Presa test');
  }finally{t.close();}
 });
 test('activity stays expanded as timer counts change',async()=>{

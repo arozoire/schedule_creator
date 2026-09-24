@@ -10,8 +10,14 @@ export const clean = (value) => {
 
 export const messageFor = (error) => {
   const operation = error?.operation;
-  if (operation && (error?.code === 'unknown_command' || /method not implemented/i.test(error?.message || ''))) {
+  if (error?.acknowledged) {
+    return 'Home Assistant ha confermato il salvataggio, ma la card non è riuscita ad aggiornare la vista. Ricarica la dashboard prima di riprovare.';
+  }
+  if (operation && error?.code === 'unknown_command') {
     return `Home Assistant ha rifiutato ${operation} (${error?.code || error?.message}). Aggiorna l’integrazione Schedule Creator, riavvia completamente Home Assistant e riprova. Se persiste, comunica questo comando e controlla i log dell’integrazione.`;
+  }
+  if (/method not implemented/i.test(error?.message || '')) {
+    return 'Salvataggio non riuscito: una funzione ha restituito “Method not implemented”. La bozza è conservata. Apri “Dettagli errore” e invia il testo per individuare il passaggio che fallisce.';
   }
   return ({
   revision_conflict: 'Configurazione cambiata su un altro client. La bozza è conservata: confrontala e salva di nuovo.',
@@ -27,6 +33,19 @@ export const messageFor = (error) => {
   storage_unavailable: 'Archivio non disponibile: controlla i log di Home Assistant.',
   })[error?.code] || (operation ? `Operazione ${operation} non riuscita (${error?.code || error?.message || 'errore sconosciuto'}). Controlla i log di Home Assistant.` : error?.message || 'Operazione non riuscita. Controlla i log di Home Assistant.');
 };
+
+export function diagnosticFor(error, { cardVersion, haVersion, phase, operation } = {}) {
+  return [
+    `Schedule Creator: ${cardVersion || 'non disponibile'}`,
+    `Home Assistant: ${haVersion || 'non disponibile'}`,
+    `Fase: ${error?.phase || phase || 'non disponibile'}`,
+    `Operazione: ${error?.operation || operation || 'non disponibile'}`,
+    `Conferma del server: ${error?.acknowledged ? 'ricevuta' : 'non ricevuta'}`,
+    `Codice: ${error?.code || 'non disponibile'}`,
+    `Errore: ${error?.name ? `${error.name}: ` : ''}${error?.message || String(error)}`,
+    error?.stack ? `Traccia:\n${String(error.stack).split('\n').slice(0, 12).join('\n')}` : 'Traccia: non disponibile',
+  ].join('\n');
+}
 
 export function parseJson(text, label) {
   try { return JSON.parse(text); } catch { throw new Error(`${label}: JSON non valido.`); }
