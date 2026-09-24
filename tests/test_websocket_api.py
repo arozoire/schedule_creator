@@ -39,6 +39,15 @@ from custom_components.schedule_creator.websocket_api import (
     websocket_subscribe_runtime,
 )
 
+INTEGRATION_VERSION = json.loads(
+    (
+        Path(__file__).parents[1]
+        / "custom_components"
+        / "schedule_creator"
+        / "manifest.json"
+    ).read_text(encoding="utf-8")
+)["version"]
+
 
 async def _create_entry(hass):
     result = await hass.config_entries.flow.async_init(
@@ -91,6 +100,7 @@ async def test_get_state_empty(
             "type": "result",
             "success": True,
             "result": {
+                "integration_version": INTEGRATION_VERSION,
                 "schema_version": 1,
                 "revision": 1,
                 "config": {
@@ -234,6 +244,7 @@ async def test_get_state_populated(hass, hass_ws_client, hass_storage):
     response = await _read(client)
     assert response["success"] is True
     assert response["result"] == {
+        "integration_version": INTEGRATION_VERSION,
         "schema_version": 1,
         "revision": 4,
         "config": {

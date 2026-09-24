@@ -1,15 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { clean, messageFor } from '../src/editor.js';
-import { readAction } from '../src/forms.js';
+import { readAction, describeAction } from '../src/action-editor.js';
 import { ScheduleCreatorStateAdapter } from '../src/state-adapter.js';
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 test('nested changes preserve advanced fields and remove server IDs', () => {
   assert.deepEqual(clean({ id:'a', condition:{id:'b',children:[{id:'c',value:'on'}]},end_action:null }), {condition:{children:[{value:'on'}]},end_action:null});
 });
 test('action data exclude entity targets', () => {
-  const elements = { start_pro:{checked:false},start_command:{value:'set_percentage'},start_percentage:{value:'45'} };
-  assert.deepEqual(readAction({elements},'start','fan'), {domain:'fan',action:'set_percentage',data:{percentage:45}});
+  const elements = { start_pro:{checked:false},start_mode:{value:'on'},start_percentage:{value:'45'} };
+  assert.deepEqual(readAction({elements},'start','fan'), {domain:'fan',action:'turn_on',data:{percentage:45}});
   elements.start_pro.checked = true; elements.start_json = { value:'{"domain":"fan","action":"turn_on","data":{"entity_id":"fan.a"}}' };
   assert.throws(() => readAction({elements},'start','fan'), /target/);
 });
@@ -56,4 +56,17 @@ test('post-save rendering failure is distinguished from a rejected save',async()
  assert.equal(adapter.writeError.acknowledged,true);
  assert.match(messageFor(adapter.writeError),/ha confermato il salvataggio/);
  adapter.disconnect();
+});
+test('climate desired state becomes one apply_state action', () => {
+  const elements = { start_pro:{checked:false},start_mode:{value:'cool'},start_temperature:{value:'23'},start_fan_mode:{value:'quiet'},start_swing_mode:{value:'off'} };
+  const action = readAction({elements},'start','climate');
+  assert.deepEqual(action, {domain:'climate',action:'apply_state',data:{state:'cool',temperature:23,fan_mode:'quiet',swing_mode:'off'}});
+  assert.equal(describeAction(action), 'Freddo 23° ventola quiet');
+  assert.deepEqual(readAction({elements:{start_mode:{value:'off'},start_temperature:{value:'23'}}},'start','climate'), {domain:'climate',action:'apply_state',data:{state:'off'}});
+  assert.equal(readAction({elements:{end_mode:{value:'none'}}},'end','climate'), null);
+});
+test('cover position and light brightness use native services', () => {
+  assert.deepEqual(readAction({elements:{start_mode:{value:'position'},start_position:{value:'35'}}},'start','cover'), {domain:'cover',action:'set_cover_position',data:{position:35}});
+  assert.deepEqual(readAction({elements:{start_mode:{value:'close'}}},'start','cover'), {domain:'cover',action:'close_cover',data:{}});
+  assert.deepEqual(readAction({elements:{start_mode:{value:'on'},start_brightness_pct:{value:'60'}}},'start','light'), {domain:'light',action:'turn_on',data:{brightness_pct:60}});
 });

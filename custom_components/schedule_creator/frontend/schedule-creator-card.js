@@ -204,84 +204,6 @@ function controllable(hass, id) {
 function targetEntities(hass, allowed = null) {
   return Object.keys(hass.states || {}).filter((id) => (!allowed || allowed.includes(id)) && controllable(hass,id));
 }
-const intersect = (states, key) => states.length ? (states[0].attributes?.[key] || []).filter((value) => states.every((s) => (s.attributes?.[key] || []).includes(value))) : [];
-const knownData = {turn_on:['brightness','brightness_pct','rgb_color','color_temp_kelvin'], turn_off:[],set_hvac_mode:['hvac_mode'],set_temperature:['temperature','target_temp_low','target_temp_high','hvac_mode'],set_fan_mode:['fan_mode'],set_percentage:['percentage'],set_preset_mode:['preset_mode'],open_cover:[],close_cover:[],stop_cover:[],set_cover_position:['position']};
-const modeLabels = {heat:'Riscaldamento',cool:'Raffrescamento',heat_cool:'Auto caldo/freddo',auto:'Automatico',fan_only:'Solo ventola',dry:'Deumidifica',off:'Spento'};
-function actionForm(prefix, label, hass, ids, value, optional, draft = {}) {
-  const domain = ids[0]?.split('.')[0];
-  const states = ids.map((id) => hass.states?.[id]).filter(Boolean);
-  if (!domain) return `<fieldset><legend>${label}</legend><p>Seleziona prima un’entità.</p></fieldset>`;
-  const attrs = states[0]?.attributes || {};
-  const hvac = intersect(states,'hvac_modes'), fans = intersect(states,'fan_modes'), presets = intersect(states,'preset_modes');
-  const available = Object.entries(commands[domain] || {}).filter(([action]) => hass.services?.[domain]?.[action])
-    .filter(([action]) => action !== 'set_temperature' || states.every((s) => (s.attributes?.supported_features & 3) !== 0))
-    .filter(([action]) => action !== 'set_hvac_mode' || hvac.length)
-    .filter(([action]) => action !== 'set_fan_mode' || fans.length)
-    .filter(([action]) => action !== 'set_preset_mode' || presets.length)
-    .filter(([action]) => action !== 'set_percentage' || states.every((s) => (s.attributes?.supported_features & 1) !== 0))
-    .filter(([action]) => action !== 'set_cover_position' || states.every((s) => (s.attributes?.supported_features & 4) !== 0));
-  const fallback = available[0]?.[0] || '';
-  const representable = !value || (value.domain === domain && available.some(([a]) => a === value.action) && Object.keys(value.data || {}).every((k) => (knownData[value.action] || []).includes(k)));
-  const current = draft[`${prefix}_command`] ?? (optional && !value ? 'none' : value?.action || fallback);
-  const get = (name, val = '') => draft[`${prefix}_${name}`] ?? val;
-  const actionOptions = [...(optional ? [['none','Nessune azioni alla fine']] : []),...available];
-  if (value && !available.some(([a]) => a === value.action)) actionOptions.push([value.action, `${value.action} (azione conservata)`]);
-  const data = value?.data || {};
-  const pro = get('pro', !representable ? 'on' : '') === 'on';
-  let fields = '';
-  if (current === 'set_temperature') {
-    const range = (attrs.supported_features & 2) && !(attrs.supported_features & 1);
-    const min = Math.max(...states.map((s) => s.attributes?.min_temp ?? 7));
-    const max = Math.min(...states.map((s) => s.attributes?.max_temp ?? 35));
-    const limits = `min="${min}" max="${max}" step="any"`;
-    fields += range ? input(`${prefix}_target_temp_low`,'Temperatura minima',get('target_temp_low',data.target_temp_low),'number',limits) + input(`${prefix}_target_temp_high`,'Temperatura massima',get('target_temp_high',data.target_temp_high),'number',limits) : input(`${prefix}_temperature`,'Temperatura',get('temperature',data.temperature ?? attrs.temperature ?? 20),'number',limits);
-    fields += choice(`${prefix}_hvac_mode`,'Modalità', [['','Non cambiare modalità'],...hvac.map((x)=>[x,modeLabels[x] || x])],get('hvac_mode',data.hvac_mode || ''));
-  }
-  if (current === 'set_hvac_mode') fields += choice(`${prefix}_hvac_mode`,'Modalità',hvac.map((x)=>[x,modeLabels[x] || x]),get('hvac_mode',data.hvac_mode || hvac[0]));
-  if (current === 'set_fan_mode') fields += choice(`${prefix}_fan_mode`,'Velocità ventola',fans.map((x)=>[x,x]),get('fan_mode',data.fan_mode || fans[0]));
-  if (current === 'set_preset_mode') fields += choice(`${prefix}_preset_mode`,'Preset',presets.map((x)=>[x,x]),get('preset_mode',data.preset_mode || presets[0]));
-  if (current === 'set_percentage' || current === 'set_cover_position') {
-    const key = current === 'set_percentage' ? 'percentage' : 'position';
-    fields += input(`${prefix}_${key}`,current === 'set_percentage' ? 'Velocità (%)' : 'Posizione (%)',get(key,data[key] ?? 50),'number','min="0" max="100" step="1"');
-  }
-  if (domain === 'light' && current === 'turn_on') {
-    const modes = states.map((s) => s.attributes?.supported_color_modes || []);
-    if (modes.every((m) => m.some((x) => !['onoff','unknown'].includes(x)))) fields += input(`${prefix}_brightness_pct`,'Luminosità % (vuoto = non cambiare)',get('brightness_pct',data.brightness_pct ?? (data.brightness === undefined ? '' : Math.round(data.brightness / 255 * 100))),'number','min="0" max="100"');
-    const colors = [['','Non cambiare colore']];
-    if (modes.every((m) => m.some((x) => ['hs','xy','rgb','rgbw','rgbww'].includes(x)))) colors.push(['rgb','Colore']);
-    if (modes.every((m) => m.includes('color_temp'))) colors.push(['kelvin','Temperatura colore']);
-    const colorMode = get('color_mode',data.rgb_color ? 'rgb' : data.color_temp_kelvin ? 'kelvin' : '');
-    if (colors.length > 1) fields += choice(`${prefix}_color_mode`,'Colore',colors,colorMode);
-    if (colorMode === 'rgb') fields += input(`${prefix}_color`,'Colore',get('color',data.rgb_color ? '#'+data.rgb_color.map((v)=>v.toString(16).padStart(2,'0')).join('') : '#ffffff'),'color');
-    if (colorMode === 'kelvin') fields += input(`${prefix}_color_temp_kelvin`,'Temperatura colore (K)',get('color_temp_kelvin',data.color_temp_kelvin ?? 3000),'number',`min="${Math.max(...states.map((s)=>s.attributes?.min_color_temp_kelvin ?? 2000))}" max="${Math.min(...states.map((s)=>s.attributes?.max_color_temp_kelvin ?? 6500))}"`);
-  }
-  return `<fieldset data-action="${prefix}" data-domain="${E(domain)}"><legend>${label}</legend>${choice(`${prefix}_command`,'Comando',actionOptions,current)}${pro ? '<p>Azione personalizzata conservata in modalità Pro.</p>' : ''}<div ${pro ? 'hidden' : ''}>${fields}</div><details><summary>Pro · azione personalizzata</summary>${check(`${prefix}_pro`,'Usa JSON al posto dei controlli',pro)}<label>Azione JSON<textarea name="${prefix}_json" rows="4">${E(get('json',JSON.stringify(value ? {domain:value.domain,action:value.action,data:value.data} : {domain,action:fallback,data:{}},null,2)))}</textarea></label></details></fieldset>`;
-}
-function readAction(form, prefix, domain) {
-  const val = (key) => form.elements[`${prefix}_${key}`]?.value;
-  if (form.elements[`${prefix}_pro`]?.checked) {
-    const a = JSON.parse(val('json'));
-    if (!a || a.domain !== domain || !a.action || !a.data || typeof a.data !== 'object' || Array.isArray(a.data)) throw new Error('Azione Pro non valida per le entità selezionate.');
-    if (['entity_id','device_id','area_id'].some((k)=>k in a.data)) throw new Error('Il target è già definito dalle entità selezionate.');
-    return {domain:a.domain,action:a.action,data:a.data};
-  }
-  const action = val('command');
-  if (action === 'none') return null;
-  if (!action) throw new Error('Seleziona un comando disponibile.');
-  const data = {};
-  for (const key of knownData[action] || []) {
-    if (['rgb_color','brightness'].includes(key)) continue;
-    if (key === 'color_temp_kelvin' && val('color_mode') !== 'kelvin') continue;
-    const v = val(key);
-    if (v !== undefined && v !== '') data[key] = ['hvac_mode','fan_mode','preset_mode'].includes(key) ? v : Number(v);
-  }
-  if (domain === 'light' && action === 'turn_on' && val('color_mode') === 'rgb') data.rgb_color = val('color').slice(1).match(/../g).map((v)=>parseInt(v,16));
-  const required = {set_hvac_mode:['hvac_mode'],set_fan_mode:['fan_mode'],set_preset_mode:['preset_mode'],set_percentage:['percentage'],set_cover_position:['position']}[action] || [];
-  if (required.some((key)=>data[key] === undefined || data[key] === '')) throw new Error('Completa i parametri del comando selezionato.');
-  if (action === 'set_temperature' && data.temperature === undefined && (data.target_temp_low === undefined || data.target_temp_high === undefined)) throw new Error('Inserisci la temperatura richiesta.');
-  if (Object.values(data).some((v)=>typeof v === 'number' && !Number.isFinite(v))) throw new Error('Inserisci un valore numerico valido.');
-  return {domain,action,data};
-}
 const blankCondition = () => ({operator:'available',entity_id:'',value:null,lower:null,upper:null,children:[],minimum_duration_seconds:null,hysteresis:null});
 const operators = [['available','Entità disponibile'],['state_equals','Stato uguale a'],['state_not_equals','Stato diverso da'],['numeric_greater','Maggiore di'],['numeric_greater_or_equal','Maggiore o uguale'],['numeric_less','Minore di'],['numeric_less_or_equal','Minore o uguale'],['numeric_range','Compreso tra'],['and','Tutte le condizioni (E)'],['or','Almeno una condizione (O)']];
 function conditionForm(node, path = 'condition') {
@@ -312,6 +234,224 @@ function slotsForm(slots) {
 }
 function readSlots(form) {
   return [...form.querySelectorAll('[data-slot]')].map((node)=>{const i=node.dataset.slot;return {weekdays:[...node.querySelectorAll('input[type=checkbox]:checked')].map((x)=>Number(x.value)),start:form.elements[`slot_${i}_start`].value,end:form.elements[`slot_${i}_end`].value};});
+}
+// Desired-state action editor inspired by the weekly-schedule-card Quick Timer:
+// mode buttons, sliders and option chips. HA executes; this only builds payloads.
+
+
+const escA = uiEscape;
+const APPLY_STATE = 'apply_state';
+const intersect = (states, key) => states.length ? (states[0].attributes?.[key] || []).filter((value) => states.every((s) => (s.attributes?.[key] || []).includes(value))) : [];
+const every = (states, test) => states.length > 0 && states.every(test);
+const features = (s) => s.attributes?.supported_features || 0;
+const modeLabels = {off:'Spento',on:'Acceso',auto:'Auto',heat_cool:'Caldo/Freddo',cool:'Freddo',heat:'Caldo',dry:'Deumidifica',fan_only:'Ventola',open:'Apri',close:'Chiudi',stop:'Ferma',position:'Posizione',none:'Nessuna azione'};
+const modeIcons = {off:'power',on:'power',auto:'autorenew',heat_cool:'sun-snowflake',cool:'snowflake',heat:'fire',dry:'water-percent',fan_only:'fan',open:'arrow-up',close:'arrow-down',stop:'stop',position:'tune-vertical',none:'minus-circle-outline'};
+const pretty = (value) => modeLabels[value] || String(value).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+const round = (value, step) => Math.round(value / step) * step;
+
+function capabilities(hass, ids) {
+  const domain = ids[0]?.split('.')[0];
+  const states = ids.map((id) => hass.states?.[id]).filter(Boolean);
+  const numberLimit = (key, fallback, pick) => pick(...states.map((s) => Number(s.attributes?.[key] ?? fallback)));
+  const caps = {domain, states, attrs: states[0]?.attributes || {}};
+  if (domain === 'climate') {
+    caps.modes = intersect(states, 'hvac_modes');
+    caps.temperature = every(states, (s) => features(s) & 1 || s.attributes?.temperature != null);
+    caps.range = !caps.temperature && every(states, (s) => features(s) & 2);
+    caps.min = numberLimit('min_temp', 7, Math.max); caps.max = numberLimit('max_temp', 35, Math.min);
+    caps.step = Number(caps.attrs.target_temp_step) || 0.5;
+    caps.fan_modes = intersect(states, 'fan_modes');
+    caps.preset_modes = intersect(states, 'preset_modes');
+    caps.swing_modes = intersect(states, 'swing_modes');
+    caps.swing_horizontal_modes = intersect(states, 'swing_horizontal_modes');
+    caps.unit = caps.attrs.temperature_unit || hass.config?.unit_system?.temperature || '°C';
+  } else if (domain === 'cover') {
+    caps.modes = [['open', 1], ['close', 2], ['position', 4], ['stop', 8]].filter(([, bit]) => every(states, (s) => features(s) & bit)).map(([mode]) => mode);
+    if (!caps.modes.length) caps.modes = ['open', 'close'];
+  } else {
+    caps.modes = ['on', 'off'];
+    if (domain === 'light') {
+      const modes = states.map((s) => s.attributes?.supported_color_modes || []);
+      caps.dimmable = states.length > 0 && modes.every((m) => m.some((x) => !['onoff', 'unknown'].includes(x)));
+      caps.rgb = states.length > 0 && modes.every((m) => m.some((x) => ['hs', 'xy', 'rgb', 'rgbw', 'rgbww'].includes(x)));
+      caps.kelvin = states.length > 0 && modes.every((m) => m.includes('color_temp'));
+      caps.minK = numberLimit('min_color_temp_kelvin', 2000, Math.max); caps.maxK = numberLimit('max_color_temp_kelvin', 6500, Math.min);
+    }
+    if (domain === 'fan') {
+      caps.speed = every(states, (s) => features(s) & 1);
+      caps.preset_modes = intersect(states, 'preset_modes');
+    }
+  }
+  return caps;
+}
+
+// Translate a stored action into editable controls; null means "keep as Pro".
+function actionToUi(domain, action, caps) {
+  if (!action) return {mode: 'none'};
+  const data = action.data || {};
+  const keys = Object.keys(data);
+  const only = (...allowed) => keys.every((key) => allowed.includes(key));
+  if (action.domain !== domain) return null;
+  if (domain === 'climate') {
+    if (action.action === APPLY_STATE && only('state', 'temperature', 'target_temp_low', 'target_temp_high', 'fan_mode', 'preset_mode', 'swing_mode', 'swing_horizontal_mode')) return {...data, mode: data.state};
+    if (action.action === 'set_hvac_mode' && only('hvac_mode')) return {mode: data.hvac_mode};
+    if (action.action === 'set_temperature' && only('temperature', 'target_temp_low', 'target_temp_high', 'hvac_mode')) {
+      const {hvac_mode: mode, ...rest} = data;
+      return {...rest, mode: mode || (caps.states[0]?.state !== 'off' && caps.states[0]?.state) || caps.modes.find((m) => m !== 'off')};
+    }
+    return null;
+  }
+  if (domain === 'cover') {
+    const mode = {open_cover: 'open', close_cover: 'close', stop_cover: 'stop', set_cover_position: 'position'}[action.action];
+    return mode && only('position') ? {mode, position: data.position} : null;
+  }
+  if (action.action === 'turn_off' && !keys.length) return {mode: 'off'};
+  if (domain === 'light' && action.action === 'turn_on' && only('brightness_pct', 'brightness', 'rgb_color', 'color_temp_kelvin')) {
+    const brightness = data.brightness_pct ?? (data.brightness === undefined ? undefined : Math.round(data.brightness / 255 * 100));
+    return {mode: 'on', brightness_pct: brightness, color_mode: data.rgb_color ? 'rgb' : data.color_temp_kelvin ? 'kelvin' : '', rgb_color: data.rgb_color, color_temp_kelvin: data.color_temp_kelvin};
+  }
+  if (domain === 'fan') {
+    if (action.action === 'turn_on' && only('percentage', 'preset_mode')) return {mode: 'on', ...data};
+    if (action.action === 'set_percentage' && only('percentage')) return {mode: 'on', percentage: data.percentage};
+    if (action.action === 'set_preset_mode' && only('preset_mode')) return {mode: 'on', preset_mode: data.preset_mode};
+    return null;
+  }
+  if (action.action === 'turn_on' && !keys.length) return {mode: 'on'};
+  return null;
+}
+
+function defaults(caps, optional) {
+  if (optional) return {mode: 'none'};
+  const a = caps.attrs, current = caps.states[0]?.state;
+  if (caps.domain === 'climate') {
+    const mode = caps.modes.includes(current) && current !== 'off' ? current : caps.modes.find((m) => m !== 'off') || caps.modes[0];
+    return {mode, temperature: a.temperature ?? round((caps.min + caps.max) / 2, caps.step), target_temp_low: a.target_temp_low ?? caps.min, target_temp_high: a.target_temp_high ?? caps.max, fan_mode: a.fan_mode, preset_mode: a.preset_mode, swing_mode: a.swing_mode, swing_horizontal_mode: a.swing_horizontal_mode};
+  }
+  if (caps.domain === 'cover') return {mode: caps.modes.includes('position') ? 'position' : caps.modes[0], position: a.current_position ?? 50};
+  return {mode: 'on', brightness_pct: 100, percentage: a.percentage ?? 50};
+}
+
+function choices(name, label, values, selected, {primary = false, icons = false} = {}) {
+  if (!values.length) return '';
+  return `<div class="sc-field"><span class="sc-field-label" id="${name}-label">${escA(label)}</span><div class="sc-choices${primary ? ' sc-mode-buttons' : ''}" role="radiogroup" aria-labelledby="${name}-label">${values.map((v) => `<label class="sc-choice${String(v) === String(selected) ? ' is-selected' : ''}"><input type="radio" name="${name}" value="${escA(v)}" ${String(v) === String(selected) ? 'checked' : ''}>${icons ? `<ha-icon icon="mdi:${modeIcons[v] || 'tune'}" aria-hidden="true"></ha-icon>` : ''}<span>${escA(pretty(v))}</span></label>`).join('')}</div></div>`;
+}
+
+function rangeField(name, label, value, min, max, step = 1, unit = '') {
+  const v = Math.min(max, Math.max(min, Number(value ?? min)));
+  const fill = max > min ? (v - min) / (max - min) * 100 : 0;
+  return `<div class="sc-field sc-range"><div class="sc-range-head"><span class="sc-field-label" id="${name}-label">${escA(label)}</span><span class="sc-range-value"><input type="number" data-mirror="${name}" aria-labelledby="${name}-label" min="${min}" max="${max}" step="${step}" value="${v}">${escA(unit)}</span></div><input type="range" name="${name}" aria-labelledby="${name}-label" min="${min}" max="${max}" step="${step}" value="${v}" style="--sc-fill:${fill}%"><div class="sc-range-labels" aria-hidden="true"><span>${min}</span><span>${max}</span></div></div>`;
+}
+
+function describeState(state, domain) {
+  if (!state) return '';
+  const a = state.attributes || {};
+  const parts = [pretty(state.state)];
+  if (!['off', 'unknown', 'unavailable'].includes(state.state)) {
+    if (domain === 'climate' && a.temperature != null && state.state !== 'fan_only') parts.push(`${a.temperature}${a.temperature_unit || '°C'}`);
+    if (domain === 'climate' && a.fan_mode) parts.push(pretty(a.fan_mode));
+    if (domain === 'light' && a.brightness != null) parts.push(`${Math.round(a.brightness / 255 * 100)}%`);
+    if (domain === 'fan' && a.percentage != null) parts.push(`${a.percentage}%`);
+    if (domain === 'cover' && a.current_position != null) parts.push(`${a.current_position}%`);
+  }
+  return parts.join(' · ');
+}
+
+function actionForm(prefix, label, hass, ids, value, optional, draft = {}) {
+  const caps = capabilities(hass, ids);
+  const {domain} = caps;
+  if (!domain) return `<fieldset><legend>${label}</legend><p>Seleziona prima un’entità.</p></fieldset>`;
+  const parsed = value === undefined || value === null ? (optional ? {mode: 'none'} : null) : actionToUi(domain, value, caps);
+  const base = {...defaults(caps, false), ...(value ? parsed || {} : optional ? {mode: 'none'} : {})};
+  const get = (key) => draft[`${prefix}_${key}`] ?? base[key];
+  const pro = (draft[`${prefix}_pro`] ?? (value && !parsed ? 'on' : '')) === 'on';
+  const modes = [...(optional ? ['none'] : []), ...caps.modes];
+  const mode = modes.includes(get('mode')) ? get('mode') : modes[0];
+  const fields = [], more = [];
+  const name = (key) => `${prefix}_${key}`;
+  fields.push(choices(name('mode'), domain === 'climate' ? 'Modalità HVAC' : domain === 'cover' ? 'Comando' : 'Stato', modes, mode, {primary: true, icons: true}));
+  if (domain === 'climate' && !['none', 'off'].includes(mode)) {
+    if (mode !== 'fan_only' && caps.temperature) fields.push(rangeField(name('temperature'), `Temperatura (${caps.unit})`, get('temperature'), caps.min, caps.max, caps.step));
+    if (mode !== 'fan_only' && caps.range) fields.push(rangeField(name('target_temp_low'), `Minima (${caps.unit})`, get('target_temp_low'), caps.min, caps.max, caps.step), rangeField(name('target_temp_high'), `Massima (${caps.unit})`, get('target_temp_high'), caps.min, caps.max, caps.step));
+    fields.push(choices(name('fan_mode'), 'Ventola', caps.fan_modes, get('fan_mode')));
+    more.push(choices(name('preset_mode'), 'Preset', caps.preset_modes, get('preset_mode')));
+    more.push(choices(name('swing_mode'), 'Swing', caps.swing_modes, get('swing_mode')));
+    more.push(choices(name('swing_horizontal_mode'), 'Swing orizzontale', caps.swing_horizontal_modes, get('swing_horizontal_mode')));
+  }
+  if (domain === 'light' && mode === 'on') {
+    if (caps.dimmable) fields.push(rangeField(name('brightness_pct'), 'Luminosità', get('brightness_pct') ?? 100, 1, 100, 1, '%'));
+    const colors = [['', 'Non cambiare colore'], ...(caps.rgb ? [['rgb', 'Colore']] : []), ...(caps.kelvin ? [['kelvin', 'Temperatura colore']] : [])];
+    const colorMode = get('color_mode') || '';
+    if (colors.length > 1) fields.push(`<label>Colore<select name="${name('color_mode')}">${colors.map(([v, t]) => `<option value="${v}" ${v === colorMode ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`);
+    if (colorMode === 'rgb') fields.push(`<label>Colore<input name="${name('color')}" type="color" value="${escA(draft[name('color')] ?? (base.rgb_color ? '#' + base.rgb_color.map((v) => v.toString(16).padStart(2, '0')).join('') : '#ffffff'))}"></label>`);
+    if (colorMode === 'kelvin') fields.push(rangeField(name('color_temp_kelvin'), 'Temperatura colore', get('color_temp_kelvin') ?? 3000, caps.minK, caps.maxK, 50, 'K'));
+  }
+  if (domain === 'fan' && mode === 'on') {
+    if (caps.speed) fields.push(rangeField(name('percentage'), 'Velocità', get('percentage') ?? 50, 0, 100, 1, '%'));
+    fields.push(choices(name('preset_mode'), 'Preset', caps.preset_modes, get('preset_mode')));
+  }
+  if (domain === 'cover' && mode === 'position') fields.push(rangeField(name('position'), 'Posizione', get('position') ?? 50, 0, 100, 1, '%'));
+  const extra = more.filter(Boolean);
+  const current = caps.states.length === 1 ? `<p class="sc-current">Stato attuale <strong>${escA(describeState(caps.states[0], domain))}</strong></p>` : '';
+  const json = draft[name('json')] ?? JSON.stringify(value ? {domain: value.domain, action: value.action, data: value.data} : {domain, action: domain === 'climate' ? APPLY_STATE : caps.modes.includes('on') ? 'turn_on' : 'open_cover', data: domain === 'climate' ? {state: mode} : {}}, null, 2);
+  return `<fieldset class="sc-action" data-action="${prefix}" data-domain="${escA(domain)}"><legend>${label}</legend>${current}${pro ? '<p>Azione personalizzata conservata in modalità Pro.</p>' : ''}<div class="sc-action-fields" ${pro ? 'hidden' : ''}>${fields.join('')}${extra.length ? `<details class="sc-more" data-section="${prefix}-more"><summary>Altre opzioni</summary>${extra.join('')}</details>` : ''}</div><details data-section="${prefix}-pro"><summary>Pro · azione personalizzata</summary>${check(name('pro'), 'Usa JSON al posto dei controlli', pro)}<label>Azione JSON<textarea name="${name('json')}" rows="4">${escA(json)}</textarea></label></details></fieldset>`;
+}
+
+function readAction(form, prefix, domain) {
+  const el = (key) => form.elements[`${prefix}_${key}`];
+  // Radio groups come back as RadioNodeList; plain objects are accepted in tests.
+  const val = (key) => el(key)?.value;
+  const num = (key) => (val(key) === undefined || val(key) === '' ? undefined : Number(val(key)));
+  if (el('pro')?.checked) {
+    const a = JSON.parse(val('json'));
+    if (!a || a.domain !== domain || !a.action || !a.data || typeof a.data !== 'object' || Array.isArray(a.data)) throw new Error('Azione Pro non valida per le entità selezionate.');
+    if (['entity_id', 'device_id', 'area_id'].some((k) => k in a.data)) throw new Error('Il target è già definito dalle entità selezionate.');
+    if (a.action === APPLY_STATE && typeof a.data.state !== 'string') throw new Error('apply_state richiede il campo "state".');
+    return {domain: a.domain, action: a.action, data: a.data};
+  }
+  const mode = val('mode');
+  if (mode === 'none') return null;
+  if (!mode) throw new Error('Scegli cosa deve fare il dispositivo.');
+  const data = {};
+  const put = (key, value) => { if (value !== undefined && value !== '') data[key] = value; };
+  let action;
+  if (domain === 'climate') {
+    action = APPLY_STATE; data.state = mode;
+    if (mode !== 'off') {
+      if (mode !== 'fan_only') { put('temperature', num('temperature')); put('target_temp_low', num('target_temp_low')); put('target_temp_high', num('target_temp_high')); }
+      for (const key of ['fan_mode', 'preset_mode', 'swing_mode', 'swing_horizontal_mode']) put(key, val(key));
+    }
+  } else if (domain === 'cover') {
+    action = {open: 'open_cover', close: 'close_cover', stop: 'stop_cover', position: 'set_cover_position'}[mode];
+    if (mode === 'position') put('position', num('position'));
+  } else {
+    action = mode === 'off' ? 'turn_off' : 'turn_on';
+    if (mode === 'on' && domain === 'light') {
+      put('brightness_pct', num('brightness_pct'));
+      if (val('color_mode') === 'rgb' && val('color')) data.rgb_color = val('color').slice(1).match(/../g).map((v) => parseInt(v, 16));
+      if (val('color_mode') === 'kelvin') put('color_temp_kelvin', num('color_temp_kelvin'));
+    }
+    if (mode === 'on' && domain === 'fan') { put('percentage', num('percentage')); put('preset_mode', val('preset_mode')); }
+  }
+  if (!action) throw new Error('Comando non disponibile per questo dispositivo.');
+  if (action === 'set_cover_position' && data.position === undefined) throw new Error('Indica la posizione richiesta.');
+  if (Object.values(data).some((v) => typeof v === 'number' && !Number.isFinite(v))) throw new Error('Inserisci un valore numerico valido.');
+  return {domain, action, data};
+}
+
+// Short human text used for suggested names and notification messages.
+function describeAction(action) {
+  if (!action) return '';
+  const d = action.data || {};
+  if (action.action === APPLY_STATE) {
+    const parts = [pretty(d.state)];
+    if (d.temperature != null) parts.push(`${d.temperature}°`);
+    if (d.target_temp_low != null && d.target_temp_high != null) parts.push(`${d.target_temp_low}–${d.target_temp_high}°`);
+    if (d.fan_mode) parts.push(`ventola ${pretty(d.fan_mode).toLowerCase()}`);
+    return parts.join(' ');
+  }
+  const base = {turn_on: 'Accendi', turn_off: 'Spegni', open_cover: 'Apri', close_cover: 'Chiudi', stop_cover: 'Ferma', set_cover_position: `Posizione ${d.position}%`, set_hvac_mode: pretty(d.hvac_mode), set_temperature: `${d.temperature ?? ''}°`, set_percentage: `Velocità ${d.percentage}%`}[action.action] || pretty(action.action);
+  const extra = d.brightness_pct != null ? ` ${d.brightness_pct}%` : d.percentage != null && action.action === 'turn_on' ? ` ${d.percentage}%` : '';
+  return base + extra;
 }
 // Weekly wall-clock projection; execution and date exceptions remain server-side.
 function weeklySegments(schedules) {
@@ -346,8 +486,9 @@ function weeklySegments(schedules) {
 
 
 
-const STYLE = ":host {\n  overflow-anchor: none;\n  display: block;\n  font-family: var(--primary-font-family, Arial, sans-serif);\n  color: var(--primary-text-color, #202a35);\n  container-type: inline-size;\n  --sc-accent: var(--primary-color, #00897b);\n  --sc-muted: var(--secondary-text-color, #647180);\n  --sc-surface: var(--secondary-background-color, #f4f6f8);\n  --sc-border: var(--divider-color, #dce2e7);\n}\n* {\n  box-sizing: border-box;\n}\nha-card {\n  display: block;\n  overflow: hidden;\n  padding: 24px;\n  border-radius: var(--ha-card-border-radius, 20px);\n  background: var(--card-background-color, #fff);\n}\nbutton,\ninput,\nselect,\ntextarea {\n  font: inherit;\n  color: inherit;\n}\nbutton {\n  min-height: 40px;\n  padding: 9px 14px;\n  border: 1px solid var(--sc-border);\n  border-radius: 10px;\n  background: var(--card-background-color, #fff);\n  cursor: pointer;\n  line-height: 1.3;\n  transition:\n    background 0.15s,\n    border-color 0.15s;\n}\nbutton:hover {\n  background: var(--sc-surface);\n  border-color: var(--sc-accent);\n}\nbutton:disabled {\n  opacity: 0.5;\n  cursor: wait;\n}\nbutton:focus-visible,\ninput:focus-visible,\nselect:focus-visible,\ntextarea:focus-visible,\nsummary:focus-visible {\n  outline: 3px solid var(--sc-accent);\n  outline-offset: 3px;\n}\nbutton[data-command^=\"delete\"],\nbutton[data-command^=\"remove\"] {\n  color: var(--error-color, #b3261e);\n}\nbutton[data-command=\"newSchedule\"],\n.sc-actions button[type=\"submit\"] {\n  background: var(--sc-accent);\n  color: var(--text-primary-color, #fff);\n  border-color: var(--sc-accent);\n  font-weight: 600;\n}\n.card-header {\n  margin-bottom: 20px;\n}\n.hdr-row1 {\n  display: flex;\n  gap: 12px;\n  align-items: center;\n  margin-bottom: 20px;\n}\n.card-title {\n  font-size: 1.4rem;\n  font-weight: 700;\n  letter-spacing: -0.03em;\n}\n.sc-version {\n  margin-left: auto;\n  color: var(--sc-muted);\n  font-size: 0.72rem;\n  border: 1px solid var(--sc-border);\n  border-radius: 20px;\n  padding: 4px 8px;\n}\n.sc-eyebrow {\n  font-size: 0.7rem;\n  font-weight: 700;\n  letter-spacing: 0.1em;\n  text-transform: uppercase;\n  color: var(--sc-muted);\n  margin: 0 0 8px;\n}\n.hdr-row2 {\n  display: flex;\n  gap: 8px;\n  overflow-x: auto;\n  padding: 3px 2px 8px;\n}\n.profile-chip {\n  flex-shrink: 0;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  border-radius: 24px;\n  color: var(--sc-muted);\n}\n.profile-chip.viewed {\n  color: var(--primary-text-color, #202a35);\n  border-color: var(--pchip-color);\n  background: color-mix(\n    in srgb,\n    var(--pchip-color) 12%,\n    var(--card-background-color, #fff)\n  );\n  font-weight: 600;\n}\n.profile-chip.active-op::before {\n  content: \"\";\n  width: 7px;\n  height: 7px;\n  border-radius: 50%;\n  background: var(--success-color, #388e3c);\n}\n.profile-status-bar {\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 8px;\n  font-size: 0.8rem;\n  color: var(--sc-muted);\n  margin: 0 0 18px;\n}\n.sc-badge {\n  display: inline-flex;\n  align-items: center;\n  padding: 5px 9px;\n  border-radius: 6px;\n  background: var(--sc-surface);\n  font-size: 0.73rem;\n  font-weight: 600;\n}\n.sc-badge.is-active {\n  color: var(--success-color, #287d39);\n  background: color-mix(\n    in srgb,\n    var(--success-color, #287d39) 10%,\n    var(--card-background-color, #fff)\n  );\n}\n.tab-bar {\n  display: flex;\n  overflow-x: auto;\n  gap: 5px;\n  border-bottom: 1px solid var(--sc-border);\n  margin-bottom: 20px;\n  padding-bottom: 8px;\n}\n.tab {\n  white-space: nowrap;\n  border-color: transparent;\n  color: var(--sc-muted);\n}\n.tab.active {\n  color: var(--sc-accent);\n  background: color-mix(\n    in srgb,\n    var(--sc-accent) 9%,\n    var(--card-background-color, #fff)\n  );\n  font-weight: 600;\n}\n.sc-toolbar,\n.sc-controls,\n.sc-actions,\n.sc-entry-actions {\n  display: flex;\n  gap: 8px;\n  flex-wrap: wrap;\n  align-items: center;\n}\n.sc-toolbar {\n  justify-content: space-between;\n  margin: 20px 0 14px;\n}\n.sc-toolbar h2 {\n  font-size: 1.05rem;\n  margin: 0;\n}\n.sc-toolbar p {\n  margin: 4px 0 0;\n  color: var(--sc-muted);\n  font-size: 0.8rem;\n}\n.sc-controls {\n  margin: 14px 0;\n}\n.sc-week {\n  display: grid;\n  grid-template-columns: repeat(7, minmax(0, 1fr));\n  gap: 7px;\n  margin: 14px 0 24px;\n}\n.sc-day {\n  min-width: 0;\n  min-height: 124px;\n  padding: 10px 7px;\n  border: 1px solid var(--sc-border);\n  border-radius: 12px;\n  background: var(--sc-surface);\n}\n.sc-day > strong {\n  display: block;\n  color: var(--sc-muted);\n  font-size: 0.72rem;\n  font-weight: 600;\n  margin: 0 2px 10px;\n}\n.sc-slot {\n  margin-top: 7px;\n  padding: 8px 7px;\n  border-radius: 6px;\n  background: var(--card-background-color, #fff);\n  border-left: 3px solid var(--pchip-color, var(--sc-accent));\n  font-size: 0.72rem;\n  overflow-wrap: anywhere;\n  line-height: 1.5;\n}\n.sc-slot time {\n  font-size: 0.66rem;\n  font-variant-numeric: tabular-nums;\n  color: var(--sc-muted);\n}\n.sc-slot.is-off {\n  opacity: 0.6;\n  border-left-style: dashed;\n}\n.sc-day-empty {\n  color: var(--sc-muted);\n  font-size: 0.72rem;\n}\n.sc-list {\n  list-style: none;\n  padding: 0;\n  margin: 12px 0 22px;\n  display: grid;\n  gap: 10px;\n}\n.sc-entry {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 14px;\n  padding: 16px;\n  border: 1px solid var(--sc-border);\n  border-radius: 12px;\n}\n.sc-entry-copy {\n  min-width: 0;\n}\n.sc-entry strong {\n  font-size: 0.9rem;\n}\n.sc-meta {\n  font-size: 0.76rem;\n  color: var(--sc-muted);\n  margin: 6px 0 0;\n  overflow-wrap: anywhere;\n  line-height: 1.5;\n}\n.sc-entry-actions {\n  flex-shrink: 0;\n}\n.sc-entry-actions button {\n  font-size: 0.76rem;\n}\n.sc-empty {\n  padding: 30px 18px;\n  border: 1px dashed var(--sc-border);\n  border-radius: 14px;\n  background: var(--sc-surface);\n  text-align: center;\n  color: var(--sc-muted);\n  font-size: 0.85rem;\n  line-height: 1.6;\n}\n.sc-empty strong {\n  display: block;\n  color: var(--primary-text-color, #202a35);\n  font-size: 1rem;\n  margin-bottom: 5px;\n}\ndetails {\n  border: 1px solid var(--sc-border);\n  border-radius: 12px;\n  padding: 12px 14px;\n  margin: 12px 0;\n}\nsummary {\n  cursor: pointer;\n  font-size: 0.82rem;\n  font-weight: 600;\n  min-height: 24px;\n  line-height: 24px;\n}\ndetails[open] > summary {\n  margin-bottom: 12px;\n}\n.sc-operational {\n  margin-top: 20px;\n  color: var(--sc-muted);\n  font-size: 0.8rem;\n}\n.sc-operational p {\n  line-height: 1.6;\n}\n.sc-editor {\n  padding: 22px;\n  margin: 20px 0;\n  border: 1px solid var(--sc-border);\n  border-radius: 16px;\n  display: grid;\n  gap: 16px;\n  background: var(--sc-surface);\n}\n.sc-editor h3 {\n  font-size: 1.15rem;\n  margin: 0;\n  letter-spacing: -0.02em;\n}\n.sc-editor p {\n  font-size: 0.8rem;\n  color: var(--sc-muted);\n  line-height: 1.6;\n  margin: 0;\n}\n.sc-editor label {\n  display: grid;\n  gap: 7px;\n  font-size: 0.8rem;\n  font-weight: 500;\n  min-width: 0;\n}\n.sc-editor input,\n.sc-editor select,\n.sc-editor textarea {\n  width: 100%;\n  max-width: 100%;\n  min-height: 44px;\n  padding: 10px 12px;\n  background: var(--card-background-color, #fff);\n  border: 1px solid var(--sc-border);\n  border-radius: 8px;\n  font-size: 0.9rem;\n}\n.sc-editor textarea {\n  font-family: monospace;\n  line-height: 1.5;\n  resize: vertical;\n}\n.sc-editor fieldset {\n  min-width: 0;\n  border: 1px solid var(--sc-border);\n  border-radius: 12px;\n  padding: 16px;\n  display: grid;\n  gap: 14px;\n  background: var(--card-background-color, #fff);\n  margin: 0;\n}\n.sc-editor legend {\n  font-size: 0.8rem;\n  font-weight: 700;\n  padding: 0 7px;\n}\n.sc-editor details {\n  margin: 0;\n  background: var(--card-background-color, #fff);\n}\n.sc-editor details > * + * {\n  margin-top: 12px;\n}\n.sc-check {\n  display: flex !important;\n  align-items: center;\n  gap: 9px !important;\n}\n.sc-editor input[type=\"checkbox\"] {\n  width: 18px !important;\n  min-height: 18px;\n  height: 18px;\n  accent-color: var(--sc-accent);\n  flex-shrink: 0;\n}\n.sc-entities {\n  max-height: 240px;\n  overflow: auto;\n  display: grid;\n  gap: 5px;\n  border: 1px solid var(--sc-border);\n  padding: 6px;\n  border-radius: 10px;\n  background: var(--card-background-color, #fff);\n}\n.sc-entities label {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  min-height: 48px;\n  padding: 8px 10px;\n  border-radius: 7px;\n  font-weight: 400;\n}\n.sc-entities label:hover {\n  background: var(--sc-surface);\n}\n.sc-entity-name {\n  display: block;\n  font-weight: 500;\n}\n.sc-entity-id {\n  display: block;\n  font-size: 0.7rem;\n  color: var(--sc-muted);\n  margin-top: 3px;\n  overflow-wrap: anywhere;\n}\n.sc-days {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 7px;\n}\n.sc-days label {\n  padding: 8px;\n  border: 1px solid var(--sc-border);\n  border-radius: 8px;\n}\n.sc-actions {\n  padding-top: 16px;\n  border-top: 1px solid var(--sc-border);\n}\n.sc-actions button {\n  min-width: 100px;\n}\n.status,\n.sc-error {\n  padding: 12px 14px;\n  border-radius: 10px;\n  font-size: 0.85rem;\n  line-height: 1.6;\n  margin: 12px 0;\n  background: var(--sc-surface);\n}\n.sc-error,\n.error {\n  color: var(--error-color, #b3261e);\n  background: color-mix(\n    in srgb,\n    var(--error-color, #b3261e) 8%,\n    var(--card-background-color, #fff)\n  );\n  overflow-wrap: anywhere;\n}\n[hidden],\n.sc-entities label[hidden] {\n  display: none !important;\n}\n@container (max-width:600px) {\n  ha-card {\n    padding: 16px;\n  }\n  .card-title {\n    font-size: 1.2rem;\n  }\n  .sc-week {\n    grid-template-columns: 1fr;\n    gap: 7px;\n  }\n  .sc-day {\n    display: grid;\n    grid-template-columns: 34px 1fr;\n    gap: 5px 9px;\n    min-height: 45px;\n    padding: 9px;\n  }\n  .sc-day > strong {\n    grid-row: 1/20;\n    margin: 5px 0;\n  }\n  .sc-slot {\n    margin: 0;\n    padding: 6px 9px;\n  }\n  .sc-slot time {\n    margin-right: 8px;\n  }\n  .sc-entry {\n    align-items: flex-start;\n    flex-direction: column;\n  }\n  .sc-entry-actions {\n    align-self: flex-end;\n  }\n  .sc-editor {\n    padding: 14px;\n  }\n  .sc-toolbar {\n    align-items: flex-start;\n  }\n  .sc-toolbar .sc-controls {\n    margin: 0;\n  }\n  .sc-days {\n    gap: 5px;\n  }\n  .sc-days label {\n    padding: 7px;\n  }\n  .sc-editor fieldset {\n    padding: 12px;\n  }\n}\n@media (prefers-reduced-motion: reduce) {\n  * {\n    transition: none !important;\n  }\n}\n.sc-slot time {\n  display: block;\n}\n.sc-editor {\n  scroll-margin-top: 16px;\n}\n.sc-error-details textarea {\n  width: 100%;\n  box-sizing: border-box;\n  background: var(--card-background-color, #fff);\n  color: var(--primary-text-color, #202a35);\n  border: 1px solid var(--sc-border);\n  border-radius: 8px;\n  padding: 10px;\n  font: 12px/1.5 monospace;\n  resize: vertical;\n}\n.sc-error-details p {\n  font-size: .8rem;\n  color: var(--sc-muted);\n}\n.sc-timeline {\n  overflow-x: auto;\n  padding: 8px 0 14px;\n  overscroll-behavior-x: contain;\n}\n.sc-timeline-head, .sc-timeline-grid {\n  display: grid;\n  grid-template-columns: 44px repeat(7,minmax(68px,1fr));\n  gap: 5px;\n  min-width: 555px;\n}\n.sc-timeline-head { margin-bottom: 10px; text-align: center; font-size: .74rem; color: var(--sc-muted); }\n.sc-time-axis, .sc-day-track { position: relative; height: 576px; }\n.sc-time-axis span { position:absolute; right:4px; transform:translateY(-50%); font-size:.65rem; font-variant-numeric:tabular-nums; color:var(--sc-muted); }\n.sc-day-track {\n  border-radius: 7px;\n  background: repeating-linear-gradient(to bottom, var(--sc-border) 0 1px, transparent 1px 24px), var(--sc-surface);\n}\n.sc-time-block {\n  position:absolute;\n  display:flex;\n  flex-direction:column;\n  align-items:flex-start;\n  justify-content:flex-start;\n  min-height:8px;\n  padding:3px 4px;\n  border:1px solid var(--card-background-color,#fff);\n  border-left:3px solid var(--block-color);\n  border-radius:5px;\n  background:color-mix(in srgb,var(--block-color) 22%,var(--card-background-color,#fff));\n  color:var(--primary-text-color,#202a35);\n  font-size:.68rem;\n  line-height:1.3;\n  text-align:left;\n  overflow:hidden;\n}\n.sc-time-block span { font-weight:600; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }\n.sc-time-block small { font-size:.6rem; white-space:nowrap; }\n.sc-time-block:hover { background:color-mix(in srgb,var(--block-color) 38%,var(--card-background-color,#fff)); }\n.sc-time-block.is-off { opacity:.55; border-style:dashed; }\n.sc-dialog {\n  width:min(680px,calc(100vw - 24px));\n  max-height:calc(100dvh - 32px);\n  padding:0 20px 20px;\n  border:1px solid var(--sc-border);\n  border-radius:18px;\n  background:var(--card-background-color,#fff);\n  color:var(--primary-text-color,#202a35);\n  box-shadow:0 20px 70px #0005;\n  overscroll-behavior:contain;\n}\n.sc-dialog::backdrop { background:#0008; }\n.sc-dialog-heading { position:sticky; top:0; z-index:2; display:flex; align-items:center; justify-content:space-between; padding:12px 0; background:var(--card-background-color,#fff); border-bottom:1px solid var(--sc-border); }\n.sc-dialog-heading button { min-width:40px; }\n.sc-dialog .sc-editor { margin:16px 0 0; padding:0; border:0; background:transparent; }\n.sc-dialog .sc-actions { position:sticky; bottom:-20px; padding:12px 0; background:var(--card-background-color,#fff); z-index:1; }\n@media (max-width:600px) {\n  .sc-dialog { width:calc(100vw - 12px); max-height:calc(100dvh - 12px); padding:0 14px 14px; }\n  .sc-dialog .sc-actions { bottom:-14px; }\n}\n@container (max-width:600px) {\n  .sc-slot time {\n    display: inline-block;\n  }\n}\n";
-const CARD_VERSION = '0.3.3';
+
+const STYLE = ":host {\n  overflow-anchor: none;\n  display: block;\n  font-family: var(--primary-font-family, Arial, sans-serif);\n  color: var(--primary-text-color, #202a35);\n  container-type: inline-size;\n  --sc-accent: var(--primary-color, #00897b);\n  --sc-muted: var(--secondary-text-color, #647180);\n  --sc-surface: var(--secondary-background-color, #f4f6f8);\n  --sc-border: var(--divider-color, #dce2e7);\n}\n* {\n  box-sizing: border-box;\n}\nha-card {\n  display: block;\n  overflow: hidden;\n  padding: 24px;\n  border-radius: var(--ha-card-border-radius, 20px);\n  background: var(--card-background-color, #fff);\n}\nbutton,\ninput,\nselect,\ntextarea {\n  font: inherit;\n  color: inherit;\n}\nbutton {\n  min-height: 40px;\n  padding: 9px 14px;\n  border: 1px solid var(--sc-border);\n  border-radius: 10px;\n  background: var(--card-background-color, #fff);\n  cursor: pointer;\n  line-height: 1.3;\n  transition:\n    background 0.15s,\n    border-color 0.15s;\n}\nbutton:hover {\n  background: var(--sc-surface);\n  border-color: var(--sc-accent);\n}\nbutton:disabled {\n  opacity: 0.5;\n  cursor: wait;\n}\nbutton:focus-visible,\ninput:focus-visible,\nselect:focus-visible,\ntextarea:focus-visible,\nsummary:focus-visible {\n  outline: 3px solid var(--sc-accent);\n  outline-offset: 3px;\n}\nbutton[data-command^=\"delete\"],\nbutton[data-command^=\"remove\"] {\n  color: var(--error-color, #b3261e);\n}\nbutton[data-command=\"newSchedule\"],\n.sc-actions button[type=\"submit\"] {\n  background: var(--sc-accent);\n  color: var(--text-primary-color, #fff);\n  border-color: var(--sc-accent);\n  font-weight: 600;\n}\n.card-header {\n  margin-bottom: 20px;\n}\n.hdr-row1 {\n  display: flex;\n  gap: 12px;\n  align-items: center;\n  margin-bottom: 20px;\n}\n.card-title {\n  font-size: 1.4rem;\n  font-weight: 700;\n  letter-spacing: -0.03em;\n}\n.sc-version {\n  margin-left: auto;\n  color: var(--sc-muted);\n  font-size: 0.72rem;\n  border: 1px solid var(--sc-border);\n  border-radius: 20px;\n  padding: 4px 8px;\n}\n.sc-eyebrow {\n  font-size: 0.7rem;\n  font-weight: 700;\n  letter-spacing: 0.1em;\n  text-transform: uppercase;\n  color: var(--sc-muted);\n  margin: 0 0 8px;\n}\n.hdr-row2 {\n  display: flex;\n  gap: 8px;\n  overflow-x: auto;\n  padding: 3px 2px 8px;\n}\n.profile-chip {\n  flex-shrink: 0;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  border-radius: 24px;\n  color: var(--sc-muted);\n}\n.profile-chip.viewed {\n  color: var(--primary-text-color, #202a35);\n  border-color: var(--pchip-color);\n  background: color-mix(\n    in srgb,\n    var(--pchip-color) 12%,\n    var(--card-background-color, #fff)\n  );\n  font-weight: 600;\n}\n.profile-chip.active-op::before {\n  content: \"\";\n  width: 7px;\n  height: 7px;\n  border-radius: 50%;\n  background: var(--success-color, #388e3c);\n}\n.profile-status-bar {\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 8px;\n  font-size: 0.8rem;\n  color: var(--sc-muted);\n  margin: 0 0 18px;\n}\n.sc-badge {\n  display: inline-flex;\n  align-items: center;\n  padding: 5px 9px;\n  border-radius: 6px;\n  background: var(--sc-surface);\n  font-size: 0.73rem;\n  font-weight: 600;\n}\n.sc-badge.is-active {\n  color: var(--success-color, #287d39);\n  background: color-mix(\n    in srgb,\n    var(--success-color, #287d39) 10%,\n    var(--card-background-color, #fff)\n  );\n}\n.tab-bar {\n  display: flex;\n  overflow-x: auto;\n  gap: 5px;\n  border-bottom: 1px solid var(--sc-border);\n  margin-bottom: 20px;\n  padding-bottom: 8px;\n}\n.tab {\n  white-space: nowrap;\n  border-color: transparent;\n  color: var(--sc-muted);\n}\n.tab.active {\n  color: var(--sc-accent);\n  background: color-mix(\n    in srgb,\n    var(--sc-accent) 9%,\n    var(--card-background-color, #fff)\n  );\n  font-weight: 600;\n}\n.sc-toolbar,\n.sc-controls,\n.sc-actions,\n.sc-entry-actions {\n  display: flex;\n  gap: 8px;\n  flex-wrap: wrap;\n  align-items: center;\n}\n.sc-toolbar {\n  justify-content: space-between;\n  margin: 20px 0 14px;\n}\n.sc-toolbar h2 {\n  font-size: 1.05rem;\n  margin: 0;\n}\n.sc-toolbar p {\n  margin: 4px 0 0;\n  color: var(--sc-muted);\n  font-size: 0.8rem;\n}\n.sc-controls {\n  margin: 14px 0;\n}\n.sc-week {\n  display: grid;\n  grid-template-columns: repeat(7, minmax(0, 1fr));\n  gap: 7px;\n  margin: 14px 0 24px;\n}\n.sc-day {\n  min-width: 0;\n  min-height: 124px;\n  padding: 10px 7px;\n  border: 1px solid var(--sc-border);\n  border-radius: 12px;\n  background: var(--sc-surface);\n}\n.sc-day > strong {\n  display: block;\n  color: var(--sc-muted);\n  font-size: 0.72rem;\n  font-weight: 600;\n  margin: 0 2px 10px;\n}\n.sc-slot {\n  margin-top: 7px;\n  padding: 8px 7px;\n  border-radius: 6px;\n  background: var(--card-background-color, #fff);\n  border-left: 3px solid var(--pchip-color, var(--sc-accent));\n  font-size: 0.72rem;\n  overflow-wrap: anywhere;\n  line-height: 1.5;\n}\n.sc-slot time {\n  font-size: 0.66rem;\n  font-variant-numeric: tabular-nums;\n  color: var(--sc-muted);\n}\n.sc-slot.is-off {\n  opacity: 0.6;\n  border-left-style: dashed;\n}\n.sc-day-empty {\n  color: var(--sc-muted);\n  font-size: 0.72rem;\n}\n.sc-list {\n  list-style: none;\n  padding: 0;\n  margin: 4px 0 0;\n  display: grid;\n  gap: 4px;\n}\n.sc-entry {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  padding: 7px 8px 7px 12px;\n  border: 1px solid var(--sc-border);\n  border-left: 3px solid var(--block-color, var(--sc-accent));\n  border-radius: 8px;\n}\n.sc-entry-copy {\n  min-width: 0;\n  display: grid;\n  gap: 2px;\n}\n.sc-entry strong {\n  font-size: 0.84rem;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.sc-entry .sc-meta {\n  margin: 0;\n  font-size: 0.72rem;\n  line-height: 1.35;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.sc-meta {\n  font-size: 0.76rem;\n  color: var(--sc-muted);\n  margin: 6px 0 0;\n  overflow-wrap: anywhere;\n  line-height: 1.5;\n}\n.sc-entry-actions {\n  flex-shrink: 0;\n  flex-wrap: nowrap !important;\n  gap: 4px !important;\n}\n.sc-entry-actions button {\n  font-size: 0.72rem;\n  min-height: 30px;\n  padding: 4px 9px;\n  border-radius: 7px;\n}\n.sc-empty {\n  padding: 30px 18px;\n  border: 1px dashed var(--sc-border);\n  border-radius: 14px;\n  background: var(--sc-surface);\n  text-align: center;\n  color: var(--sc-muted);\n  font-size: 0.85rem;\n  line-height: 1.6;\n}\n.sc-empty strong {\n  display: block;\n  color: var(--primary-text-color, #202a35);\n  font-size: 1rem;\n  margin-bottom: 5px;\n}\ndetails {\n  border: 1px solid var(--sc-border);\n  border-radius: 12px;\n  padding: 12px 14px;\n  margin: 12px 0;\n}\nsummary {\n  cursor: pointer;\n  font-size: 0.82rem;\n  font-weight: 600;\n  min-height: 24px;\n  line-height: 24px;\n}\ndetails[open] > summary {\n  margin-bottom: 12px;\n}\n.sc-operational {\n  margin-top: 20px;\n  color: var(--sc-muted);\n  font-size: 0.8rem;\n}\n.sc-operational p {\n  line-height: 1.6;\n}\n.sc-editor {\n  padding: 22px;\n  margin: 20px 0;\n  border: 1px solid var(--sc-border);\n  border-radius: 16px;\n  display: grid;\n  gap: 16px;\n  background: var(--sc-surface);\n}\n.sc-editor h3 {\n  font-size: 1.15rem;\n  margin: 0;\n  letter-spacing: -0.02em;\n}\n.sc-editor p {\n  font-size: 0.8rem;\n  color: var(--sc-muted);\n  line-height: 1.6;\n  margin: 0;\n}\n.sc-editor label {\n  display: grid;\n  gap: 7px;\n  font-size: 0.8rem;\n  font-weight: 500;\n  min-width: 0;\n}\n.sc-editor input,\n.sc-editor select,\n.sc-editor textarea {\n  width: 100%;\n  max-width: 100%;\n  min-height: 44px;\n  padding: 10px 12px;\n  background: var(--card-background-color, #fff);\n  border: 1px solid var(--sc-border);\n  border-radius: 8px;\n  font-size: 0.9rem;\n}\n.sc-editor textarea {\n  font-family: monospace;\n  line-height: 1.5;\n  resize: vertical;\n}\n.sc-editor fieldset {\n  min-width: 0;\n  border: 1px solid var(--sc-border);\n  border-radius: 12px;\n  padding: 16px;\n  display: grid;\n  gap: 14px;\n  background: var(--card-background-color, #fff);\n  margin: 0;\n}\n.sc-editor legend {\n  font-size: 0.8rem;\n  font-weight: 700;\n  padding: 0 7px;\n}\n.sc-editor details {\n  margin: 0;\n  background: var(--card-background-color, #fff);\n}\n.sc-editor details > * + * {\n  margin-top: 12px;\n}\n.sc-check {\n  display: flex !important;\n  align-items: center;\n  gap: 9px !important;\n}\n.sc-editor input[type=\"checkbox\"] {\n  width: 18px !important;\n  min-height: 18px;\n  height: 18px;\n  accent-color: var(--sc-accent);\n  flex-shrink: 0;\n}\n.sc-entities {\n  max-height: 240px;\n  overflow: auto;\n  display: grid;\n  gap: 5px;\n  border: 1px solid var(--sc-border);\n  padding: 6px;\n  border-radius: 10px;\n  background: var(--card-background-color, #fff);\n}\n.sc-entities label {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  min-height: 48px;\n  padding: 8px 10px;\n  border-radius: 7px;\n  font-weight: 400;\n}\n.sc-entities label:hover {\n  background: var(--sc-surface);\n}\n.sc-entity-name {\n  display: block;\n  font-weight: 500;\n}\n.sc-entity-id {\n  display: block;\n  font-size: 0.7rem;\n  color: var(--sc-muted);\n  margin-top: 3px;\n  overflow-wrap: anywhere;\n}\n.sc-days {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 7px;\n}\n.sc-days label {\n  padding: 8px;\n  border: 1px solid var(--sc-border);\n  border-radius: 8px;\n}\n.sc-actions {\n  padding-top: 16px;\n  border-top: 1px solid var(--sc-border);\n}\n.sc-actions button {\n  min-width: 100px;\n}\n.status,\n.sc-error {\n  padding: 12px 14px;\n  border-radius: 10px;\n  font-size: 0.85rem;\n  line-height: 1.6;\n  margin: 12px 0;\n  background: var(--sc-surface);\n}\n.sc-error,\n.error {\n  color: var(--error-color, #b3261e);\n  background: color-mix(\n    in srgb,\n    var(--error-color, #b3261e) 8%,\n    var(--card-background-color, #fff)\n  );\n  overflow-wrap: anywhere;\n}\n[hidden],\n.sc-entities label[hidden] {\n  display: none !important;\n}\n@container (max-width:600px) {\n  ha-card {\n    padding: 16px;\n  }\n  .card-title {\n    font-size: 1.2rem;\n  }\n  .sc-week {\n    grid-template-columns: 1fr;\n    gap: 7px;\n  }\n  .sc-day {\n    display: grid;\n    grid-template-columns: 34px 1fr;\n    gap: 5px 9px;\n    min-height: 45px;\n    padding: 9px;\n  }\n  .sc-day > strong {\n    grid-row: 1/20;\n    margin: 5px 0;\n  }\n  .sc-slot {\n    margin: 0;\n    padding: 6px 9px;\n  }\n  .sc-slot time {\n    margin-right: 8px;\n  }\n  .sc-editor {\n    padding: 14px;\n  }\n  .sc-toolbar {\n    align-items: flex-start;\n  }\n  .sc-toolbar .sc-controls {\n    margin: 0;\n  }\n  .sc-days {\n    gap: 5px;\n  }\n  .sc-days label {\n    padding: 7px;\n  }\n  .sc-editor fieldset {\n    padding: 12px;\n  }\n}\n@media (prefers-reduced-motion: reduce) {\n  * {\n    transition: none !important;\n  }\n}\n.sc-slot time {\n  display: block;\n}\n.sc-editor {\n  scroll-margin-top: 16px;\n}\n.sc-error-details textarea {\n  width: 100%;\n  box-sizing: border-box;\n  background: var(--card-background-color, #fff);\n  color: var(--primary-text-color, #202a35);\n  border: 1px solid var(--sc-border);\n  border-radius: 8px;\n  padding: 10px;\n  font: 12px/1.5 monospace;\n  resize: vertical;\n}\n.sc-error-details p {\n  font-size: .8rem;\n  color: var(--sc-muted);\n}\n.sc-timeline {\n  overflow-x: auto;\n  padding: 8px 0 14px;\n  overscroll-behavior-x: contain;\n}\n.sc-timeline-head, .sc-timeline-grid {\n  display: grid;\n  grid-template-columns: 44px repeat(7,minmax(68px,1fr));\n  gap: 5px;\n  min-width: 555px;\n}\n.sc-timeline-head { margin-bottom: 10px; text-align: center; font-size: .74rem; color: var(--sc-muted); }\n.sc-time-axis, .sc-day-track { position: relative; height: 576px; }\n.sc-time-axis span { position:absolute; right:4px; transform:translateY(-50%); font-size:.65rem; font-variant-numeric:tabular-nums; color:var(--sc-muted); }\n.sc-day-track {\n  border-radius: 7px;\n  background: repeating-linear-gradient(to bottom, var(--sc-border) 0 1px, transparent 1px 24px), var(--sc-surface);\n}\n.sc-time-block {\n  position:absolute;\n  display:flex;\n  flex-direction:column;\n  align-items:flex-start;\n  justify-content:flex-start;\n  min-height:8px;\n  padding:3px 4px;\n  border:1px solid var(--card-background-color,#fff);\n  border-left:3px solid var(--block-color);\n  border-radius:5px;\n  background:color-mix(in srgb,var(--block-color) 22%,var(--card-background-color,#fff));\n  color:var(--primary-text-color,#202a35);\n  font-size:.68rem;\n  line-height:1.3;\n  text-align:left;\n  overflow:hidden;\n}\n.sc-time-block span { font-weight:600; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }\n.sc-time-block small { font-size:.6rem; white-space:nowrap; }\n.sc-time-block:hover { background:color-mix(in srgb,var(--block-color) 38%,var(--card-background-color,#fff)); }\n.sc-time-block.is-off { opacity:.55; border-style:dashed; }\n.sc-dialog {\n  width:min(680px,calc(100vw - 24px));\n  max-height:calc(100dvh - 32px);\n  padding:0 20px 20px;\n  border:1px solid var(--sc-border);\n  border-radius:18px;\n  background:var(--card-background-color,#fff);\n  color:var(--primary-text-color,#202a35);\n  box-shadow:0 20px 70px #0005;\n  overscroll-behavior:contain;\n}\n.sc-dialog::backdrop { background:#0008; }\n.sc-dialog-heading { position:sticky; top:0; z-index:2; display:flex; align-items:center; justify-content:space-between; padding:12px 0; background:var(--card-background-color,#fff); border-bottom:1px solid var(--sc-border); }\n.sc-dialog-heading button { min-width:40px; }\n.sc-dialog .sc-editor { margin:16px 0 0; padding:0; border:0; background:transparent; }\n.sc-dialog .sc-actions { position:sticky; bottom:-20px; padding:12px 0; background:var(--card-background-color,#fff); z-index:1; }\n@media (max-width:600px) {\n  .sc-dialog { width:calc(100vw - 12px); max-height:calc(100dvh - 12px); padding:0 14px 14px; }\n  .sc-dialog .sc-actions { bottom:-14px; }\n}\n@container (max-width:600px) {\n  .sc-slot time {\n    display: inline-block;\n  }\n}\n\n/* Desired-state action editor (weekly-schedule-card Quick Timer style) */\n.sc-field { display: grid; gap: 8px; min-width: 0; }\n.sc-field-label { font-size: .8rem; font-weight: 500; }\n.sc-current { display: flex; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--sc-border); }\n.sc-current strong { color: var(--primary-text-color, #202a35); font-weight: 600; }\n.sc-action-fields { display: grid; gap: 16px; }\n.sc-choices {\n  display: flex; flex-wrap: wrap; gap: 4px; padding: 4px;\n  border-radius: 12px; background: var(--sc-surface);\n}\n.sc-editor label.sc-choice {\n  position: relative; flex: 1 1 auto; display: flex; flex-direction: column;\n  align-items: center; justify-content: center; gap: 4px; min-width: 64px; min-height: 42px;\n  padding: 8px 10px; border: 1px solid transparent; border-radius: 9px;\n  font-size: .8rem; font-weight: 500; text-align: center; cursor: pointer; color: var(--sc-muted);\n}\n.sc-editor .sc-choice input {\n  position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; margin: 0;\n  opacity: 0; cursor: pointer;\n}\n.sc-choice:hover { color: var(--primary-text-color, #202a35); }\n.sc-choice.is-selected, .sc-choice:has(input:checked) {\n  color: var(--sc-accent); border-color: var(--sc-accent);\n  background: var(--card-background-color, #fff); font-weight: 600;\n  box-shadow: 0 1px 3px #0001;\n}\n.sc-choice:has(input:focus-visible) { outline: 3px solid var(--sc-accent); outline-offset: 2px; }\n.sc-mode-buttons { background: transparent; padding: 0; gap: 6px; }\n.sc-mode-buttons .sc-choice { min-height: 64px; border-color: var(--sc-border); background: var(--card-background-color, #fff); }\n.sc-choice ha-icon { --mdc-icon-size: 20px; }\n.sc-range-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }\n.sc-range-value { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; color: var(--sc-accent); }\n.sc-editor .sc-range-value input {\n  width: 84px; min-height: 40px; padding: 6px 10px; text-align: center;\n  font-size: 1.15rem; font-weight: 600; color: var(--sc-accent); background: var(--sc-surface); border-color: transparent;\n}\n.sc-editor input[type=\"range\"] {\n  -webkit-appearance: none; appearance: none; width: 100%; min-height: 24px; padding: 0;\n  border: 0; background: transparent; accent-color: var(--sc-accent);\n}\ninput[type=\"range\"]::-webkit-slider-runnable-track { height: 6px; border-radius: 6px; background: linear-gradient(to right, var(--sc-accent) var(--sc-fill, 0%), var(--sc-border) var(--sc-fill, 0%)); }\ninput[type=\"range\"]::-moz-range-track { height: 6px; border-radius: 6px; background: var(--sc-border); }\ninput[type=\"range\"]::-moz-range-progress { height: 6px; border-radius: 6px; background: var(--sc-accent); }\ninput[type=\"range\"]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -8px; border-radius: 50%; border: 4px solid var(--card-background-color, #fff); background: var(--sc-accent); box-shadow: 0 0 0 1px var(--sc-accent); }\ninput[type=\"range\"]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; border: 4px solid var(--card-background-color, #fff); background: var(--sc-accent); box-shadow: 0 0 0 1px var(--sc-accent); }\n.sc-range-labels { display: flex; justify-content: space-between; font-size: .7rem; color: var(--sc-muted); }\n.sc-more { padding: 10px 12px; }\n.sc-name-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }\n.sc-name-row button { min-height: 44px; }\n.sc-summary { padding: 12px 14px; border-radius: 10px; background: var(--card-background-color, #fff); border: 1px solid var(--sc-border); }\n.sc-summary p { margin-top: 6px !important; }\n.sc-notice { color: var(--success-color, #287d39); background: color-mix(in srgb, var(--success-color, #287d39) 9%, var(--card-background-color, #fff)); }\n.sc-warning { color: var(--warning-color, #8a5a00); background: color-mix(in srgb, var(--warning-color, #f0a500) 12%, var(--card-background-color, #fff)); }\n.sc-actions button.sc-danger { background: var(--error-color, #b3261e); border-color: var(--error-color, #b3261e); color: #fff; }\n.sc-overview-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; font-size: .82rem; }\n.sc-overview-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 8px 10px; border: 1px solid var(--sc-border); border-radius: 8px; }\n.sc-overview-row .sc-meta { margin: 0; flex-basis: 100%; padding-left: 18px; }\n.sc-overview-list li:not(.sc-overview-row) { padding: 8px 10px; border-radius: 8px; background: var(--sc-surface); }\n.sc-overview-list li .sc-meta { display: block; margin-top: 3px; }\n.sc-overview h4 { margin: 14px 0 8px; font-size: .82rem; }\n.sc-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pchip-color, var(--sc-accent)); flex-shrink: 0; }\n.sc-maintenance .sc-controls { margin: 10px 0 0; }\n";
+const CARD_VERSION = "0.3.5";
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
@@ -356,6 +497,25 @@ const area = (name, title, value, rows = 4) => `<label>${title}<textarea name="$
 const select = (name, title, options, current) => `<label>${title}<select name="${name}">${options.map(([value, label]) => `<option value="${esc(value)}" ${value === current ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label>`;
 const button = (name, label, id = '') => `<button type="button" data-command="${name}" data-id="${esc(id)}">${esc(label)}</button>`;
 const json = (value) => JSON.stringify(clean(value), null, 2);
+const byOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0) || String(a.name).localeCompare(String(b.name));
+const daysLabel = (days) => {
+  const d = [...days].sort((a, b) => a - b), key = d.join('');
+  if (key === '0123456') return 'Tutti i giorni';
+  if (key === '01234') return 'Lun–Ven';
+  if (key === '56') return 'Weekend';
+  return d.length > 2 && d.every((v, i) => !i || v === d[i - 1] + 1) ? `${DAYS[d[0]]}–${DAYS[d.at(-1)]}` : d.map((i) => DAYS[i]).join(', ');
+};
+const newer = (a, b) => {
+  const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
+  for (let i = 0; i < 3; i += 1) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+  return false;
+};
+// Backend and card versions come from the same manifest at build time.
+function versionAdvice(backend) {
+  if (backend === CARD_VERSION) return '';
+  if (!backend || newer(CARD_VERSION, backend)) return `La card v${CARD_VERSION} è aggiornata, ma Home Assistant esegue ancora l’integrazione ${backend ? `v${backend}` : 'precedente'}. Riavvia Home Assistant (Impostazioni → Sistema → Riavvia) per attivare il nuovo backend.`;
+  return `L’integrazione v${backend} è attiva, ma questa pagina usa ancora la card v${CARD_VERSION}. Ricarica la pagina; nell’app mobile usa “Ricarica” o svuota la cache del frontend.`;
+}
 class ScheduleCreatorCard extends HTMLElement {
   constructor() {
     super(); this.attachShadow({ mode: 'open' });
@@ -373,8 +533,11 @@ class ScheduleCreatorCard extends HTMLElement {
     });
     this.shadowRoot.addEventListener('input', (e) => {
       if (!e.target.closest('form')) return;
-      this.changedFields?.add(e.target.name);
+      this.syncRange(e.target);
+      const name = e.target.getAttribute('name') || e.target.dataset.mirror;
+      this.changedFields?.add(name);
       this.capture();
+      if (name && name !== 'name' && !/_notification_(title|message)$/.test(name)) this.updateSuggestions();
       if (e.target.name === 'entity_search') {
         const query = e.target.value.toLowerCase();
         this.shadowRoot.querySelectorAll('[data-entity-label]').forEach((node) => {
@@ -386,7 +549,9 @@ class ScheduleCreatorCard extends HTMLElement {
     });
     this.shadowRoot.addEventListener('change', (e) => {
       if (!e.target.closest('form')) return;
-      this.changedFields?.add(e.target.name);
+      if (e.target.dataset.role === 'backup-file') { this.readBackupFile(e.target); return; }
+      if (e.target.dataset.mirror || e.target.type === 'range') return;
+      this.changedFields?.add(e.target.getAttribute('name'));
       const previousDomain = this.actionDomain;
       if (e.target.name === 'entities' && this.edit?.[0] === 'schedule' && e.target.checked) {
         const others = [...this.shadowRoot.querySelectorAll('[name="entities"]:checked')].filter((x)=>x!==e.target);
@@ -399,7 +564,7 @@ class ScheduleCreatorCard extends HTMLElement {
       // A text/time field emits change on blur, just before a click on Save.
       // Replacing the form here removes the clicked button before submission.
       // Only selectors and checkboxes can change which controls are displayed.
-      if (!e.target.matches('select,input[type="checkbox"]')) return;
+      if (!e.target.matches('select,input[type="checkbox"],input[type="radio"]')) return;
       const newDomain = (this.edit?.[0] === 'timer' ? this.draft.entity_id : this.draft.selectedEntities[0])?.split('.')[0];
       if (newDomain && previousDomain && newDomain !== previousDomain) {
         for (const key of Object.keys(this.draft)) if (/^(start|end|timer)_/.test(key) && !key.includes('notification')) delete this.draft[key];
@@ -425,7 +590,7 @@ class ScheduleCreatorCard extends HTMLElement {
   capture() {
     const form = this.shadowRoot.querySelector('form[data-editor]');
     if (!form) return;
-    this.draft = Object.fromEntries(new FormData(form));
+    this.draft = Object.fromEntries([...new FormData(form)].filter(([, value]) => typeof value === 'string'));
     for (const node of form.querySelectorAll('input[type="checkbox"]')) {
       if (!['entities'].includes(node.name) && !node.name.endsWith('_days')) this.draft[node.name] = node.checked ? 'on' : '';
     }
@@ -440,11 +605,13 @@ class ScheduleCreatorCard extends HTMLElement {
     // throws; the editor only creates native input/select/textarea fields.
     for (const node of form.querySelectorAll('input[name],select[name],textarea[name]')) {
       const name = node.getAttribute('name');
-      if (name === 'entities' || name.startsWith('slot_') || name.startsWith('condition')) continue;
+      if (name === 'entities' || name.startsWith('slot_') || name.startsWith('condition') || node.type === 'file') continue;
       if (this.draft[name] === undefined) continue;
       if (node.type === 'checkbox') node.checked = this.draft[name] === 'on';
-      else node.value = this.draft[name];
+      else if (node.type === 'radio') node.checked = this.draft[name] === node.value;
+      else { node.value = this.draft[name]; this.syncRange(node); }
     }
+    form.querySelectorAll('.sc-choice').forEach((node) => node.classList.toggle('is-selected', !!node.querySelector('input:checked')));
     form.querySelectorAll('[name="entities"]').forEach((x) => { x.checked = this.draft.selectedEntities.includes(x.value); });
     const query = form.querySelector('input[name="entity_search"]')?.value?.toLowerCase() || '';
     form.querySelectorAll('[data-entity-label]').forEach((node) => {
@@ -469,9 +636,9 @@ class ScheduleCreatorCard extends HTMLElement {
     const pageX=window.scrollX, pageY=window.scrollY;
     const { state, error, loading, busy, writeError } = this.adapter;
     const config = state?.config || {};
-    const profiles = config.profiles || [];
+    const profiles = [...(config.profiles || [])].sort(byOrder);
     const profile = profiles.find((p) => p.id === this.selectedProfile) || profiles[0];
-    const groups = (config.groups || []).filter((g) => g.profile_id === profile?.id);
+    const groups = (config.groups || []).filter((g) => g.profile_id === profile?.id).sort(byOrder);
     const group = groups.find((g) => g.id === this.selectedGroup) || groups[0];
     const schedules = (config.schedules || []).filter((s) => s.profile_id === profile?.id && (!group || s.group_id === group.id));
     const chips = profiles.map((p) => `<button type="button" class="profile-chip ${p.id === profile?.id ? 'viewed' : ''} ${p.active ? 'active-op' : ''}" style="--pchip-color:${tint(p.color)}" aria-pressed="${p.id === profile?.id}" data-profile="${esc(p.id)}">${esc(p.name)}</button>`).join('');
@@ -484,15 +651,18 @@ class ScheduleCreatorCard extends HTMLElement {
       const label=`${schedule.name} · ${day} ${time(start)}–${time(end)}${schedule.enabled?'':' · Disabilitato'}`;
       return `<button type="button" class="sc-time-block ${schedule.enabled?'':'is-off'}" data-command="editSchedule" data-id="${esc(schedule.id)}" aria-label="${esc(label)}" title="${esc(label)}" style="top:${start/1440*100}%;height:${(end-start)/1440*100}%;left:${lane/lanes*100}%;width:${100/lanes}%;--block-color:${colorFor(schedule)}"><span>${esc(schedule.name)}</span><small>${time(start)}–${time(end)}</small></button>`;
     }).join('')}</div>`).join('')}</div>`;
-    const status = error ? `<div class="status error" role="alert">${esc(messageFor(error))}</div>` : loading ? '<div class="status">Caricamento…</div>' : '';
+    const advice = state ? versionAdvice(state.integration_version) : '';
+    const status = `${error ? `<div class="status error" role="alert">${esc(messageFor(error))}</div>` : loading ? '<div class="status">Caricamento…</div>' : ''}${advice ? `<div class="status sc-warning" role="status">${esc(advice)}</div>` : ''}${this.notice && !this.edit ? `<div class="status sc-notice" role="status">${esc(this.notice)}</div>` : ''}`;
     const info = this.localError || writeError;
     const errorDetails = this.localError ? this.localErrorDetails : writeError ? diagnosticFor(writeError, {cardVersion:CARD_VERSION,haVersion:this._hass.config?.version}) : null;
     const editable = this._hass?.user?.is_admin === true && writeError?.code !== 'unauthorized';
     const view = state ? `<div class="profile-status-bar">${profile ? `<span class="sc-badge ${profile.active ? 'is-active' : ''}">${profile.active ? 'Profilo attivo' : 'Profilo inattivo'}</span><span>${esc(profile.profile_type === 'exclusive' ? 'Esclusivo' : 'Condiviso')}</span>` : 'Crea un profilo per iniziare'}<span>· ${state.quick_timers?.length ?? 0} timer attivi</span></div>
       ${groups.length ? `<nav class="tab-bar" aria-label="Gruppi">${tabs}</nav>` : ''}
       <div class="sc-toolbar"><div><h2>${esc(group?.name || 'La tua settimana')}</h2><p>${schedules.length} schedule · ${esc(this._hass.config?.time_zone || 'Fuso Home Assistant')}</p></div>${editable ? `<div class="sc-controls">${group ? button('newSchedule','＋ Schedule') : ''}${button('newTimer','Quick Timer')}</div>` : ''}</div>
-      ${schedules.length ? `<section class="sc-timeline" data-scroll="timeline" aria-label="Programmazione settimanale">${slots}</section><p class="sc-meta">Settimana tipo · seleziona una fascia per modificarla. Date speciali e condizioni sono nelle opzioni dello schedule.</p><details data-section="schedules"><summary>Gestisci schedule (${schedules.length})</summary><ul class="sc-list">${schedules.map((schedule) => `<li class="sc-entry"><div class="sc-entry-copy"><strong>${esc(schedule.name)}</strong><p class="sc-meta">${esc(schedule.target_entity_ids.map((id)=>this._hass.states[id]?.attributes?.friendly_name || id).join(', '))}</p><p class="sc-meta">${schedule.enabled ? 'Abilitato' : 'Disabilitato'} · ${schedule.time_slots?.length ?? 0} fasce</p></div>${editable ? `<div class="sc-entry-actions">${button('editSchedule','Modifica',schedule.id)}${button('deleteSchedule','Elimina',schedule.id)}</div>` : ''}</li>`).join('')}</ul></details>` : `<div class="sc-empty"><strong>${!profile ? 'Inizia dal tuo primo profilo' : !group ? 'Aggiungi un gruppo di dispositivi' : 'La settimana è ancora libera'}</strong>${!profile ? 'Organizza la casa per abitudini, ambienti o stagioni.' : !group ? 'Riunisci i dispositivi che vuoi programmare.' : 'Crea uno schedule e scegli giorni, orari e azioni.'}</div>`}
+      ${schedules.length ? `<section class="sc-timeline" data-scroll="timeline" aria-label="Programmazione settimanale">${slots}</section><p class="sc-meta">Settimana tipo · seleziona una fascia per modificarla. Date speciali e condizioni sono nelle opzioni dello schedule.</p><details data-section="schedules" class="sc-schedules"><summary>Gestisci schedule (${schedules.length})</summary><ul class="sc-list">${schedules.map((schedule) => `<li class="sc-entry" style="--block-color:${colorFor(schedule)}"><div class="sc-entry-copy"><strong>${esc(schedule.name)}</strong><span class="sc-meta">${esc(schedule.target_entity_ids.map((id)=>this._hass.states[id]?.attributes?.friendly_name || id).join(', '))} · ${schedule.enabled ? '' : 'disabilitato · '}${schedule.time_slots?.length ?? 0} ${schedule.time_slots?.length === 1 ? 'fascia' : 'fasce'}</span></div>${editable ? `<div class="sc-entry-actions">${button('editSchedule','Modifica',schedule.id)}${button('deleteSchedule','Elimina',schedule.id)}</div>` : ''}</li>`).join('')}</ul></details>` : `<div class="sc-empty"><strong>${!profile ? 'Inizia dal tuo primo profilo' : !group ? 'Aggiungi un gruppo di dispositivi' : 'La settimana è ancora libera'}</strong>${!profile ? 'Organizza la casa per abitudini, ambienti o stagioni.' : !group ? 'Riunisci i dispositivi che vuoi programmare.' : 'Crea uno schedule e scegli giorni, orari e azioni.'}</div>`}
       ${editable ? `<details class="sc-management" data-section="management" ${!profile || !group ? 'open' : ''}><summary>Gestisci profili e gruppi</summary><div class="sc-controls">${button('newProfile','＋ Profilo')}${profile ? `${button('editProfile','Modifica profilo',profile.id)}${button('toggleProfile',profile.active ? 'Disattiva profilo' : 'Attiva profilo',profile.id)}${button('deleteProfile','Elimina profilo',profile.id)}${button('newGroup','＋ Gruppo')}` : ''}${group ? `${button('editGroup','Modifica gruppo',group.id)}${button('deleteGroup','Elimina gruppo',group.id)}` : ''}</div></details>` : '<p class="sc-meta">Vista in sola lettura: serve un amministratore per modificare.</p>'}
+      ${profiles.length ? this.overview(config, profiles) : ''}
+      ${editable ? `<details class="sc-maintenance" data-section="maintenance"><summary>Manutenzione · backup e RESET</summary><p class="sc-meta">Il backup salva profili, gruppi e schedule in un file JSON. Il ripristino li sostituisce e lascia i profili disattivati. RESET cancella tutti i dati di Schedule Creator.</p><div class="sc-controls">${button('exportBackup','Salva backup')}${button('newRestore','Ripristina backup')}${button('newReset','RESET…')}</div></details>` : ''}
       <details class="sc-operational" data-section="operational"><summary>Attività · ${state.operational?.occurrences?.length ?? 0} fasce in corso · ${state.quick_timers?.length ?? 0} timer</summary>${(state.operational?.occurrences || []).map((x) => `<p>${esc(config.schedules?.find((s) => s.id === x.schedule_id)?.name || x.schedule_id)}: ${esc(x.state)}, condizione ${esc(x.condition_branch)}, termine ${esc(x.end_utc)}</p>`).join('') || '<p>Nessuna fascia attiva.</p>'}${(state.operational?.leases || []).map((x) => `<p>${esc(x.entity_id)}: ${esc(x.state)} (${esc(x.controller_type)})</p>`).join('')}${(state.quick_timers || []).map((x) => `<p>Timer ${esc(this._hass.states[x.entity_id]?.attributes?.friendly_name || x.entity_id)}: <span data-expiry="${esc(x.expires_at)}"></span> ${editable ? button('cancelTimer','Annulla timer',x.id) : ''}</p>`).join('')}</details>` : '';
     const errorMarkup = `${info ? `<p class="sc-error" role="alert">${esc(typeof info === 'string' ? info : messageFor(info))}</p>` : ''}${errorDetails ? `<details class="sc-error-details" data-section="error-details"><summary>Dettagli errore</summary><p>Seleziona e copia questo testo per segnalare il problema.</p><textarea readonly aria-label="Dettagli errore da copiare" rows="10">${esc(errorDetails)}</textarea></details>` : ''}`;
     const surface=this.shadowRoot.querySelector('ha-card');
@@ -500,7 +670,7 @@ class ScheduleCreatorCard extends HTMLElement {
     surface.innerHTML = `<div class="card-header"><div class="hdr-row1"><span class="card-title">${esc(this.config.title || 'Schedule Creator')}</span><span class="sc-version">v${CARD_VERSION}</span></div><p class="sc-eyebrow">Profili</p><div class="hdr-row2" aria-label="Profili">${chips}</div></div>${status}${this.edit ? '' : errorMarkup}${view}`;
     if(this.edit && editable) {
       const wasOpen=this.dialog.open;
-      this.dialog.innerHTML = `<div class="sc-dialog-heading"><strong>Schedule Creator</strong><button type="button" data-command="close" aria-label="Chiudi editor">✕</button></div>${errorMarkup}${this.editor(config,profile,group)}`;
+      this.dialog.innerHTML = `<div class="sc-dialog-heading"><strong>Schedule Creator</strong><button type="button" data-command="close" aria-label="Chiudi editor">✕</button></div>${errorMarkup}${this.notice ? `<div class="status sc-notice" role="status">${esc(this.notice)}</div>` : ''}${this.editor(config,profile,group)}`;
       if(!wasOpen) {
         if(this.dialog.showModal) this.dialog.showModal(); else this.dialog.setAttribute('open','');
         this.dialog.querySelector('input[name="name"],select[name="entity_id"]')?.focus({preventScroll:true});
@@ -510,6 +680,7 @@ class ScheduleCreatorCard extends HTMLElement {
       this.dialog.innerHTML='';
     }
     this.restoreDraft(); this.updateClock();
+    if (this.edit?.[0] === 'schedule') this.updateSuggestions();
     this.shadowRoot.querySelectorAll('details').forEach((node)=>{if (hadDetails) node.open=openSections.has(node.dataset.section || node.querySelector('summary')?.textContent);});
     const nextFocus = focusName ? [...this.shadowRoot.querySelectorAll('[name]')].find((x)=>x.getAttribute('name')===focusName && (focusValue===null || x.value===focusValue)) : focusCommand ? [...this.dialog.querySelectorAll('[data-command]')].find(x=>x.dataset.command===focusCommand && x.dataset.id===focusId) : null;
     if (nextFocus) { nextFocus.focus({preventScroll:true}); if (selection !== null && selection !== undefined && ['text','search','textarea'].includes(nextFocus.type)) nextFocus.setSelectionRange(selection,selection); }
@@ -521,6 +692,103 @@ class ScheduleCreatorCard extends HTMLElement {
     if(window.scrollX!==pageX || window.scrollY!==pageY) window.scrollTo(pageX,pageY);
     if (!this.clock && this.isConnected) this.clock = setInterval(() => this.updateClock(), 1000);
     this.shadowRoot.querySelectorAll('button,input,select,textarea').forEach((b) => { b.disabled = busy; });
+  }
+  overview(config, profiles) {
+    const friendly = (id) => this._hass.states[id]?.attributes?.friendly_name || id;
+    const owners = new Map();
+    for (const schedule of config.schedules || []) for (const id of schedule.target_entity_ids) {
+      if (!owners.has(id)) owners.set(id, new Set());
+      owners.get(id).add(schedule.profile_id);
+    }
+    const byId = Object.fromEntries(profiles.map((p) => [p.id, p]));
+    const shared = [...owners].filter(([, ids]) => ids.size > 1).map(([id, ids]) => {
+      const list = [...ids].map((pid) => byId[pid]).filter(Boolean);
+      // Two exclusive profiles are never active together; any other pair can be.
+      const together = list.some((a, i) => list.slice(i + 1).some((b) => a.profile_type !== 'exclusive' || b.profile_type !== 'exclusive'));
+      const now = list.filter((p) => p.active).length > 1;
+      return `<li><strong>${esc(friendly(id))}</strong> · ${list.map((p) => esc(p.name)).join(', ')}<span class="sc-meta">${now ? 'Più profili attivi ora: vince la fascia iniziata per ultima.' : together ? 'Possono essere attivi insieme: se le fasce si sovrappongono vince quella iniziata per ultima.' : 'Profili esclusivi: mai attivi insieme, nessun conflitto.'}</span></li>`;
+    });
+    const rows = profiles.map((p) => {
+      const groups = (config.groups || []).filter((g) => g.profile_id === p.id).length;
+      const schedules = (config.schedules || []).filter((x) => x.profile_id === p.id);
+      const entities = new Set(schedules.flatMap((x) => x.target_entity_ids)).size;
+      return `<li class="sc-overview-row" style="--pchip-color:${tint(p.color)}"><span class="sc-dot"></span><strong>${esc(p.name)}</strong><span class="sc-badge ${p.active ? 'is-active' : ''}">${p.active ? 'Attivo' : 'Inattivo'}</span><span class="sc-meta">${p.profile_type === 'exclusive' ? 'Esclusivo' : 'Condiviso'} · ${groups} gruppi · ${schedules.length} schedule · ${entities} entità</span></li>`;
+    }).join('');
+    return `<details class="sc-overview" data-section="overview"><summary>Panoramica profili e interazioni</summary><ul class="sc-overview-list">${rows}</ul><p class="sc-meta"><strong>Esclusivo</strong>: attivandolo si disattivano gli altri profili esclusivi. <strong>Condiviso</strong>: resta attivo insieme agli altri. Solo i profili attivi eseguono i loro schedule. Se due fasce comandano la stessa entità vince quella iniziata per ultima; a parità un Quick Timer prevale su uno schedule con condizione, che prevale su uno normale. L’ordine serve solo a disporre profili e gruppi.</p><h4>Entità comandate da più profili</h4>${shared.length ? `<ul class="sc-overview-list">${shared.join('')}</ul>` : '<p class="sc-meta">Nessuna: ogni entità è programmata da un solo profilo.</p>'}</details>`;
+  }
+  syncRange(node) {
+    const root = node?.closest?.('.sc-range');
+    if (!root) return;
+    const range = root.querySelector('input[type="range"]'), mirror = root.querySelector('[data-mirror]');
+    if (node === mirror) { if (mirror.value !== '' && Number.isFinite(Number(mirror.value))) range.value = mirror.value; }
+    else if (mirror) mirror.value = range.value;
+    const min = Number(range.min), max = Number(range.max);
+    range.style.setProperty('--sc-fill', `${max > min ? (Number(range.value) - min) / (max - min) * 100 : 0}%`);
+  }
+  suggestion(form) {
+    const ids = this.draft?.selectedEntities || [...form.querySelectorAll('[name="entities"]:checked')].map((x) => x.value);
+    const domain = ids[0]?.split('.')[0];
+    if (!domain) return null;
+    const attempt = (prefix) => { try { return readAction(form, prefix, domain); } catch { return null; } };
+    const start = attempt('start'), end = attempt('end');
+    const slots = readSlots(form), slot = slots[0];
+    const who = `${this._hass.states[ids[0]]?.attributes?.friendly_name || ids[0]}${ids.length > 1 ? ` +${ids.length - 1}` : ''}`;
+    const when = slot?.weekdays.length ? `${daysLabel(slot.weekdays)} ${slot.start}–${slot.end}${slots.length > 1 ? ` (+${slots.length - 1})` : ''}` : '';
+    return {
+      name: [who, describeAction(start), when].filter(Boolean).join(' · '),
+      start_notification_message: `${who}: ${describeAction(start) || 'avvio'}${slot ? ` alle ${slot.start}` : ''}`,
+      end_notification_message: end ? `${who}: ${describeAction(end)}${slot ? ` alle ${slot.end}` : ''}` : `${who}: fascia terminata${slot ? ` alle ${slot.end}` : ''}`,
+    };
+  }
+  // Suggested texts replace a field only while it still holds the previous suggestion.
+  updateSuggestions(force = false) {
+    const form = this.shadowRoot.querySelector('form[data-editor="schedule"]');
+    if (!form) return;
+    const suggested = this.suggestion(form);
+    if (!suggested) return;
+    const fill = (key, value) => {
+      const node = [...form.querySelectorAll('input')].find((x) => x.getAttribute('name') === key);
+      // Existing schedules keep their texts; an empty notification is filled
+      // only after it is enabled in this editor session.
+      const phase = key.split('_notification_')[1] ? key.split('_notification_')[0] : null;
+      const fresh = !this.edit?.[1] || (phase && this.changedFields?.has(`${phase}_notification_enabled`));
+      const auto = this.auto[key] ?? (fresh ? '' : undefined);
+      if (!node || (!(force && key === 'name') && node.value !== auto)) return;
+      node.value = value; this.auto[key] = value;
+      if (this.draft) this.draft[key] = value;
+    };
+    fill('name', suggested.name);
+    const title = form.querySelector('input[name="name"]')?.value?.trim() || suggested.name;
+    for (const phase of ['start', 'end']) {
+      fill(`${phase}_notification_title`, title);
+      fill(`${phase}_notification_message`, suggested[`${phase}_notification_message`]);
+    }
+  }
+  async exportBackup() {
+    this.localError = null; this.notice = null;
+    try {
+      const backup = await this.adapter.connection.sendMessagePromise({type: 'schedule_creator/backup/export'});
+      const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], {type: 'application/json'}));
+      const link = document.createElement('a');
+      link.href = url; link.download = `schedule-creator-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.append(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      this.notice = `Backup salvato: ${backup.config.profiles.length} profili, ${backup.config.groups.length} gruppi, ${backup.config.schedules.length} schedule.`;
+    } catch (error) {
+      this.localError = messageFor({...error, operation: 'schedule_creator/backup/export'});
+    }
+    this.render();
+  }
+  async readBackupFile(input) {
+    this.localError = null; this.restoreData = null;
+    try {
+      const backup = JSON.parse(await input.files[0].text());
+      if (backup?.format !== 'schedule_creator.backup' || !backup.config) throw new Error('Il file non è un backup di Schedule Creator.');
+      this.restoreData = backup;
+    } catch (error) {
+      this.localError = error instanceof SyntaxError ? 'Il file non contiene JSON valido.' : error.message;
+    }
+    this.render();
   }
   updateClock() {
     this.shadowRoot.querySelectorAll('[data-expiry]').forEach((node) => {
@@ -538,15 +806,15 @@ class ScheduleCreatorCard extends HTMLElement {
     const item = this.editRecord;
     const d = this.draft || {};
     let content = '';
-    if (kind === 'profile') content = `${field('name', 'Nome', item?.name)}${select('profile_type', 'Tipo', [['exclusive','Esclusivo'],['shared','Condiviso']], item?.profile_type || 'exclusive')}${field('icon','Icona',item?.icon)}${field('color','Colore HEX',item?.color)}${field('order','Ordine',item?.order ?? 0,'number')}`;
-    if (kind === 'group') content = `${field('name','Nome',item?.name)}${field('icon','Icona',item?.icon)}${field('color','Colore HEX',item?.color)}${field('order','Ordine',item?.order ?? 0,'number')}${this.entities(d.selectedEntities || item?.entity_ids || [])}`;
+    if (kind === 'profile') content = `${field('name', 'Nome', item?.name)}${select('profile_type', 'Tipo', [['exclusive','Esclusivo'],['shared','Condiviso']], item?.profile_type || 'exclusive')}${field('icon','Icona',item?.icon)}${field('color','Colore HEX',item?.color)}${field('order','Posizione nell’elenco (0 = primo)',item?.order ?? 0,'number')}<p>Serve solo a ordinare l’elenco: non cambia priorità né esecuzione.</p>`;
+    if (kind === 'group') content = `${field('name','Nome',item?.name)}${field('icon','Icona',item?.icon)}${field('color','Colore HEX',item?.color)}${field('order','Posizione nell’elenco (0 = primo)',item?.order ?? 0,'number')}<p>Serve solo a ordinare l’elenco: non cambia priorità né esecuzione.</p>${this.entities(d.selectedEntities || item?.entity_ids || [])}`;
     if (kind === 'schedule') {
       const owner = config.groups.find((g) => g.id === this.ownerGroup);
       const ids = d.selectedEntities || item?.target_entity_ids || targetEntities(this._hass,owner?.entity_ids || []).slice(0,1);
       this.actionDomain = ids[0]?.split('.')[0] || this.actionDomain;
       const slots = this.slotDraft || item?.time_slots || [{weekdays:[0,1,2,3,4,5,6],start:'08:00',end:'09:00'}];
       const condition = this.conditionDraft === undefined ? item?.condition : this.conditionDraft;
-      content = `${field('name','Nome',item?.name)}<label class="sc-check"><input name="enabled" type="checkbox" ${item?.enabled !== false ? 'checked' : ''}>Abilitato</label>
+      content = `<div class="sc-name-row">${field('name','Nome',item?.name)}${button('suggestName','Suggerisci')}</div><label class="sc-check"><input name="enabled" type="checkbox" ${item?.enabled !== false ? 'checked' : ''}>Abilitato</label>
         <p>Gruppo: ${esc(owner?.name || 'non disponibile')}. Scegli dispositivi dello stesso tipo.</p>${this.entities(ids,owner?.entity_ids || [])}
         <p>Orari: ${esc(this._hass.config?.time_zone || 'fuso Home Assistant')}. Se la fine precede l’inizio, la fascia termina il giorno successivo.</p>${slotsForm(slots)}
         ${actionForm('start','Azione iniziale',this._hass,ids,this.actionReset?null:item?.start_action,false,d)}${actionForm('end','Azione finale',this._hass,ids,this.actionReset?null:item?.end_action,true,d)}
@@ -558,13 +826,22 @@ class ScheduleCreatorCard extends HTMLElement {
         ${notificationForm('start_notification','Notifica iniziale',item?.start_notification,this._hass,d)}${notificationForm('end_notification','Notifica finale',item?.end_notification,this._hass,d)}</details>
         <details><summary>Pro · configurazione JSON</summary><label class="sc-check"><input type="checkbox" name="pro_config_enabled">Usa JSON per condizioni, fasce e notifiche</label>${area('pro_config','Configurazione avanzata',json({time_slots:slots,condition:condition||null,start_notification:item?.start_notification||null,end_notification:item?.end_notification||null}),8)}</details>`;
     }
+    if (kind === 'restore') {
+      const b = this.restoreData?.config;
+      const missing = b ? [...new Set([...(b.groups || []).flatMap((g) => g.entity_ids || []), ...(b.schedules || []).flatMap((x) => x.target_entity_ids || [])])].filter((id) => !this._hass.states[id]) : [];
+      content = `<p>Il ripristino <strong>sostituisce</strong> tutti i profili, gruppi e schedule attuali con quelli del file. I profili ripristinati restano <strong>disattivati</strong>: attivali quando vuoi che eseguano i comandi. Timer e fasce in corso non fanno parte del backup.</p><label>File di backup (.json)<input type="file" accept="application/json,.json" data-role="backup-file"></label>${b ? `<div class="sc-summary"><strong>Contenuto del file</strong><p>${(b.profiles || []).length} profili · ${(b.groups || []).length} gruppi · ${(b.schedules || []).length} schedule</p><p>Salvato il ${esc(String(this.restoreData.exported_at || '').replace('T', ' ').slice(0, 16) || 'data sconosciuta')} con la versione ${esc(this.restoreData.integration_version || 'sconosciuta')}.</p>${missing.length ? `<p class="sc-error">Entità non presenti in questo Home Assistant: ${esc(missing.join(', '))}. Gli schedule collegati non potranno comandarle.</p>` : ''}</div>` : '<p>Scegli un file creato con “Salva backup”.</p>'}`;
+    }
+    if (kind === 'reset') {
+      const timers = this.adapter.state.quick_timers?.length ?? 0;
+      content = `<p>RESET cancella <strong>tutti</strong> i dati di Schedule Creator: ${config.profiles.length} profili, ${config.groups.length} gruppi, ${config.schedules.length} schedule, ${timers} timer attivi, fasce in corso e storico operazioni. L’integrazione resta installata e vuota.</p><p>I dispositivi restano nello stato in cui si trovano: nessun comando di spegnimento o ripristino viene inviato. Dispositivi, entità, automazioni e la vecchia weekly-schedule-card non vengono toccati.</p><p>Prima di procedere puoi salvare un backup.</p><div class="sc-controls">${button('exportBackup','Salva backup')}</div>${field('confirm','Scrivi RESET per confermare','')}`;
+    }
     if (kind === 'timer') {
       const ids = targetEntities(this._hass);
       const selected = d.entity_id || ids[0];
       this.actionDomain = selected?.split('.')[0];
       content = `${select('entity_id','Entità',ids.map((id) => [id, `${this._hass.states[id].attributes?.friendly_name || id} · ${id}`]),selected)}${field('duration_seconds','Durata in secondi (1–604800)',300,'number')}${actionForm('timer','Azione timer',this._hass,selected?[selected]:[],null,false,d)}`;
     }
-    return `<form data-editor="${esc(kind)}" class="sc-editor"><h3 id="sc-editor-title">${({profile:id?'Modifica profilo':'Nuovo profilo',group:id?'Modifica gruppo':'Nuovo gruppo',schedule:id?'Modifica schedule':'Nuovo schedule',timer:'Quick Timer'})[kind]}</h3>${content}<div class="sc-actions"><button type="submit">Salva</button>${button('close','Annulla')}</div></form>`;
+    return `<form data-editor="${esc(kind)}" class="sc-editor"><h3 id="sc-editor-title">${({profile:id?'Modifica profilo':'Nuovo profilo',group:id?'Modifica gruppo':'Nuovo gruppo',schedule:id?'Modifica schedule':'Nuovo schedule',timer:'Quick Timer',restore:'Ripristina backup',reset:'RESET completo'})[kind]}</h3>${content}<div class="sc-actions"><button type="submit" ${kind === 'reset' ? 'class="sc-danger"' : ''}>${({restore:'Ripristina',reset:'Cancella tutto'})[kind] || 'Salva'}</button>${button('close','Annulla')}</div></form>`;
   }
   async click(event) {
     const buttonEl = event.target.closest('button'); if (!buttonEl || this.adapter.busy) return;
@@ -590,6 +867,8 @@ class ScheduleCreatorCard extends HTMLElement {
       this.render(); return;
     }
     if (command === 'close') { this.closeEditor(); return; }
+    if (command === 'suggestName') { this.capture(); this.updateSuggestions(true); return; }
+    if (command === 'exportBackup') { await this.exportBackup(); return; }
     if (/^(new|edit)/.test(command)) {
       if(this._hass?.user?.is_admin !== true) return;
       this.editorOpener={command,id};
@@ -600,6 +879,7 @@ class ScheduleCreatorCard extends HTMLElement {
       const group = config.groups.find((g)=>g.id===this.selectedGroup)||config.groups.find((g)=>g.profile_id===profile?.id);
       this.edit = [kind,id||null];
       this.editRecord = id ? structuredClone(config[`${kind}s`].find((x)=>x.id===id)) : null;
+      this.auto = {}; this.restoreData = null; this.notice = null;
       this.ownerGroup = this.editRecord?.group_id || group?.id;
       this.ownerProfile = this.editRecord?.profile_id || profile?.id;
       this.editRevision = this.adapter.state.revision;
@@ -621,7 +901,7 @@ class ScheduleCreatorCard extends HTMLElement {
     event.preventDefault(); if (this.adapter.busy) return;
     this.localError = null; this.localErrorDetails = null;
     const [kind,id] = this.edit;
-    const type = kind === 'timer' ? 'quick_timer/create' : `${kind}/${id ? 'update' : 'create'}`;
+    const type = ({timer:'quick_timer/create',restore:'backup/import',reset:'reset'})[kind] || `${kind}/${id ? 'update' : 'create'}`;
     let phase = 'lettura del modulo';
     try {
       this.capture();
@@ -629,7 +909,15 @@ class ScheduleCreatorCard extends HTMLElement {
       const config = this.adapter.state.config;
       let payload;
       phase = 'validazione del nome';
-      if (kind !== 'timer' && !data.name?.trim()) throw new Error('Inserisci un nome prima di salvare.');
+      if (!['timer','restore','reset'].includes(kind) && !data.name?.trim()) throw new Error('Inserisci un nome prima di salvare.');
+      if (kind === 'restore') {
+        if (!this.restoreData) throw new Error('Scegli prima un file di backup.');
+        payload = {backup: this.restoreData};
+      }
+      if (kind === 'reset') {
+        if (data.confirm?.trim() !== 'RESET') throw new Error('Scrivi RESET in maiuscolo per confermare la cancellazione.');
+        payload = {confirm: 'RESET'};
+      }
       phase = 'preparazione dei dati';
       if (kind === 'profile') payload = { name: data.name.trim(), profile_type: data.profile_type, icon: data.icon || null, color: data.color || null, order: Number(data.order) };
       if (kind === 'group') payload = { name: data.name.trim(), entity_ids: this.draft.selectedEntities, icon: data.icon || null, color: data.color || null, order: Number(data.order) };
@@ -678,6 +966,10 @@ class ScheduleCreatorCard extends HTMLElement {
       if (!id && kind === 'schedule') { payload.profile_id = this.ownerProfile; payload.group_id = this.ownerGroup; }
       phase = 'salvataggio e aggiornamento della vista';
       const ok = await this.adapter.mutate(type,payload,{ runtime: kind === 'timer', expectedRevision: kind === 'timer' || this.adapter.conflicted ? undefined : this.editRevision });
+      if (ok && ['restore','reset'].includes(kind)) {
+        this.selectedProfile = null; this.selectedGroup = null;
+        this.notice = kind === 'reset' ? 'RESET completato: Schedule Creator è vuoto.' : 'Backup ripristinato. I profili sono disattivati: attivali per eseguire gli schedule.';
+      }
       if (ok) this.closeEditor();
     } catch (error) {
       this.localError = messageFor(error);

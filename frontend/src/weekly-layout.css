@@ -246,24 +246,38 @@ button[data-command="newSchedule"],
 .sc-list {
   list-style: none;
   padding: 0;
-  margin: 12px 0 22px;
+  margin: 4px 0 0;
   display: grid;
-  gap: 10px;
+  gap: 4px;
 }
 .sc-entry {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding: 16px;
+  gap: 10px;
+  padding: 7px 8px 7px 12px;
   border: 1px solid var(--sc-border);
-  border-radius: 12px;
+  border-left: 3px solid var(--block-color, var(--sc-accent));
+  border-radius: 8px;
 }
 .sc-entry-copy {
   min-width: 0;
+  display: grid;
+  gap: 2px;
 }
 .sc-entry strong {
-  font-size: 0.9rem;
+  font-size: 0.84rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sc-entry .sc-meta {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sc-meta {
   font-size: 0.76rem;
@@ -274,9 +288,14 @@ button[data-command="newSchedule"],
 }
 .sc-entry-actions {
   flex-shrink: 0;
+  flex-wrap: nowrap !important;
+  gap: 4px !important;
 }
 .sc-entry-actions button {
-  font-size: 0.76rem;
+  font-size: 0.72rem;
+  min-height: 30px;
+  padding: 4px 9px;
+  border-radius: 7px;
 }
 .sc-empty {
   padding: 30px 18px;
@@ -498,13 +517,6 @@ details[open] > summary {
   .sc-slot time {
     margin-right: 8px;
   }
-  .sc-entry {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  .sc-entry-actions {
-    align-self: flex-end;
-  }
   .sc-editor {
     padding: 14px;
   }
@@ -615,3 +627,66 @@ details[open] > summary {
     display: inline-block;
   }
 }
+
+/* Desired-state action editor (weekly-schedule-card Quick Timer style) */
+.sc-field { display: grid; gap: 8px; min-width: 0; }
+.sc-field-label { font-size: .8rem; font-weight: 500; }
+.sc-current { display: flex; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--sc-border); }
+.sc-current strong { color: var(--primary-text-color, #202a35); font-weight: 600; }
+.sc-action-fields { display: grid; gap: 16px; }
+.sc-choices {
+  display: flex; flex-wrap: wrap; gap: 4px; padding: 4px;
+  border-radius: 12px; background: var(--sc-surface);
+}
+.sc-editor label.sc-choice {
+  position: relative; flex: 1 1 auto; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 4px; min-width: 64px; min-height: 42px;
+  padding: 8px 10px; border: 1px solid transparent; border-radius: 9px;
+  font-size: .8rem; font-weight: 500; text-align: center; cursor: pointer; color: var(--sc-muted);
+}
+.sc-editor .sc-choice input {
+  position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; margin: 0;
+  opacity: 0; cursor: pointer;
+}
+.sc-choice:hover { color: var(--primary-text-color, #202a35); }
+.sc-choice.is-selected, .sc-choice:has(input:checked) {
+  color: var(--sc-accent); border-color: var(--sc-accent);
+  background: var(--card-background-color, #fff); font-weight: 600;
+  box-shadow: 0 1px 3px #0001;
+}
+.sc-choice:has(input:focus-visible) { outline: 3px solid var(--sc-accent); outline-offset: 2px; }
+.sc-mode-buttons { background: transparent; padding: 0; gap: 6px; }
+.sc-mode-buttons .sc-choice { min-height: 64px; border-color: var(--sc-border); background: var(--card-background-color, #fff); }
+.sc-choice ha-icon { --mdc-icon-size: 20px; }
+.sc-range-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sc-range-value { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; color: var(--sc-accent); }
+.sc-editor .sc-range-value input {
+  width: 84px; min-height: 40px; padding: 6px 10px; text-align: center;
+  font-size: 1.15rem; font-weight: 600; color: var(--sc-accent); background: var(--sc-surface); border-color: transparent;
+}
+.sc-editor input[type="range"] {
+  -webkit-appearance: none; appearance: none; width: 100%; min-height: 24px; padding: 0;
+  border: 0; background: transparent; accent-color: var(--sc-accent);
+}
+input[type="range"]::-webkit-slider-runnable-track { height: 6px; border-radius: 6px; background: linear-gradient(to right, var(--sc-accent) var(--sc-fill, 0%), var(--sc-border) var(--sc-fill, 0%)); }
+input[type="range"]::-moz-range-track { height: 6px; border-radius: 6px; background: var(--sc-border); }
+input[type="range"]::-moz-range-progress { height: 6px; border-radius: 6px; background: var(--sc-accent); }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -8px; border-radius: 50%; border: 4px solid var(--card-background-color, #fff); background: var(--sc-accent); box-shadow: 0 0 0 1px var(--sc-accent); }
+input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; border: 4px solid var(--card-background-color, #fff); background: var(--sc-accent); box-shadow: 0 0 0 1px var(--sc-accent); }
+.sc-range-labels { display: flex; justify-content: space-between; font-size: .7rem; color: var(--sc-muted); }
+.sc-more { padding: 10px 12px; }
+.sc-name-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
+.sc-name-row button { min-height: 44px; }
+.sc-summary { padding: 12px 14px; border-radius: 10px; background: var(--card-background-color, #fff); border: 1px solid var(--sc-border); }
+.sc-summary p { margin-top: 6px !important; }
+.sc-notice { color: var(--success-color, #287d39); background: color-mix(in srgb, var(--success-color, #287d39) 9%, var(--card-background-color, #fff)); }
+.sc-warning { color: var(--warning-color, #8a5a00); background: color-mix(in srgb, var(--warning-color, #f0a500) 12%, var(--card-background-color, #fff)); }
+.sc-actions button.sc-danger { background: var(--error-color, #b3261e); border-color: var(--error-color, #b3261e); color: #fff; }
+.sc-overview-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; font-size: .82rem; }
+.sc-overview-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 8px 10px; border: 1px solid var(--sc-border); border-radius: 8px; }
+.sc-overview-row .sc-meta { margin: 0; flex-basis: 100%; padding-left: 18px; }
+.sc-overview-list li:not(.sc-overview-row) { padding: 8px 10px; border-radius: 8px; background: var(--sc-surface); }
+.sc-overview-list li .sc-meta { display: block; margin-top: 3px; }
+.sc-overview h4 { margin: 14px 0 8px; font-size: .82rem; }
+.sc-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pchip-color, var(--sc-accent)); flex-shrink: 0; }
+.sc-maintenance .sc-controls { margin: 10px 0 0; }

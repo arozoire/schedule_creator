@@ -12,7 +12,13 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.util.hass_dict import HassKey
 
-from .const import DOMAIN, EVENT_CONFIG_UPDATED, EVENT_RUNTIME_UPDATED
+from .backup_api import BACKUP_COMMANDS
+from .const import (
+    DOMAIN,
+    EVENT_CONFIG_UPDATED,
+    EVENT_RUNTIME_UPDATED,
+    INTEGRATION_VERSION,
+)
 from .group_api import GROUP_COMMANDS
 from .models import LeaseState, OccurrenceState, QuickTimerState
 from .profile_api import PROFILE_COMMANDS
@@ -42,6 +48,8 @@ def async_register_commands(hass: HomeAssistant) -> None:
     for command in SCHEDULE_COMMANDS:
         websocket_api.async_register_command(hass, command)
     for command in QUICK_TIMER_COMMANDS:
+        websocket_api.async_register_command(hass, command)
+    for command in BACKUP_COMMANDS:
         websocket_api.async_register_command(hass, command)
     hass.data[_REGISTERED] = True
 
@@ -80,6 +88,7 @@ def websocket_get_state(
 
         config_payload = config.to_dict()
         result = {
+            "integration_version": hass.data.get(INTEGRATION_VERSION, ""),
             "schema_version": config_payload.pop("schema_version"),
             "revision": config_payload.pop("revision"),
             "config": config_payload,

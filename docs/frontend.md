@@ -13,12 +13,11 @@ Serve Home Assistant 2026.9.2 o successivo con HACS gia installato.
 3. In **Impostazioni → Dispositivi e servizi → Aggiungi integrazione**, cerca
    **Schedule Creator** e completa il modulo. Serve anche quando i file sono
    gia installati: crea il config entry e avvia il backend.
-4. In **Impostazioni → Dashboard → ⋮ → Risorse**, aggiungi una risorsa di tipo
-   **Modulo JavaScript** con URL
-   `/schedule_creator/frontend/schedule-creator-card.js`. Se la risorsa esiste
-   gia, non duplicarla. Dopo l'aggiornamento ricarica la dashboard e controlla
-   il badge versione. Solo se resta vecchio, usa temporaneamente `?v=0.3.3`
-   (o `&v=0.3.3` se ci sono già parametri) per diagnosticare la cache.
+4. Dalla 0.3.5 la card si carica **da sola** in tutte le dashboard: non serve
+   aggiungere una risorsa. Se in **Impostazioni → Dashboard → ⋮ → Risorse**
+   esiste già `/schedule_creator/frontend/schedule-creator-card.js` (con o senza
+   `?v=`/`hacstag`), può restare o essere rimossa: tutti gli URL caricano lo
+   stesso bundle una volta sola.
 5. Modifica una dashboard, scegli **Aggiungi scheda → Manuale** e incolla:
 
    ```yaml
@@ -35,7 +34,49 @@ Una configurazione nuova e vuota mostra un calendario vuoto: crea un profilo,
 poi un gruppo e uno schedule dalla card. La vecchia weekly-schedule-card resta
 installata e puo stare nella stessa dashboard.
 
+## Aggiornamenti senza interventi manuali (0.3.5)
+
+L'URL `/schedule_creator/frontend/schedule-creator-card.js` restituisce un
+piccolo loader mai memorizzato in cache (`Cache-Control: no-store`) che importa
+`/schedule_creator/static/schedule-creator-card.js?v=<hash del contenuto>`.
+Quando HACS sostituisce il bundle, l'hash cambia e il browser scarica la nuova
+card al successivo caricamento della pagina, senza modificare risorse o `?v=`.
+La card confronta la propria versione con `integration_version` del backend:
+
+| Situazione | Cosa fare | Messaggio nella card |
+|---|---|---|
+| Solo la card è cambiata (stesso Python) | Ricaricare la pagina | Nessuno, dopo il refresh |
+| Nuovo codice Python scaricato da HACS | **Riavviare Home Assistant** (non serve riavviare il Raspberry) | «Riavvia Home Assistant…» finché il backend in esecuzione è più vecchio |
+| Pagina aperta da prima dell'aggiornamento | Ricaricare la pagina / app | «Ricarica la pagina…» |
+| Ricarica dell'integrazione da Dispositivi e servizi | Utile solo per riavviare il runtime; **non** importa nuovo codice Python | — |
+
+Ogni release di Schedule Creator include codice Python, quindi dopo un
+aggiornamento HACS serve un riavvio di Home Assistant: è il limite del
+caricamento dei moduli Python in HA, non aggirabile in modo sicuro. Dopo il
+riavvio basta ricaricare la dashboard; non servono più `?v=` né cancellazioni
+della cache. Il primo passaggio alla 0.3.5 richiede ancora riavvio e refresh.
+
 ## Contratto tecnico
+
+### Editor azioni, suggerimenti e manutenzione 0.3.5
+
+- Climate: pulsanti modalità HVAC con icone, temperatura con cursore e campo
+  numerico, ventola a chip; preset e swing in «Altre opzioni». Con «Spento»
+  restano solo i pulsanti. Inizio, fine e Quick Timer salvano un unico
+  `apply_state` (vedi `websocket-api.md`). Le azioni precedenti con
+  `set_temperature`/`set_hvac_mode` si riaprono negli stessi controlli.
+- Luci: Acceso/Spento e cursore luminosità (1–100%), colore o temperatura
+  colore se supportati. Tende: Apri/Chiudi/Posizione/Ferma con cursore
+  percentuale. Ventole: velocità in percentuale e preset. La fine può essere
+  «Nessuna azione».
+- Il nome dello schedule e i testi delle notifiche vengono proposti da entità,
+  azione e fascia e si aggiornano finché non li modifichi; «Suggerisci»
+  ripropone il nome. Negli schedule esistenti i testi non cambiano da soli.
+- «Gestisci schedule» usa righe compatte. «Panoramica profili e interazioni»
+  mostra stato e tipo dei profili e le entità comandate da più profili.
+  L'ordine dei profili/gruppi serve solo a disporli nell'elenco.
+- «Manutenzione»: Salva backup (file JSON), Ripristina backup con anteprima e
+  controllo delle entità mancanti, RESET con conferma scritta.
 
 ### Vista ed editor 0.3.3
 
@@ -53,18 +94,14 @@ con dati fittizi è disponibile in `frontend/preview.html`.
 
 The integration includes a separate Lovelace card derived from the
 weekly-schedule-card visual style. It does not register or modify the original
-card. After installing the integration and restarting Home Assistant, add a
-Lovelace resource of type **JavaScript module** with URL:
-
-`/schedule_creator/frontend/schedule-creator-card.js`
-
-When updating an existing installation, reload the dashboard page or restart
-the Home Assistant mobile app, then check the loaded bundle badge (`v0.3.3`).
-If an older bundle remains after downloading the update, a version query on the
-existing resource is a cache troubleshooting workaround; do not add a duplicate
-resource. Automatic resource version management is still a roadmap item.
-Do not assume HACS updates the query string on this custom integration route.
-The query string refreshes only the JavaScript card. A server response with code
+card. Since 0.3.5 the integration loads the card automatically (frontend extra
+module); an existing Lovelace resource with URL
+`/schedule_creator/frontend/schedule-creator-card.js` keeps working and is no
+longer required. That URL serves an uncached loader importing the bundle by
+content hash, so HACS updates reach the browser after a page reload. The card
+compares its version with the running backend and explains whether to reload
+the page or restart Home Assistant (see "Aggiornamenti senza interventi manuali").
+A server response with code
 `unknown_command` requires checking the backend integration version and a full
 Home Assistant restart. The text `Method not implemented.` alone does not
 identify a backend problem. Expand **Dettagli errore** and copy its text: the

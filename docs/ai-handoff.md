@@ -1,5 +1,51 @@
 # AI handoff — stato attuale e piano futuro
 
+## Aggiornamenti automatici, editor stile Quick Timer, backup e RESET — 0.3.5 (2026-09-24)
+
+Nota versioni: il tag `0.3.4` contiene il codice 0.3.3 (manifest/badge 0.3.3);
+il tag `0.3.3` punta al codice 0.3.2. Questa consegna riallinea tutto a **0.3.5**.
+Branch `codex/auto-update-and-editors`, base main `8ce5d5c` (PR #35).
+
+Fatto (punti 2, 3, 5.1 del piano e riscontri del proprietario sulla 0.3.4):
+- **Punto 2 aggiornamenti**: `frontend_loader.py` serve all'URL storico un loader
+  `no-store` che importa `/schedule_creator/static/…js?v=<sha256>`; la card è
+  caricata anche con `add_extra_js_url` (risorsa manuale non più necessaria,
+  quella esistente resta compatibile). `get_state.integration_version` = versione
+  Python in esecuzione; la card avvisa «ricarica pagina» o «riavvia HA». Il build
+  prende la versione dal manifest. Codice Python nuovo richiede sempre riavvio HA
+  (documentato in `docs/frontend.md`), nessun hack su `sys.modules`.
+- **Climate come la quick-timer card upstream**: pulsanti HVAC con icone, cursore
+  temperatura + campo, chip ventola, preset/swing in «Altre opzioni», per inizio,
+  fine e Quick Timer. Nuova azione `apply_state` (dati = stato desiderato, `state`
+  obbligatorio) eseguita con `scene.apply` sull'entità, stesso meccanismo del
+  ripristino snapshot. Vecchie azioni `set_temperature`/`set_hvac_mode` si
+  riaprono nei controlli. Luci: cursore luminosità; tende: cursore posizione;
+  ventole: cursore velocità. Nuovo modulo `frontend/src/action-editor.js`.
+- Lista «Gestisci schedule» compatta; nome schedule e testi notifica suggeriti
+  (si aggiornano finché l'utente non li modifica; pulsante «Suggerisci»).
+- «Ordine» profilo/gruppo: era salvato ma **mai usato** (né priorità né
+  visualizzazione). Ora ordina chip/tab ed è spiegato nell'editor. Nuova
+  «Panoramica profili e interazioni» (tipo, stato, entità condivise tra profili,
+  regole di arbitraggio: vince la fascia iniziata per ultima, poi timer >
+  condizionata > normale).
+- **Backup/ripristino/RESET** (`backup_api.py`, docs in `websocket-api.md`):
+  export JSON solo configurazione; import validato in un commit con profili
+  disattivati; RESET admin con conferma «RESET», unload entry → runtime vuoto →
+  config vuota → setup, revisioni monotone, guardia contro RESET concorrenti.
+
+Verifiche: build + 33 test Node (DOM su bundle: climate inizio/fine, tende,
+suggerimenti, versione, RESET, ripristino, panoramica); ruff e mypy puliti.
+Nuovi test pytest (`test_frontend_loader.py`, `test_apply_state.py`,
+`test_backup_api.py`) **non eseguibili sul PC Windows del proprietario** (policy
+DLL): affidarsi alla CI prima del merge. Anteprima visiva `frontend/preview.html`
+controllata a 800px e 400px (icone `ha-icon` visibili solo dentro HA).
+
+Prove HA del proprietario dopo la release 0.3.5: riavvio HA, badge v0.3.5 senza
+toccare risorse; schedule climate (Freddo 23°, ventola, fine Spento) eseguito
+all'orario; luce dimmer e tenda con percentuale; salva backup, RESET su istanza
+di prova o dopo backup, ripristino. Punto 1 (bug) resta aperto finché il
+proprietario non conferma. Punto 4 (card Quick Timer separata) non iniziato.
+
 ## Settimana grafica, popup e posizione pagina — 0.3.3 (2026-09-24)
 
 Il proprietario chiede di tornare alla lettura della weekly-schedule-card,
