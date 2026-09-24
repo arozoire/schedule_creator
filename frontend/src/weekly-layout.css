@@ -690,3 +690,48 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius
 .sc-overview h4 { margin: 14px 0 8px; font-size: .82rem; }
 .sc-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pchip-color, var(--sc-accent)); flex-shrink: 0; }
 .sc-maintenance .sc-controls { margin: 10px 0 0; }
+
+/* Time bar with magnets and day shortcuts (weekly-schedule-card style) */
+.sc-timebar { position: relative; height: 48px; border-radius: 8px; background: var(--sc-surface); overflow: hidden; touch-action: none; user-select: none; }
+.sc-tb-bg { position: absolute; top: 6px; bottom: 6px; border-radius: 6px; background: var(--block-color); opacity: .4; pointer-events: auto; }
+.sc-tb-magnet { position: absolute; top: 0; bottom: 0; width: 2px; transform: translateX(-50%); background: color-mix(in srgb, var(--sc-accent) 45%, transparent); pointer-events: none; }
+.sc-tb-magnet.is-near { background: var(--sc-accent); box-shadow: 0 0 6px var(--sc-accent); }
+.sc-tb-edit { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: var(--sc-accent); color: var(--text-primary-color, #fff); font-size: .72rem; font-weight: 700; font-variant-numeric: tabular-nums; cursor: grab; touch-action: none; box-shadow: 0 2px 8px #0003; overflow: hidden; }
+.sc-tb-edit:active { cursor: grabbing; }
+.sc-tb-edit.is-static { cursor: default; opacity: .75; }
+.sc-tb-label { pointer-events: none; white-space: nowrap; padding: 0 22px; }
+.sc-tb-handle { position: absolute; top: 0; bottom: 0; width: 22px; display: flex; align-items: center; justify-content: center; cursor: ew-resize; }
+.sc-tb-handle::after { content: ""; width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 2px solid var(--sc-accent); box-shadow: 0 1px 4px #0004; }
+.sc-tb-handle[data-handle="start"] { left: 0; }
+.sc-tb-handle[data-handle="end"] { right: 0; }
+.sc-tb-ticks { display: flex; justify-content: space-between; font-size: .66rem; color: var(--sc-muted); margin-top: -8px; }
+.sc-time-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sc-snap, .sc-shortcuts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: .75rem; color: var(--sc-muted); }
+.sc-editor .sc-pill { min-height: 30px; padding: 4px 12px; border-radius: 16px; font-size: .76rem; color: var(--sc-muted); }
+.sc-editor .sc-pill.is-selected { color: var(--sc-accent); border-color: var(--sc-accent); background: color-mix(in srgb, var(--sc-accent) 12%, var(--card-background-color, #fff)); font-weight: 600; }
+.sc-days { gap: 6px !important; }
+.sc-editor .sc-days label.sc-day-chip { position: relative; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border-radius: 50%; border: 1.5px solid var(--sc-border); font-size: .74rem; font-weight: 600; color: var(--sc-muted); cursor: pointer; }
+.sc-editor .sc-day-chip input { position: absolute; inset: 0; width: 100% !important; height: 100% !important; margin: 0; opacity: 0; cursor: pointer; }
+.sc-day-chip:has(input:checked) { background: var(--sc-accent); border-color: var(--sc-accent) !important; color: var(--text-primary-color, #fff) !important; }
+.sc-day-chip:has(input:focus-visible) { outline: 3px solid var(--sc-accent); outline-offset: 2px; }
+
+/* Conditions */
+.sc-condition-group { display: grid; gap: 12px; }
+.sc-editor fieldset.sc-condition { background: var(--card-background-color, #fff); }
+
+/* Icon and colour pickers */
+.sc-icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); gap: 6px; max-height: 232px; overflow: auto; padding: 2px; }
+.sc-editor label.sc-icon-choice { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 64px; padding: 6px 4px; border: 1px solid var(--sc-border); border-radius: 10px; cursor: pointer; color: var(--sc-muted); text-align: center; }
+.sc-icon-choice small { font-size: .64rem; line-height: 1.2; }
+.sc-editor .sc-icon-choice input, .sc-editor .sc-swatch input[type="radio"] { position: absolute; inset: 0; width: 100% !important; height: 100% !important; min-height: 0; margin: 0; opacity: 0; cursor: pointer; }
+.sc-icon-choice.is-selected, .sc-icon-choice:has(input:checked) { color: var(--sc-accent); border-color: var(--sc-accent); background: color-mix(in srgb, var(--sc-accent) 10%, var(--card-background-color, #fff)); }
+.sc-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.sc-editor label.sc-swatch { position: relative; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: var(--swatch, var(--sc-surface)); border: 2px solid var(--card-background-color, #fff); box-shadow: 0 0 0 1px var(--sc-border); cursor: pointer; font-size: .66rem; color: var(--sc-muted); }
+.sc-swatch.is-selected, .sc-swatch:has(input[type="radio"]:checked) { box-shadow: 0 0 0 3px var(--sc-accent); }
+.sc-editor .sc-swatch-custom input[type="color"] { position: absolute; inset: 0; width: 100% !important; height: 100% !important; min-height: 0; padding: 0; opacity: 0; cursor: pointer; z-index: 1; }
+.sc-swatch-custom span { font-size: 1rem; }
+.tab ha-icon, .profile-chip ha-icon { --mdc-icon-size: 18px; margin-right: 4px; }
+.tab.active { border-bottom: 2px solid var(--tab-color, var(--sc-accent)); }
+.sc-tb-edit.is-narrow .sc-tb-label { visibility: hidden; }
+.sc-tb-edit.is-narrow .sc-tb-handle { width: 16px; }
+.sc-tb-edit.is-narrow .sc-tb-handle::after { width: 12px; height: 12px; }

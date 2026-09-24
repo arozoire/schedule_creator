@@ -355,3 +355,19 @@ riavvio: mai comandi vecchi senza il loro schedule. I dispositivi restano nello
 stato corrente; un comando già inviato non è revocabile. Dispositivi, entità HA,
 automazioni e dati della weekly-schedule-card non vengono toccati. Un secondo
 RESET concorrente riceve `reset_running`.
+
+## Notifiche di stato e collegamento (0.3.6)
+
+`schedule/create` e `schedule/update` accettano `status_notification` (bool).
+L'elenco degli schedule scelti è in `config.settings.status_notification_schedule_ids`
+(la cancellazione di uno schedule lo rimuove). Durante una fascia attiva o sospesa
+il backend mantiene una notifica persistente `schedule_creator_status_<id>`:
+«Attivo», «In pausa: la condizione non è soddisfatta» o «In attesa: un altro
+schedule o timer ha la priorità», con l'ora di fine; viene rimossa a fine fascia
+e allo scarico dell'integrazione. È solo informativa e non passa dal journal.
+
+`schedule_creator/settings/update` (admin): `expected_revision`,
+`notification_url` = percorso che inizia con `/` oppure `null`. Se impostato,
+le notifiche `notify.*` ricevono `data.clickAction` e `data.url` (app Companion
+Android/iOS) e quelle `persistent_notification` un link «Apri Schedule Creator».
+URL esterni sono rifiutati.

@@ -13,5 +13,5 @@ const card = module('schedule-creator-card.js')
   .replace(/const CARD_VERSION = '[^']*';/, `const CARD_VERSION = ${JSON.stringify(manifest.version)};`);
 const output = new URL('../custom_components/schedule_creator/frontend/', import.meta.url);
 mkdirSync(output, { recursive: true });
-const parts = ['state-adapter.js', 'editor.js', 'forms.js', 'action-editor.js', 'timeline.js'].map((name) => module(name).trimEnd());
+const parts = ['state-adapter.js', 'editor.js', 'forms.js', 'action-editor.js', 'schedule-editor.js', 'timeline.js'].map((name) => module(name).trimEnd());
 writeFileSync(new URL('schedule-creator-card.js', output), `${[...parts, card.trimEnd()].join('\n')}\n`);

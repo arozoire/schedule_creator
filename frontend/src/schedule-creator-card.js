@@ -1,11 +1,12 @@
 import { ScheduleCreatorStateAdapter } from './state-adapter.js';
 import { weeklySegments } from './timeline.js';
 import { clean, messageFor, parseJson, diagnosticFor } from './editor.js';
-import { controllable, targetEntities, blankCondition, conditionForm, readCondition, notificationForm, readNotification, slotsForm, readSlots } from './forms.js';
+import { controllable, targetEntities, notificationForm, readNotification } from './forms.js';
+import { blankCondition, conditionForm, readCondition, slotsForm, readSlots, magnetSnap, toMinutes, toTime, DAY_SHORTCUTS, iconPicker, colorPicker } from './schedule-editor.js';
 import { actionForm, readAction, describeAction } from './action-editor.js';
 
 const STYLE = '__SC_CSS__';
-const CARD_VERSION = '0.3.5';
+const CARD_VERSION = '0.3.6';
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
@@ -44,6 +45,7 @@ class ScheduleCreatorCard extends HTMLElement {
     this.dialog = this.shadowRoot.querySelector('dialog');
     this.dialog.addEventListener('cancel', event=>{event.preventDefault(); if(!this.adapter.busy) this.closeEditor();});
     this.shadowRoot.addEventListener('click', (e) => this.click(e));
+    this.shadowRoot.addEventListener('pointerdown', (e) => this.startDrag(e));
     this.shadowRoot.addEventListener('submit', (e) => this.submit(e));
     this.shadowRoot.addEventListener('keydown', (e) => {
       if (e.target.name === 'entity_search' && e.key === 'Enter') e.preventDefault();
@@ -51,13 +53,25 @@ class ScheduleCreatorCard extends HTMLElement {
     this.shadowRoot.addEventListener('input', (e) => {
       if (!e.target.closest('form')) return;
       this.syncRange(e.target);
+      if (e.target.dataset.colorCustom !== undefined) {
+        const radio = e.target.parentElement.querySelector('input[type="radio"]');
+        radio.value = e.target.value; radio.checked = true;
+        e.target.parentElement.style.setProperty('--swatch', e.target.value);
+      }
+      const slotTime = /^slot_(\d+)_(start|end)$/.exec(e.target.getAttribute('name') || '');
+      if (slotTime) {
+        const form = e.target.form;
+        this.syncTimebar(slotTime[1], toMinutes(form.elements[`slot_${slotTime[1]}_start`].value), toMinutes(form.elements[`slot_${slotTime[1]}_end`].value));
+      }
       const name = e.target.getAttribute('name') || e.target.dataset.mirror;
       this.changedFields?.add(name);
       this.capture();
       if (name && name !== 'name' && !/_notification_(title|message)$/.test(name)) this.updateSuggestions();
+      // Choosing a condition entity reveals the comparisons that fit it.
+      if (/^condition(\.\d+)*_entity_id$/.test(name || '') && this._hass.states[e.target.value]) this.render();
       if (e.target.name === 'entity_search') {
         const query = e.target.value.toLowerCase();
-        this.shadowRoot.querySelectorAll('[data-entity-label]').forEach((node) => {
+        e.target.form.querySelectorAll('[data-entity-label]').forEach((node) => {
           const matches = node.dataset.entityLabel.includes(query);
           node.hidden = !matches;
           node.style.setProperty('display', matches ? '' : 'none', matches ? '' : 'important');
@@ -158,8 +172,8 @@ class ScheduleCreatorCard extends HTMLElement {
     const groups = (config.groups || []).filter((g) => g.profile_id === profile?.id).sort(byOrder);
     const group = groups.find((g) => g.id === this.selectedGroup) || groups[0];
     const schedules = (config.schedules || []).filter((s) => s.profile_id === profile?.id && (!group || s.group_id === group.id));
-    const chips = profiles.map((p) => `<button type="button" class="profile-chip ${p.id === profile?.id ? 'viewed' : ''} ${p.active ? 'active-op' : ''}" style="--pchip-color:${tint(p.color)}" aria-pressed="${p.id === profile?.id}" data-profile="${esc(p.id)}">${esc(p.name)}</button>`).join('');
-    const tabs = groups.map((g) => `<button type="button" class="tab ${g.id === group?.id ? 'active' : ''}" aria-pressed="${g.id === group?.id}" data-group="${esc(g.id)}">${esc(g.name)}</button>`).join('');
+    const chips = profiles.map((p) => `<button type="button" class="profile-chip ${p.id === profile?.id ? 'viewed' : ''} ${p.active ? 'active-op' : ''}" style="--pchip-color:${tint(p.color)}" aria-pressed="${p.id === profile?.id}" data-profile="${esc(p.id)}">${p.icon ? `<ha-icon icon="${esc(p.icon)}" aria-hidden="true"></ha-icon>` : ''}${esc(p.name)}</button>`).join('');
+    const tabs = groups.map((g) => `<button type="button" class="tab ${g.id === group?.id ? 'active' : ''}" aria-pressed="${g.id === group?.id}" data-group="${esc(g.id)}" style="--tab-color:${tint(g.color)}">${g.icon ? `<ha-icon icon="${esc(g.icon)}" aria-hidden="true"></ha-icon>` : ''}${esc(g.name)}</button>`).join('');
     const segments=weeklySegments(schedules);
     const palette=['#087f8c','#7057b5','#b65c21','#317a45','#b34269','#326ab2'];
     const colorFor=schedule=>palette[schedules.indexOf(schedule)%palette.length];
@@ -232,6 +246,67 @@ class ScheduleCreatorCard extends HTMLElement {
       return `<li class="sc-overview-row" style="--pchip-color:${tint(p.color)}"><span class="sc-dot"></span><strong>${esc(p.name)}</strong><span class="sc-badge ${p.active ? 'is-active' : ''}">${p.active ? 'Attivo' : 'Inattivo'}</span><span class="sc-meta">${p.profile_type === 'exclusive' ? 'Esclusivo' : 'Condiviso'} · ${groups} gruppi · ${schedules.length} schedule · ${entities} entità</span></li>`;
     }).join('');
     return `<details class="sc-overview" data-section="overview"><summary>Panoramica profili e interazioni</summary><ul class="sc-overview-list">${rows}</ul><p class="sc-meta"><strong>Esclusivo</strong>: attivandolo si disattivano gli altri profili esclusivi. <strong>Condiviso</strong>: resta attivo insieme agli altri. Solo i profili attivi eseguono i loro schedule. Se due fasce comandano la stessa entità vince quella iniziata per ultima; a parità un Quick Timer prevale su uno schedule con condizione, che prevale su uno normale. L’ordine serve solo a disporre profili e gruppi.</p><h4>Entità comandate da più profili</h4>${shared.length ? `<ul class="sc-overview-list">${shared.join('')}</ul>` : '<p class="sc-meta">Nessuna: ogni entità è programmata da un solo profilo.</p>'}</details>`;
+  }
+  otherSlots(config, ids, ownId) {
+    const palette = ['#087f8c','#7057b5','#b65c21','#317a45','#b34269','#326ab2'];
+    return (config.schedules || []).filter((s) => s.id !== ownId && s.target_entity_ids.some((x) => ids.includes(x)))
+      .flatMap((s) => (s.time_slots || []).map((slot) => ({...slot, name: s.name, color: palette[config.schedules.indexOf(s) % palette.length]})));
+  }
+  statusEnabled(config, scheduleId) {
+    return !!scheduleId && (config.settings?.status_notification_schedule_ids || []).includes(scheduleId);
+  }
+  notificationExtras(config, item) {
+    const url = config.settings?.notification_url;
+    const here = window.location?.pathname?.startsWith('/') ? window.location.pathname : '';
+    const status = this.draft?.status_notification === undefined ? this.statusEnabled(config, item?.id) : this.draft.status_notification === 'on';
+    return `<fieldset><legend>Notifica di stato</legend><label class="sc-check"><input type="checkbox" name="status_notification" ${status ? 'checked' : ''}>Notifica persistente per tutta la fascia</label><p>In Home Assistant compare una notifica che dice se lo schedule è attivo, in pausa per la condizione o in attesa di un altro controllo; si aggiorna da sola e sparisce a fine fascia.</p></fieldset>
+      <fieldset><legend>Tocco sulla notifica</legend><p>${url ? `Apre <strong>${esc(url)}</strong> (app Companion e notifiche di Home Assistant).` : 'Nessuna pagina impostata: la notifica non apre nulla.'}</p><div class="sc-controls">${url !== here && here ? button('setNotificationUrl','Apri questa dashboard',here) : ''}${url ? button('setNotificationUrl','Rimuovi collegamento','') : ''}</div></fieldset>`;
+  }
+  entityRadios(ids, selected) {
+    const states = this._hass?.states || {};
+    return `<label>Ricerca entità<input type="search" name="entity_search" placeholder="Nome, dominio o ID"></label><div class="sc-entities" role="radiogroup" aria-label="Entità">${[...ids].sort().map((id) => `<label data-entity-label="${esc(`${id} ${states[id]?.attributes?.friendly_name || ''}`.toLowerCase())}"><input type="radio" name="entity_id" value="${esc(id)}" ${id === selected ? 'checked' : ''}><span><span class="sc-entity-name">${esc(states[id]?.attributes?.friendly_name || id)}</span><span class="sc-entity-id">${esc(id)}</span></span></label>`).join('')}</div>`;
+  }
+  // Drag the slot (move) or a handle (resize) with snap and magnets, like weekly-schedule-card.
+  startDrag(event) {
+    const bar = event.target.closest('.sc-tb-edit[data-slot-bar]');
+    if (!bar || event.button > 0) return;
+    event.preventDefault();
+    const track = bar.parentElement, i = bar.dataset.slotBar;
+    const form = this.shadowRoot.querySelector('form[data-editor]');
+    const startInput = form.elements[`slot_${i}_start`], endInput = form.elements[`slot_${i}_end`];
+    const handle = event.target.closest('[data-handle]')?.dataset.handle || 'move';
+    const s0 = toMinutes(startInput.value), e0 = toMinutes(endInput.value), x0 = event.clientX;
+    const magnets = (track.dataset.magnets || '').split(',').filter(Boolean).map(Number);
+    const snap = Number(track.dataset.snap) || 15;
+    bar.setPointerCapture?.(event.pointerId);
+    const move = (e) => {
+      const width = track.getBoundingClientRect().width || 1;
+      const dx = (e.clientX - x0) / width * 1440, threshold = 10 / width * 1440;
+      let start = s0, end = e0;
+      const snapTo = (m) => magnetSnap(m, magnets, threshold, snap);
+      if (handle === 'move') {
+        const duration = e0 - s0, a = snapTo(s0 + dx), b = snapTo(e0 + dx) - duration;
+        start = Math.max(0, Math.min(1440 - duration, Math.abs(a - s0 - dx) <= Math.abs(b - s0 - dx) ? a : b));
+        end = start + duration;
+      } else if (handle === 'start') start = Math.max(0, Math.min(e0 - snap, snapTo(s0 + dx)));
+      else end = Math.max(s0 + snap, Math.min(1440, snapTo(e0 + dx)));
+      startInput.value = toTime(start); endInput.value = toTime(end % 1440);
+      track.querySelectorAll('.sc-tb-magnet').forEach((m) => m.classList.toggle('is-near', [start, end].includes(Number(m.dataset.min))));
+      this.syncTimebar(i, start, end);
+    };
+    const stop = () => {
+      bar.removeEventListener('pointermove', move); bar.removeEventListener('pointerup', stop); bar.removeEventListener('pointercancel', stop);
+      track.querySelectorAll('.sc-tb-magnet').forEach((m) => m.classList.remove('is-near'));
+      startInput.dispatchEvent(new Event('input', {bubbles: true}));
+    };
+    bar.addEventListener('pointermove', move); bar.addEventListener('pointerup', stop); bar.addEventListener('pointercancel', stop);
+  }
+  syncTimebar(i, start, end) {
+    const bar = this.shadowRoot.querySelector(`.sc-tb-edit[data-slot-bar="${i}"]`);
+    if (!bar || end <= start) return;
+    bar.style.left = `${start / 1440 * 100}%`; bar.style.width = `${(end - start) / 1440 * 100}%`;
+    bar.classList.toggle('is-narrow', end - start < 150);
+    bar.querySelector('.sc-tb-label').textContent = `${toTime(start)}–${toTime(end)}`;
   }
   syncRange(node) {
     const root = node?.closest?.('.sc-range');
@@ -323,8 +398,8 @@ class ScheduleCreatorCard extends HTMLElement {
     const item = this.editRecord;
     const d = this.draft || {};
     let content = '';
-    if (kind === 'profile') content = `${field('name', 'Nome', item?.name)}${select('profile_type', 'Tipo', [['exclusive','Esclusivo'],['shared','Condiviso']], item?.profile_type || 'exclusive')}${field('icon','Icona',item?.icon)}${field('color','Colore HEX',item?.color)}${field('order','Posizione nell’elenco (0 = primo)',item?.order ?? 0,'number')}<p>Serve solo a ordinare l’elenco: non cambia priorità né esecuzione.</p>`;
-    if (kind === 'group') content = `${field('name','Nome',item?.name)}${field('icon','Icona',item?.icon)}${field('color','Colore HEX',item?.color)}${field('order','Posizione nell’elenco (0 = primo)',item?.order ?? 0,'number')}<p>Serve solo a ordinare l’elenco: non cambia priorità né esecuzione.</p>${this.entities(d.selectedEntities || item?.entity_ids || [])}`;
+    if (kind === 'profile') content = `${field('name', 'Nome', item?.name)}${select('profile_type', 'Tipo', [['exclusive','Esclusivo'],['shared','Condiviso']], item?.profile_type || 'exclusive')}${iconPicker(d.icon ?? item?.icon)}${colorPicker(d.color ?? item?.color)}${field('order','Posizione nell’elenco (0 = primo)',item?.order ?? 0,'number')}<p>Serve solo a ordinare l’elenco: non cambia priorità né esecuzione.</p>`;
+    if (kind === 'group') content = `${field('name','Nome',item?.name)}${iconPicker(d.icon ?? item?.icon)}${colorPicker(d.color ?? item?.color)}${field('order','Posizione nell’elenco (0 = primo)',item?.order ?? 0,'number')}<p>Serve solo a ordinare l’elenco: non cambia priorità né esecuzione.</p>${this.entities(d.selectedEntities || item?.entity_ids || [])}`;
     if (kind === 'schedule') {
       const owner = config.groups.find((g) => g.id === this.ownerGroup);
       const ids = d.selectedEntities || item?.target_entity_ids || targetEntities(this._hass,owner?.entity_ids || []).slice(0,1);
@@ -333,14 +408,14 @@ class ScheduleCreatorCard extends HTMLElement {
       const condition = this.conditionDraft === undefined ? item?.condition : this.conditionDraft;
       content = `<div class="sc-name-row">${field('name','Nome',item?.name)}${button('suggestName','Suggerisci')}</div><label class="sc-check"><input name="enabled" type="checkbox" ${item?.enabled !== false ? 'checked' : ''}>Abilitato</label>
         <p>Gruppo: ${esc(owner?.name || 'non disponibile')}. Scegli dispositivi dello stesso tipo.</p>${this.entities(ids,owner?.entity_ids || [])}
-        <p>Orari: ${esc(this._hass.config?.time_zone || 'fuso Home Assistant')}. Se la fine precede l’inizio, la fascia termina il giorno successivo.</p>${slotsForm(slots)}
+        <p>Orari: ${esc(this._hass.config?.time_zone || 'fuso Home Assistant')}. Se la fine precede l’inizio, la fascia termina il giorno successivo.</p>${slotsForm(slots,{others:this.otherSlots(config,ids,item?.id),snap:this.snap})}
         ${actionForm('start','Azione iniziale',this._hass,ids,this.actionReset?null:item?.start_action,false,d)}${actionForm('end','Azione finale',this._hass,ids,this.actionReset?null:item?.end_action,true,d)}
-        <details><summary>Condizioni e opzioni</summary><h4>Condizione</h4>${conditionForm(condition)}<datalist id="sc-condition-entities">${Object.keys(this._hass.states||{}).map((id)=>`<option value="${esc(id)}">${esc(this._hass.states[id].attributes?.friendly_name||id)}</option>`).join('')}</datalist>
+        <details><summary>Condizioni e opzioni</summary><h4>Condizione</h4>${conditionForm(condition,this._hass)}<datalist id="sc-condition-entities">${Object.keys(this._hass.states||{}).sort().map((id)=>`<option value="${esc(id)}">${esc(this._hass.states[id].attributes?.friendly_name||id)}</option>`).join('')}</datalist>
         <p>Se falsa: azione finale se presente, altrimenti ripristino deciso dal motore. La fine fascia senza azione finale non invia comandi.</p>
         ${select('override_policy','Comandi manuali', [['cooperative','Cooperativa'],['manual_override','Priorità al comando manuale']],item?.override_policy || 'cooperative')}
         ${field('inclusion_dates','Date incluse (AAAA-MM-GG, separate da virgola)',(item?.inclusion_dates || []).join(', '))}
         ${field('exclusion_dates','Date escluse (AAAA-MM-GG, separate da virgola)',(item?.exclusion_dates || []).join(', '))}
-        ${notificationForm('start_notification','Notifica iniziale',item?.start_notification,this._hass,d)}${notificationForm('end_notification','Notifica finale',item?.end_notification,this._hass,d)}</details>
+        ${notificationForm('start_notification','Notifica iniziale',item?.start_notification,this._hass,d)}${notificationForm('end_notification','Notifica finale',item?.end_notification,this._hass,d)}${this.notificationExtras(config,item)}</details>
         <details><summary>Pro · configurazione JSON</summary><label class="sc-check"><input type="checkbox" name="pro_config_enabled">Usa JSON per condizioni, fasce e notifiche</label>${area('pro_config','Configurazione avanzata',json({time_slots:slots,condition:condition||null,start_notification:item?.start_notification||null,end_notification:item?.end_notification||null}),8)}</details>`;
     }
     if (kind === 'restore') {
@@ -356,7 +431,7 @@ class ScheduleCreatorCard extends HTMLElement {
       const ids = targetEntities(this._hass);
       const selected = d.entity_id || ids[0];
       this.actionDomain = selected?.split('.')[0];
-      content = `${select('entity_id','Entità',ids.map((id) => [id, `${this._hass.states[id].attributes?.friendly_name || id} · ${id}`]),selected)}${field('duration_seconds','Durata in secondi (1–604800)',300,'number')}${actionForm('timer','Azione timer',this._hass,selected?[selected]:[],null,false,d)}`;
+      content = `${this.entityRadios(ids,selected)}${field('duration_seconds','Durata in secondi (1–604800)',300,'number')}${actionForm('timer','Azione timer',this._hass,selected?[selected]:[],null,false,d)}`;
     }
     return `<form data-editor="${esc(kind)}" class="sc-editor"><h3 id="sc-editor-title">${({profile:id?'Modifica profilo':'Nuovo profilo',group:id?'Modifica gruppo':'Nuovo gruppo',schedule:id?'Modifica schedule':'Nuovo schedule',timer:'Quick Timer',restore:'Ripristina backup',reset:'RESET completo'})[kind]}</h3>${content}<div class="sc-actions"><button type="submit" ${kind === 'reset' ? 'class="sc-danger"' : ''}>${({restore:'Ripristina',reset:'Cancella tutto'})[kind] || 'Salva'}</button>${button('close','Annulla')}</div></form>`;
   }
@@ -366,22 +441,46 @@ class ScheduleCreatorCard extends HTMLElement {
     if (buttonEl.dataset.group) { this.selectedGroup = buttonEl.dataset.group; this.edit = null; this.draft = null; this.render(); return; }
     const command = buttonEl.dataset.command, id = buttonEl.dataset.id;
     if (!command) return;
-    if (['addSlot','removeSlot','addCondition','addConditionChild','removeCondition'].includes(command)) {
+    if (['addSlot','removeSlot','addCondition','addConditionChild','removeCondition','setSnap','slotDays'].includes(command)) {
       this.capture();
-      if (command === 'addSlot') this.slotDraft.push({weekdays:[0,1,2,3,4,5,6],start:'08:00',end:'09:00'});
+      if (command === 'setSnap') this.snap = Number(id);
+      if (command === 'slotDays') { const [i, key] = id.split(':'); this.slotDraft[Number(i)].weekdays = [...DAY_SHORTCUTS[key]]; }
+      if (command === 'addSlot') {
+        // Like weekly-schedule-card "next slot": start where the last one ends.
+        const last = this.slotDraft.at(-1), start = last ? toMinutes(last.end) % 1440 : 480;
+        this.slotDraft.push({weekdays:[...(last?.weekdays || [0,1,2,3,4,5,6])],start:toTime(start),end:toTime(Math.min(start + 60, 1439))});
+      }
       if (command === 'removeSlot' && this.slotDraft.length>1) this.slotDraft.splice(Number(id),1);
-      if (command === 'addCondition') this.conditionDraft = blankCondition();
-      if (command === 'removeCondition' && id==='condition') this.conditionDraft = null;
-      else if (command === 'addConditionChild' || command === 'removeCondition') {
-        const path = id.split('.').slice(1).map(Number);
+      if (command === 'addCondition') {
+        const root = this.conditionDraft;
+        this.conditionDraft = !root ? blankCondition() : ['and','or'].includes(root.operator) ? {...root, children:[...root.children, blankCondition()]} : {...blankCondition(), operator:'and', entity_id:null, children:[root, blankCondition()]};
+      }
+      if (command === 'addConditionChild') {
         let node = this.conditionDraft;
-        const index = command==='removeCondition' ? path.pop() : null;
-        for (const i of path) node = node.children[i];
-        if (command === 'addConditionChild') node.children.push(blankCondition());
-        else if (node.children.length>2) node.children.splice(index,1);
-        else this.localError = 'Un gruppo E/O richiede almeno due regole. Rimuovi l’intero gruppo per eliminarle.';
+        for (const i of id.split('.').slice(1).map(Number)) node = node.children[i];
+        node.children.push(blankCondition());
+      }
+      if (command === 'removeCondition') {
+        const path = id.split('.').slice(1).map(Number);
+        if (!path.length) this.conditionDraft = null;
+        else {
+          const index = path.pop();
+          let parent = this.conditionDraft;
+          for (const i of path) parent = parent.children[i];
+          parent.children.splice(index, 1);
+          // A group with a single rule collapses into that rule.
+          if (parent.children.length === 1) {
+            if (parent === this.conditionDraft) this.conditionDraft = parent.children[0];
+            else Object.assign(parent, parent.children[0]);
+          }
+        }
       }
       this.render(); return;
+    }
+    if (command === 'setNotificationUrl') {
+      await this.adapter.mutate('settings/update', {notification_url: id || null});
+      this.editRevision = this.adapter.state.revision;
+      return;
     }
     if (command === 'close') { this.closeEditor(); return; }
     if (command === 'suggestName') { this.capture(); this.updateSuggestions(true); return; }
@@ -462,7 +561,9 @@ class ScheduleCreatorCard extends HTMLElement {
           Object.assign(payload,clean(pro));
         }
         for (const key of ['start_notification','end_notification']) if (payload[key] && !payload[key].message.trim()) throw new Error('Inserisci il messaggio della notifica oppure disabilitala.');
-        const validateCondition = (node) => {if (!node) return;if (['and','or'].includes(node.operator)) {if(node.children.length<2) throw new Error('Servono due regole per E/O.');node.children.forEach(validateCondition);} else if (!node.entity_id || !this._hass.states[node.entity_id]) throw new Error('Seleziona un’entità valida nella condizione.');};
+        const statusWanted = form.elements.status_notification?.checked ?? false;
+        if (statusWanted !== this.statusEnabled(config, id)) payload.status_notification = statusWanted;
+        const validateCondition = (node) => {if (!node) return;if (['and','or'].includes(node.operator)) {if(node.children.length<2) throw new Error('Servono due regole per E/O.');node.children.forEach(validateCondition);} else {if (!node.entity_id || !this._hass.states[node.entity_id]) throw new Error('Seleziona un’entità valida nella condizione.');if (node.operator === 'numeric_range' ? node.lower === null || node.upper === null : node.operator !== 'available' && (node.value === null || node.value === '')) throw new Error('Completa il valore della condizione.');}};
         validateCondition(payload.condition);
       }
       if (kind === 'timer') { const domain = data.entity_id.split('.')[0]; payload = {entity_id:data.entity_id,duration_seconds:Number(data.duration_seconds),action:readAction(form,'timer',domain)}; if (payload.duration_seconds<1 || payload.duration_seconds>604800) throw new Error('La durata deve essere tra 1 e 604800 secondi.'); }
@@ -475,7 +576,7 @@ class ScheduleCreatorCard extends HTMLElement {
             if (![...this.changedFields].some((name)=>name.startsWith(`${prefix}_`) && !name.startsWith(`${prefix}_notification`))) delete payload[`${prefix}_action`];
           }
         }
-        for (const key of Object.keys(payload)) if (JSON.stringify(payload[key]) === JSON.stringify(clean(this.editRecord[key]))) delete payload[key];
+        for (const key of Object.keys(payload)) if (key !== 'status_notification' && JSON.stringify(payload[key]) === JSON.stringify(clean(this.editRecord[key]))) delete payload[key];
         if (!Object.keys(payload).length) { this.edit=null; this.draft=null; this.render(); return; }
         payload[`${kind}_id`] = id;
       }
