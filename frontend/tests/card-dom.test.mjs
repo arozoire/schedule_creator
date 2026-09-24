@@ -33,7 +33,7 @@ test('group lists controllable entities and search really hides nonmatches',asyn
  assert.equal(t.root.querySelector('[name="entities"][value="sensor.temperature"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="automation.test"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="update.test"]'),null);
- assert.equal(t.root.querySelector('.sc-version').textContent,'v0.3.6');
+ assert.equal(t.root.querySelector('.sc-version').textContent,'v0.3.7');
  t.set('entity_search','lampada','input');
  const hidden=t.root.querySelector('[value="switch.outside"]').parentElement;
  assert.equal(hidden.hidden,true);
@@ -102,7 +102,7 @@ test('local action failure exposes phase and stack, keeps draft and permits retr
  const details=t.root.querySelector('.sc-error-details textarea').value;
  assert.match(details,/Fase: lettura azione iniziale/);
  assert.match(details,/Traccia:\nError: Method not implemented/);
- assert.match(details,/Schedule Creator: 0.3.6/);
+ assert.match(details,/Schedule Creator: 0.3.7/);
  assert.match(t.root.querySelector('.sc-error').textContent,/La bozza è conservata/);
  t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
  assert.equal(t.writes.length,1);
@@ -178,7 +178,10 @@ test('climate schedule sets a desired state at start and turns off at end',async
  const temperature=t.root.querySelector('[name="start_temperature"]');
  assert.equal(temperature.min,'7');assert.equal(temperature.max,'30');
  t.pick('start_mode','cool');
- const mirror=t.root.querySelector('[data-mirror="start_temperature"]');mirror.value='24';mirror.dispatchEvent(new t.dom.window.Event('input',{bubbles:true}));
+ t.set('start_temperature','24','input');
+ t.root.querySelector('[data-command="stepValue"][data-id="start_temperature:1"]').click();
+ assert.equal(t.root.querySelector('[name="start_temperature"]').value,'24.5');
+ t.root.querySelector('[data-command="stepValue"][data-id="start_temperature:-1"]').click();
  assert.equal(t.root.querySelector('[name="start_temperature"]').value,'24');
  t.pick('start_fan_mode','low');t.pick('end_mode','off');
  assert.match(t.root.querySelector('[name="name"]').value,/Freddo 24°/);
@@ -230,7 +233,7 @@ test('name and notification texts are suggested until the user edits them',async
 test('version mismatch explains reload or restart',async()=>{
  const t=setup();try {await tick();
  assert.match(t.root.querySelector('.sc-warning').textContent,/Riavvia Home Assistant/);
- t.card.adapter.state={...structuredClone(t.snapshot),integration_version:'0.3.6'};t.card.render();
+ t.card.adapter.state={...structuredClone(t.snapshot),integration_version:'0.3.7'};t.card.render();
  assert.equal(t.root.querySelector('.sc-warning'),null);
  t.card.adapter.state.integration_version='0.4.0';t.card.render();
  assert.match(t.root.querySelector('.sc-warning').textContent,/Ricarica la pagina/);
@@ -353,11 +356,43 @@ test('renaming preserves opaque action data, draft revision and open options',as
  t.snapshot.config.groups[0].entity_ids=['light.rgb'];
  t.snapshot.config.schedules=[{id:'s',profile_id:'p',group_id:'g',name:'Light',enabled:true,target_entity_ids:['light.rgb'],time_slots:[{weekdays:[2],start:'12:00',end:'12:10'}],start_action:{id:'a',domain:'light',action:'turn_on',data:{brightness:137,transition:3}},end_action:null,condition:null,override_policy:'cooperative',inclusion_dates:[],exclusion_dates:[],start_notification:null,end_notification:null}];
  t.card.render();t.click('editSchedule');
- const options=[...t.root.querySelectorAll('details')].find((x)=>x.querySelector('summary').textContent==='Condizioni e opzioni');options.open=true;
+ const options=t.root.querySelector('details[data-section="row-conditions"]');options.open=true;
  t.set('name','Renamed','input');t.snapshot.revision=9;t.card.render();
- assert.equal([...t.root.querySelectorAll('details')].find((x)=>x.querySelector('summary').textContent==='Condizioni e opzioni').open,true);
+ assert.equal(t.root.querySelector('details[data-section="row-conditions"]').open,true);
  t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
  assert.equal(t.writes[0].expected_revision,3);assert.equal(t.writes[0].name,'Renamed');
  assert.equal('start_action' in t.writes[0],false);
+ }finally{t.close();}
+});
+test('agenda view: today column, now line, running tile and summaries',async()=>{
+ const t=setup();try {await tick();
+ const {haNow,temperatureColor}=await import('../src/schedule-creator-card.js').catch(()=>({}));
+ const now=new Date();const day=(now.getDay()+6)%7;
+ const hh=(m)=>`${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+ const minutes=now.getHours()*60+now.getMinutes();
+ const s={id:'c',profile_id:'p',group_id:'g',name:'AC',enabled:true,target_entity_ids:['climate.room'],time_slots:[{weekdays:[day],start:hh(Math.max(0,minutes-30)),end:hh(Math.min(1439,minutes+30))}],start_action:{domain:'climate',action:'apply_state',data:{state:'cool',temperature:23}},end_action:{domain:'climate',action:'apply_state',data:{state:'off'}},condition:{operator:'state_equals',entity_id:'switch.a',value:'off',children:[]}};
+ const st=structuredClone(t.snapshot);st.config.groups[0].entity_ids=['climate.room'];st.config.schedules=[s];
+ st.operational={occurrences:[{id:'o',schedule_id:'c',state:'active',condition_branch:'true',end_utc:new Date(Date.now()+1800000).toISOString()}],leases:[]};
+ t.hass.config.time_zone=Intl.DateTimeFormat().resolvedOptions().timeZone;
+ t.card.adapter.state=st;t.card.render();
+ assert.match(t.root.querySelector('.sc-now-tile.is-running').textContent,/Freddo 23°/);
+ assert.ok(t.root.querySelector('.sc-day-track.is-today .sc-now-line'));
+ assert.ok(t.root.querySelector('.sc-day-track.is-today .sc-time-block.is-running'));
+ assert.match(t.root.querySelector('.sc-sub').textContent,/1 fascia in corso/);
+ st.operational.occurrences[0].condition_branch='false';t.card.render();
+ assert.match(t.root.querySelector('.sc-now-tile.is-paused').textContent,/condizione non è soddisfatta/);
+ t.click('editSchedule');
+ assert.match(t.root.querySelector('[data-section="row-end"] summary').textContent,/Spento/);
+ assert.match(t.root.querySelector('[data-section="row-conditions"] summary').textContent,/Lampada test/);
+ assert.equal(t.root.querySelector('.sc-save').textContent,'Salva schedule');
+ }finally{t.close();}
+});
+test('condition release delay is offered and saved',async()=>{
+ const t=setup();try {await tick();t.click('newSchedule');t.click('addCondition');
+ t.set('condition_entity_id','sensor.temperature','input');t.set('condition_value','500','input');
+ t.pick('condition_minimum_duration_seconds','600');t.pick('condition_release_delay_seconds','900');
+ t.submit();await tick();
+ assert.equal(t.writes[0].condition.release_delay_seconds,900);
+ assert.equal(t.writes[0].condition.minimum_duration_seconds,600);
  }finally{t.close();}
 });

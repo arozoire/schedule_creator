@@ -371,3 +371,12 @@ e allo scarico dell'integrazione. È solo informativa e non passa dal journal.
 le notifiche `notify.*` ricevono `data.clickAction` e `data.url` (app Companion
 Android/iOS) e quelle `persistent_notification` un link «Apri Schedule Creator».
 URL esterni sono rifiutati.
+
+## Ritardo in uscita delle condizioni (0.3.7)
+
+Ogni nodo condizione accetta `release_delay_seconds` (facoltativo, ≥ 0). Una
+condizione già vera resta vera finché non è falsa ininterrottamente per quel
+tempo; se torna vera prima, il conteggio riparte. Durante l'attesa l'isteresi
+resta applicata. `minimum_duration_seconds` resta il ritardo in entrata. Il campo
+è omesso dal JSON quando non impostato, quindi i dati 0.3.6 non cambiano forma.
+Esempio tende: lux > 500, isteresi 100, entrata 600 s, uscita 900 s.

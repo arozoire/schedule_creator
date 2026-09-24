@@ -225,3 +225,48 @@ def test_now_must_be_utc() -> None:
 
     with pytest.raises(ValueError, match="UTC"):
         evaluate_condition(condition, {}, datetime(2026, 9, 22, 12))
+
+
+def test_release_delay_holds_a_true_condition_through_short_dips() -> None:
+    """Lux > 500 (hysteresis 100): close after 10 min, reopen after 15 min."""
+    condition = replace(
+        _node(
+            ConditionOperator.NUMERIC_GREATER,
+            entity_id="sensor.lux",
+            value=500,
+            duration=600,
+            hysteresis=100,
+        ),
+        release_delay_seconds=900,
+    )
+
+    def at(minutes: float, lux: str, previous=None):
+        return evaluate_condition(
+            condition, {"sensor.lux": lux}, NOW + timedelta(minutes=minutes), previous
+        )
+
+    state = at(0, "700")
+    assert state.result is False
+    state = at(10, "700", state)
+    assert state.result is True
+    # A cloud: below the hysteresis band, but for less than the release delay.
+    state = at(12, "300", state)
+    assert state.result is True
+    assert state.nodes[0].ready_at == NOW + timedelta(minutes=27)
+    # Back above 400 (hysteresis kept while held): stays true, delay resets.
+    state = at(20, "450", state)
+    assert state.result is True
+    state = at(21, "300", state)
+    assert state.result is True
+    state = at(36, "300", state)
+    assert state.result is False
+
+
+def test_release_delay_round_trips_and_is_omitted_when_unset() -> None:
+    """Stored 0.3.6 conditions keep their JSON shape."""
+    plain = _node(ConditionOperator.NUMERIC_GREATER, value=20)
+    assert "release_delay_seconds" not in plain.to_dict()
+    assert ConditionNode.from_dict(plain.to_dict()) == plain
+    delayed = replace(plain, release_delay_seconds=60)
+    assert delayed.to_dict()["release_delay_seconds"] == 60
+    assert ConditionNode.from_dict(delayed.to_dict()) == delayed

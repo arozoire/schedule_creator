@@ -3,10 +3,10 @@ import { weeklySegments } from './timeline.js';
 import { clean, messageFor, parseJson, diagnosticFor } from './editor.js';
 import { controllable, targetEntities, notificationForm, readNotification } from './forms.js';
 import { blankCondition, conditionForm, readCondition, slotsForm, readSlots, magnetSnap, toMinutes, toTime, DAY_SHORTCUTS, iconPicker, colorPicker } from './schedule-editor.js';
-import { actionForm, readAction, describeAction } from './action-editor.js';
+import { actionForm, readAction, describeAction, pretty } from './action-editor.js';
 
 const STYLE = '__SC_CSS__';
-const CARD_VERSION = '0.3.6';
+const CARD_VERSION = '0.3.7';
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
@@ -15,6 +15,19 @@ const area = (name, title, value, rows = 4) => `<label>${title}<textarea name="$
 const select = (name, title, options, current) => `<label>${title}<select name="${name}">${options.map(([value, label]) => `<option value="${esc(value)}" ${value === current ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label>`;
 const button = (name, label, id = '') => `<button type="button" data-command="${name}" data-id="${esc(id)}">${esc(label)}</button>`;
 const json = (value) => JSON.stringify(clean(value), null, 2);
+// Wall clock in the Home Assistant time zone: weekday 0 = Monday.
+export function haNow(timeZone, date = new Date()) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {timeZone: timeZone || undefined, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'}).formatToParts(date).map((p) => [p.type, p.value]));
+  return {weekday: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(parts.weekday), minutes: Number(parts.hour) * 60 + Number(parts.minute), label: `${parts.hour}:${parts.minute}`};
+}
+// Climate blocks: blue (cool) to orange (warm), like weekly-schedule-card.
+export function temperatureColor(value) {
+  const t = Math.min(1, Math.max(0, (Number(value) - 17) / 12));
+  const stops = [[74, 144, 217], [150, 196, 232], [240, 138, 75]];
+  const [a, b, f] = t < 0.5 ? [stops[0], stops[1], t * 2] : [stops[1], stops[2], (t - 0.5) * 2];
+  return `rgb(${a.map((c, i) => Math.round(c + (b[i] - c) * f)).join(',')})`;
+}
+const FULL_DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
 const byOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0) || String(a.name).localeCompare(String(b.name));
 const daysLabel = (days) => {
   const d = [...days].sort((a, b) => a - b), key = d.join('');
@@ -176,21 +189,34 @@ class ScheduleCreatorCard extends HTMLElement {
     const tabs = groups.map((g) => `<button type="button" class="tab ${g.id === group?.id ? 'active' : ''}" aria-pressed="${g.id === group?.id}" data-group="${esc(g.id)}" style="--tab-color:${tint(g.color)}">${g.icon ? `<ha-icon icon="${esc(g.icon)}" aria-hidden="true"></ha-icon>` : ''}${esc(g.name)}</button>`).join('');
     const segments=weeklySegments(schedules);
     const palette=['#087f8c','#7057b5','#b65c21','#317a45','#b34269','#326ab2'];
-    const colorFor=schedule=>palette[schedules.indexOf(schedule)%palette.length];
+    const colorFor=schedule=>{
+      const data=schedule.start_action?.data||{};
+      return schedule.start_action?.domain==='climate' && data.temperature!=null && data.state!=='off' ? temperatureColor(data.temperature) : palette[schedules.indexOf(schedule)%palette.length];
+    };
+    const now=haNow(this._hass?.config?.time_zone);
+    this.clockMinute=now.minutes;
+    const occurrences=state?.operational?.occurrences||[];
+    const runningState=(scheduleId)=>{
+      const item=occurrences.find((x)=>x.schedule_id===scheduleId);
+      if(!item) return '';
+      return item.condition_branch==='false' || item.state==='suspended' ? 'is-paused' : 'is-running';
+    };
     const time=minute=>`${String(Math.floor(minute/60)).padStart(2,'0')}:${String(minute%60).padStart(2,'0')}`;
-    const slots = `<div class="sc-timeline-head"><span>Ora</span>${DAYS.map(day=>`<strong>${day}</strong>`).join('')}</div><div class="sc-timeline-grid"><div class="sc-time-axis">${Array.from({length:13},(_,i)=>`<span style="top:${i/12*100}%">${time(i*120)}</span>`).join('')}</div>${DAYS.map((day,index)=>`<div class="sc-day-track" aria-label="${day}">${segments[index].map(({schedule,start,end,lane,lanes})=>{
+    const slots = `<div class="sc-timeline-head"><span>Ora</span>${DAYS.map((day,index)=>`<strong class="${index===now.weekday?'is-today':''}">${day}${index===now.weekday?' · oggi':''}</strong>`).join('')}</div><div class="sc-timeline-grid"><div class="sc-time-axis">${Array.from({length:13},(_,i)=>`<span style="top:${i/12*100}%">${time(i*120)}</span>`).join('')}</div>${DAYS.map((day,index)=>`<div class="sc-day-track ${index===now.weekday?'is-today':''}" aria-label="${day}">${segments[index].map(({schedule,start,end,lane,lanes})=>{
       const label=`${schedule.name} · ${day} ${time(start)}–${time(end)}${schedule.enabled?'':' · Disabilitato'}`;
-      return `<button type="button" class="sc-time-block ${schedule.enabled?'':'is-off'}" data-command="editSchedule" data-id="${esc(schedule.id)}" aria-label="${esc(label)}" title="${esc(label)}" style="top:${start/1440*100}%;height:${(end-start)/1440*100}%;left:${lane/lanes*100}%;width:${100/lanes}%;--block-color:${colorFor(schedule)}"><span>${esc(schedule.name)}</span><small>${time(start)}–${time(end)}</small></button>`;
-    }).join('')}</div>`).join('')}</div>`;
+      const live=index===now.weekday && start<=now.minutes && now.minutes<end ? runningState(schedule.id) : '';
+      return `<button type="button" class="sc-time-block ${schedule.enabled?'':'is-off'} ${live}" data-command="editSchedule" data-id="${esc(schedule.id)}" aria-label="${esc(label)}" title="${esc(label)}" style="top:${start/1440*100}%;height:${(end-start)/1440*100}%;left:${lane/lanes*100}%;width:${100/lanes}%;--block-color:${colorFor(schedule)}"><span>${esc(schedule.name)}</span><small>${time(start)}–${time(end)}</small></button>`;
+    }).join('')}${index===now.weekday?`<span class="sc-now-line" style="top:${now.minutes/1440*100}%" aria-label="Ora ${now.label}"></span>`:''}</div>`).join('')}</div>`;
+    const legend = `<div class="sc-legend" aria-hidden="true"><span><i class="sc-legend-temp"></i>Clima: freddo → caldo</span><span><i class="sc-legend-running"></i>In corso</span><span><i class="sc-legend-paused"></i>In pausa</span><span><i class="sc-legend-now"></i>Ora</span></div>`;
     const advice = state ? versionAdvice(state.integration_version) : '';
     const status = `${error ? `<div class="status error" role="alert">${esc(messageFor(error))}</div>` : loading ? '<div class="status">Caricamento…</div>' : ''}${advice ? `<div class="status sc-warning" role="status">${esc(advice)}</div>` : ''}${this.notice && !this.edit ? `<div class="status sc-notice" role="status">${esc(this.notice)}</div>` : ''}`;
     const info = this.localError || writeError;
     const errorDetails = this.localError ? this.localErrorDetails : writeError ? diagnosticFor(writeError, {cardVersion:CARD_VERSION,haVersion:this._hass.config?.version}) : null;
     const editable = this._hass?.user?.is_admin === true && writeError?.code !== 'unauthorized';
     const view = state ? `<div class="profile-status-bar">${profile ? `<span class="sc-badge ${profile.active ? 'is-active' : ''}">${profile.active ? 'Profilo attivo' : 'Profilo inattivo'}</span><span>${esc(profile.profile_type === 'exclusive' ? 'Esclusivo' : 'Condiviso')}</span>` : 'Crea un profilo per iniziare'}<span>· ${state.quick_timers?.length ?? 0} timer attivi</span></div>
-      ${groups.length ? `<nav class="tab-bar" aria-label="Gruppi">${tabs}</nav>` : ''}
-      <div class="sc-toolbar"><div><h2>${esc(group?.name || 'La tua settimana')}</h2><p>${schedules.length} schedule · ${esc(this._hass.config?.time_zone || 'Fuso Home Assistant')}</p></div>${editable ? `<div class="sc-controls">${group ? button('newSchedule','＋ Schedule') : ''}${button('newTimer','Quick Timer')}</div>` : ''}</div>
-      ${schedules.length ? `<section class="sc-timeline" data-scroll="timeline" aria-label="Programmazione settimanale">${slots}</section><p class="sc-meta">Settimana tipo · seleziona una fascia per modificarla. Date speciali e condizioni sono nelle opzioni dello schedule.</p><details data-section="schedules" class="sc-schedules"><summary>Gestisci schedule (${schedules.length})</summary><ul class="sc-list">${schedules.map((schedule) => `<li class="sc-entry" style="--block-color:${colorFor(schedule)}"><div class="sc-entry-copy"><strong>${esc(schedule.name)}</strong><span class="sc-meta">${esc(schedule.target_entity_ids.map((id)=>this._hass.states[id]?.attributes?.friendly_name || id).join(', '))} · ${schedule.enabled ? '' : 'disabilitato · '}${schedule.time_slots?.length ?? 0} ${schedule.time_slots?.length === 1 ? 'fascia' : 'fasce'}</span></div>${editable ? `<div class="sc-entry-actions">${button('editSchedule','Modifica',schedule.id)}${button('deleteSchedule','Elimina',schedule.id)}</div>` : ''}</li>`).join('')}</ul></details>` : `<div class="sc-empty"><strong>${!profile ? 'Inizia dal tuo primo profilo' : !group ? 'Aggiungi un gruppo di dispositivi' : 'La settimana è ancora libera'}</strong>${!profile ? 'Organizza la casa per abitudini, ambienti o stagioni.' : !group ? 'Riunisci i dispositivi che vuoi programmare.' : 'Crea uno schedule e scegli giorni, orari e azioni.'}</div>`}
+      ${this.nowTiles(config, occurrences, state.quick_timers || [])}
+      <div class="sc-toolbar"><h2>Settimana${group ? ` · ${esc(group.name)}` : ''}</h2>${groups.length ? `<nav class="tab-bar" aria-label="Gruppi">${tabs}</nav>` : ''}</div>
+      ${schedules.length ? `<section class="sc-timeline" data-scroll="timeline" aria-label="Programmazione settimanale">${slots}</section>${legend}<details data-section="schedules" class="sc-schedules"><summary>Gestisci schedule (${schedules.length})</summary><ul class="sc-list">${schedules.map((schedule) => `<li class="sc-entry" style="--block-color:${colorFor(schedule)}"><div class="sc-entry-copy"><strong>${esc(schedule.name)}</strong><span class="sc-meta">${esc(schedule.target_entity_ids.map((id)=>this._hass.states[id]?.attributes?.friendly_name || id).join(', '))} · ${schedule.enabled ? '' : 'disabilitato · '}${schedule.time_slots?.length ?? 0} ${schedule.time_slots?.length === 1 ? 'fascia' : 'fasce'}</span></div>${editable ? `<div class="sc-entry-actions">${button('editSchedule','Modifica',schedule.id)}${button('deleteSchedule','Elimina',schedule.id)}</div>` : ''}</li>`).join('')}</ul></details>` : `<div class="sc-empty"><strong>${!profile ? 'Inizia dal tuo primo profilo' : !group ? 'Aggiungi un gruppo di dispositivi' : 'La settimana è ancora libera'}</strong>${!profile ? 'Organizza la casa per abitudini, ambienti o stagioni.' : !group ? 'Riunisci i dispositivi che vuoi programmare.' : 'Crea uno schedule e scegli giorni, orari e azioni.'}</div>`}
       ${editable ? `<details class="sc-management" data-section="management" ${!profile || !group ? 'open' : ''}><summary>Gestisci profili e gruppi</summary><div class="sc-controls">${button('newProfile','＋ Profilo')}${profile ? `${button('editProfile','Modifica profilo',profile.id)}${button('toggleProfile',profile.active ? 'Disattiva profilo' : 'Attiva profilo',profile.id)}${button('deleteProfile','Elimina profilo',profile.id)}${button('newGroup','＋ Gruppo')}` : ''}${group ? `${button('editGroup','Modifica gruppo',group.id)}${button('deleteGroup','Elimina gruppo',group.id)}` : ''}</div></details>` : '<p class="sc-meta">Vista in sola lettura: serve un amministratore per modificare.</p>'}
       ${profiles.length ? this.overview(config, profiles) : ''}
       ${editable ? `<details class="sc-maintenance" data-section="maintenance"><summary>Manutenzione · backup e RESET</summary><p class="sc-meta">Il backup salva profili, gruppi e schedule in un file JSON. Il ripristino li sostituisce e lascia i profili disattivati. RESET cancella tutti i dati di Schedule Creator.</p><div class="sc-controls">${button('exportBackup','Salva backup')}${button('newRestore','Ripristina backup')}${button('newReset','RESET…')}</div></details>` : ''}
@@ -198,10 +224,12 @@ class ScheduleCreatorCard extends HTMLElement {
     const errorMarkup = `${info ? `<p class="sc-error" role="alert">${esc(typeof info === 'string' ? info : messageFor(info))}</p>` : ''}${errorDetails ? `<details class="sc-error-details" data-section="error-details"><summary>Dettagli errore</summary><p>Seleziona e copia questo testo per segnalare il problema.</p><textarea readonly aria-label="Dettagli errore da copiare" rows="10">${esc(errorDetails)}</textarea></details>` : ''}`;
     const surface=this.shadowRoot.querySelector('ha-card');
     surface.style.setProperty('--pchip-color',tint(profile?.color));
-    surface.innerHTML = `<div class="card-header"><div class="hdr-row1"><span class="card-title">${esc(this.config.title || 'Schedule Creator')}</span><span class="sc-version">v${CARD_VERSION}</span></div><p class="sc-eyebrow">Profili</p><div class="hdr-row2" aria-label="Profili">${chips}</div></div>${status}${this.edit ? '' : errorMarkup}${view}`;
+    const running = occurrences.length;
+    const header = `<div class="sc-head"><span class="sc-logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"></rect><path d="M8 2v4M16 2v4M3 10h18M8 15h3"></path></svg></span><div class="sc-head-copy"><span class="card-title">${esc(this.config.title || 'Schedule Creator')}</span><span class="sc-sub">${now.weekday >= 0 ? FULL_DAYS[now.weekday] : ''} · ${now.label}${state ? ` · ${running ? `${running} ${running === 1 ? 'fascia' : 'fasce'} in corso` : 'nessuna fascia in corso'}` : ''}</span></div><span class="sc-version">v${CARD_VERSION}</span>${state && editable ? `<div class="sc-head-actions">${button('newTimer','Quick Timer')}${group ? button('newSchedule','＋ Schedule') : ''}</div>` : ''}</div>`;
+    surface.innerHTML = `<div class="card-header">${header}${profiles.length ? `<div class="sc-segmented" role="group" aria-label="Profili">${chips}</div>` : ''}</div>${status}${this.edit ? '' : errorMarkup}${view}`;
     if(this.edit && editable) {
       const wasOpen=this.dialog.open;
-      this.dialog.innerHTML = `<div class="sc-dialog-heading"><strong>Schedule Creator</strong><button type="button" data-command="close" aria-label="Chiudi editor">✕</button></div>${errorMarkup}${this.notice ? `<div class="status sc-notice" role="status">${esc(this.notice)}</div>` : ''}${this.editor(config,profile,group)}`;
+      this.dialog.innerHTML = `<div class="sc-dialog-heading"><span class="sc-dialog-brand">Schedule Creator</span><button type="button" data-command="close" aria-label="Chiudi editor">✕</button></div>${errorMarkup}${this.notice ? `<div class="status sc-notice" role="status">${esc(this.notice)}</div>` : ''}${this.editor(config,profile,group)}`;
       if(!wasOpen) {
         if(this.dialog.showModal) this.dialog.showModal(); else this.dialog.setAttribute('open','');
         this.dialog.querySelector('input[name="name"],select[name="entity_id"]')?.focus({preventScroll:true});
@@ -247,6 +275,23 @@ class ScheduleCreatorCard extends HTMLElement {
     }).join('');
     return `<details class="sc-overview" data-section="overview"><summary>Panoramica profili e interazioni</summary><ul class="sc-overview-list">${rows}</ul><p class="sc-meta"><strong>Esclusivo</strong>: attivandolo si disattivano gli altri profili esclusivi. <strong>Condiviso</strong>: resta attivo insieme agli altri. Solo i profili attivi eseguono i loro schedule. Se due fasce comandano la stessa entità vince quella iniziata per ultima; a parità un Quick Timer prevale su uno schedule con condizione, che prevale su uno normale. L’ordine serve solo a disporre profili e gruppi.</p><h4>Entità comandate da più profili</h4>${shared.length ? `<ul class="sc-overview-list">${shared.join('')}</ul>` : '<p class="sc-meta">Nessuna: ogni entità è programmata da un solo profilo.</p>'}</details>`;
   }
+  nowTiles(config, occurrences, timers) {
+    const friendly = (id) => this._hass.states[id]?.attributes?.friendly_name || id;
+    const zone = this._hass?.config?.time_zone || undefined;
+    const clock = (iso) => new Intl.DateTimeFormat('it-IT', {timeZone: zone, hour: '2-digit', minute: '2-digit'}).format(new Date(iso));
+    const tiles = occurrences.map((item) => {
+      const schedule = (config.schedules || []).find((s) => s.id === item.schedule_id);
+      if (!schedule) return '';
+      const paused = item.condition_branch === 'false', waiting = item.state === 'suspended';
+      const kind = paused || waiting ? 'is-paused' : 'is-running';
+      const label = paused ? 'In pausa' : waiting ? 'In attesa' : 'Adesso';
+      const detail = paused ? 'La condizione non è soddisfatta' : waiting ? 'Un altro schedule o timer ha la priorità' : `Fino alle ${clock(item.end_utc)}${schedule.condition ? ' · condizione vera' : ''}`;
+      return `<button type="button" class="sc-now-tile ${kind}" data-command="editSchedule" data-id="${esc(schedule.id)}"><span class="sc-now-label">${label} · ${esc(schedule.target_entity_ids.map(friendly).join(', '))}</span><strong>${esc(describeAction(schedule.start_action) || schedule.name)}</strong><span class="sc-now-detail">${esc(detail)}</span></button>`;
+    });
+    const timerTiles = timers.map((timer) => `<div class="sc-now-tile is-timer"><span class="sc-now-label">Timer · ${esc(friendly(timer.entity_id))}</span><strong>${esc(describeAction(timer.action))}</strong><span class="sc-now-detail">Resta <span data-expiry="${esc(timer.expires_at)}"></span></span></div>`);
+    const all = [...tiles, ...timerTiles].filter(Boolean);
+    return all.length ? `<div class="sc-now">${all.join('')}</div>` : '<p class="sc-now-empty">Nessuna fascia in corso adesso.</p>';
+  }
   otherSlots(config, ids, ownId) {
     const palette = ['#087f8c','#7057b5','#b65c21','#317a45','#b34269','#326ab2'];
     return (config.schedules || []).filter((s) => s.id !== ownId && s.target_entity_ids.some((x) => ids.includes(x)))
@@ -261,6 +306,11 @@ class ScheduleCreatorCard extends HTMLElement {
     const status = this.draft?.status_notification === undefined ? this.statusEnabled(config, item?.id) : this.draft.status_notification === 'on';
     return `<fieldset><legend>Notifica di stato</legend><label class="sc-check"><input type="checkbox" name="status_notification" ${status ? 'checked' : ''}>Notifica persistente per tutta la fascia</label><p>In Home Assistant compare una notifica che dice se lo schedule è attivo, in pausa per la condizione o in attesa di un altro controllo; si aggiorna da sola e sparisce a fine fascia.</p></fieldset>
       <fieldset><legend>Tocco sulla notifica</legend><p>${url ? `Apre <strong>${esc(url)}</strong> (app Companion e notifiche di Home Assistant).` : 'Nessuna pagina impostata: la notifica non apre nulla.'}</p><div class="sc-controls">${url !== here && here ? button('setNotificationUrl','Apri questa dashboard',here) : ''}${url ? button('setNotificationUrl','Rimuovi collegamento','') : ''}</div></fieldset>`;
+  }
+  entityPills(selected, allowed) {
+    const states = this._hass?.states || {};
+    const ids = [...new Set([...targetEntities(this._hass, allowed), ...selected.filter((id) => allowed.includes(id))])].sort();
+    return `<div class="sc-entity-pills">${ids.map((id) => `<label class="sc-entity-pill" title="${esc(id)}"><input type="checkbox" name="entities" value="${esc(id)}" ${selected.includes(id) ? 'checked' : ''}><span>${esc(states[id]?.attributes?.friendly_name || id)}</span></label>`).join('')}</div>`;
   }
   entityRadios(ids, selected) {
     const states = this._hass?.states || {};
@@ -305,7 +355,7 @@ class ScheduleCreatorCard extends HTMLElement {
     const bar = this.shadowRoot.querySelector(`.sc-tb-edit[data-slot-bar="${i}"]`);
     if (!bar || end <= start) return;
     bar.style.left = `${start / 1440 * 100}%`; bar.style.width = `${(end - start) / 1440 * 100}%`;
-    bar.classList.toggle('is-narrow', end - start < 150);
+    bar.classList.toggle('is-narrow', end - start < 300);
     bar.querySelector('.sc-tb-label').textContent = `${toTime(start)}–${toTime(end)}`;
   }
   syncRange(node) {
@@ -383,6 +433,8 @@ class ScheduleCreatorCard extends HTMLElement {
     this.render();
   }
   updateClock() {
+    // The now line, today column and running markers follow the minute.
+    if (!this.edit && this.clockMinute !== undefined && haNow(this._hass?.config?.time_zone).minutes !== this.clockMinute) { this.render(); return; }
     this.shadowRoot.querySelectorAll('[data-expiry]').forEach((node) => {
       const seconds = Math.max(0, Math.ceil((new Date(node.dataset.expiry) - Date.now()) / 1000));
       node.textContent = `${Math.floor(seconds / 3600)}h ${Math.floor(seconds % 3600 / 60)}m ${seconds % 60}s`;
@@ -406,16 +458,23 @@ class ScheduleCreatorCard extends HTMLElement {
       this.actionDomain = ids[0]?.split('.')[0] || this.actionDomain;
       const slots = this.slotDraft || item?.time_slots || [{weekdays:[0,1,2,3,4,5,6],start:'08:00',end:'09:00'}];
       const condition = this.conditionDraft === undefined ? item?.condition : this.conditionDraft;
-      content = `<div class="sc-name-row">${field('name','Nome',item?.name)}${button('suggestName','Suggerisci')}</div><label class="sc-check"><input name="enabled" type="checkbox" ${item?.enabled !== false ? 'checked' : ''}>Abilitato</label>
-        <p>Gruppo: ${esc(owner?.name || 'non disponibile')}. Scegli dispositivi dello stesso tipo.</p>${this.entities(ids,owner?.entity_ids || [])}
-        <p>Orari: ${esc(this._hass.config?.time_zone || 'fuso Home Assistant')}. Se la fine precede l’inizio, la fascia termina il giorno successivo.</p>${slotsForm(slots,{others:this.otherSlots(config,ids,item?.id),snap:this.snap})}
-        ${actionForm('start','Azione iniziale',this._hass,ids,this.actionReset?null:item?.start_action,false,d)}${actionForm('end','Azione finale',this._hass,ids,this.actionReset?null:item?.end_action,true,d)}
-        <details><summary>Condizioni e opzioni</summary><h4>Condizione</h4>${conditionForm(condition,this._hass)}<datalist id="sc-condition-entities">${Object.keys(this._hass.states||{}).sort().map((id)=>`<option value="${esc(id)}">${esc(this._hass.states[id].attributes?.friendly_name||id)}</option>`).join('')}</datalist>
-        <p>Se falsa: azione finale se presente, altrimenti ripristino deciso dal motore. La fine fascia senza azione finale non invia comandi.</p>
-        ${select('override_policy','Comandi manuali', [['cooperative','Cooperativa'],['manual_override','Priorità al comando manuale']],item?.override_policy || 'cooperative')}
-        ${field('inclusion_dates','Date incluse (AAAA-MM-GG, separate da virgola)',(item?.inclusion_dates || []).join(', '))}
-        ${field('exclusion_dates','Date escluse (AAAA-MM-GG, separate da virgola)',(item?.exclusion_dates || []).join(', '))}
-        ${notificationForm('start_notification','Notifica iniziale',item?.start_notification,this._hass,d)}${notificationForm('end_notification','Notifica finale',item?.end_notification,this._hass,d)}${this.notificationExtras(config,item)}</details>
+      const friendly = (x) => this._hass.states[x]?.attributes?.friendly_name || x;
+      const endSummary = d.end_mode ? pretty(d.end_mode) : this.actionReset || !item?.end_action ? 'Nessuna azione' : describeAction(item.end_action);
+      const leafs = (node) => !node ? [] : ['and','or'].includes(node.operator) ? node.children.flatMap(leafs) : [node];
+      const conditionSummary = !condition ? 'Nessuna' : leafs(condition).length > 1 ? `${leafs(condition).length} condizioni` : friendly(leafs(condition)[0].entity_id) || 'Da completare';
+      const notified = (key, fallback) => d[`${key}_enabled`] === undefined ? !!fallback : d[`${key}_enabled`] === 'on';
+      const notificationSummary = [notified('start_notification', item?.start_notification) && 'Inizio', notified('end_notification', item?.end_notification) && 'Fine', (d.status_notification === undefined ? this.statusEnabled(config, item?.id) : d.status_notification === 'on') && 'Stato'].filter(Boolean).join(' · ') || 'Nessuna';
+      const row = (section, label, summary, body) => `<details class="sc-row" data-section="${section}"><summary><span>${label}</span><em>${esc(summary)}</em></summary><div class="sc-row-body">${body}</div></details>`;
+      content = `<div class="sc-name-row">${field('name','Nome',item?.name)}${button('suggestName','Suggerisci')}</div>
+        <div class="sc-field"><span class="sc-field-label">Dispositivi · ${esc(owner?.name || 'gruppo')}</span>${this.entityPills(ids,owner?.entity_ids || [])}</div>
+        <div class="sc-section-label">Quando</div>${slotsForm(slots,{others:this.otherSlots(config,ids,item?.id),snap:this.snap})}
+        <div class="sc-section-label">All’inizio</div>${actionForm('start','Azione iniziale',this._hass,ids,this.actionReset?null:item?.start_action,false,d)}
+        <div class="sc-rows">
+        ${row('row-end','Alla fine',endSummary,actionForm('end','Azione finale',this._hass,ids,this.actionReset?null:item?.end_action,true,d))}
+        ${row('row-conditions','Condizioni',conditionSummary,`${conditionForm(condition,this._hass)}<datalist id="sc-condition-entities">${Object.keys(this._hass.states||{}).sort().map((id)=>`<option value="${esc(id)}">${esc(this._hass.states[id].attributes?.friendly_name||id)}</option>`).join('')}</datalist><p>Se falsa: azione finale se presente, altrimenti ripristino deciso dal motore. La fine fascia senza azione finale non invia comandi.</p>`)}
+        ${row('row-notifications','Notifiche',notificationSummary,`${notificationForm('start_notification','Notifica iniziale',item?.start_notification,this._hass,d)}${notificationForm('end_notification','Notifica finale',item?.end_notification,this._hass,d)}${this.notificationExtras(config,item)}`)}
+        ${row('row-options','Altre opzioni',item?.enabled === false ? 'Disabilitato' : 'Abilitato',`<label class="sc-check"><input name="enabled" type="checkbox" ${item?.enabled !== false ? 'checked' : ''}>Schedule abilitato</label><p>Orari nel fuso ${esc(this._hass.config?.time_zone || 'di Home Assistant')}. Se la fine precede l’inizio, la fascia termina il giorno successivo.</p>${select('override_policy','Comandi manuali', [['cooperative','Cooperativa'],['manual_override','Priorità al comando manuale']],item?.override_policy || 'cooperative')}${field('inclusion_dates','Date incluse (AAAA-MM-GG, separate da virgola)',(item?.inclusion_dates || []).join(', '))}${field('exclusion_dates','Date escluse (AAAA-MM-GG, separate da virgola)',(item?.exclusion_dates || []).join(', '))}`)}
+        </div>
         <details><summary>Pro · configurazione JSON</summary><label class="sc-check"><input type="checkbox" name="pro_config_enabled">Usa JSON per condizioni, fasce e notifiche</label>${area('pro_config','Configurazione avanzata',json({time_slots:slots,condition:condition||null,start_notification:item?.start_notification||null,end_notification:item?.end_notification||null}),8)}</details>`;
     }
     if (kind === 'restore') {
@@ -433,7 +492,8 @@ class ScheduleCreatorCard extends HTMLElement {
       this.actionDomain = selected?.split('.')[0];
       content = `${this.entityRadios(ids,selected)}${field('duration_seconds','Durata in secondi (1–604800)',300,'number')}${actionForm('timer','Azione timer',this._hass,selected?[selected]:[],null,false,d)}`;
     }
-    return `<form data-editor="${esc(kind)}" class="sc-editor"><h3 id="sc-editor-title">${({profile:id?'Modifica profilo':'Nuovo profilo',group:id?'Modifica gruppo':'Nuovo gruppo',schedule:id?'Modifica schedule':'Nuovo schedule',timer:'Quick Timer',restore:'Ripristina backup',reset:'RESET completo'})[kind]}</h3>${content}<div class="sc-actions"><button type="submit" ${kind === 'reset' ? 'class="sc-danger"' : ''}>${({restore:'Ripristina',reset:'Cancella tutto'})[kind] || 'Salva'}</button>${button('close','Annulla')}</div></form>`;
+    const subtitle = kind === 'schedule' ? config.groups.find((g) => g.id === this.ownerGroup)?.name : kind === 'group' ? profile?.name : '';
+    return `<form data-editor="${esc(kind)}" class="sc-editor"><h3 id="sc-editor-title">${subtitle ? `<small>${esc(subtitle)}</small>` : ''}${({profile:id?'Modifica profilo':'Nuovo profilo',group:id?'Modifica gruppo':'Nuovo gruppo',schedule:id?'Modifica schedule':'Nuovo schedule',timer:'Quick Timer',restore:'Ripristina backup',reset:'RESET completo'})[kind]}</h3>${content}<div class="sc-actions"><button type="submit" class="sc-save ${kind === 'reset' ? 'sc-danger' : ''}">${({restore:'Ripristina',reset:'Cancella tutto',schedule:'Salva schedule'})[kind] || 'Salva'}</button>${button('close','Annulla')}</div></form>`;
   }
   async click(event) {
     const buttonEl = event.target.closest('button'); if (!buttonEl || this.adapter.busy) return;
@@ -483,6 +543,16 @@ class ScheduleCreatorCard extends HTMLElement {
       return;
     }
     if (command === 'close') { this.closeEditor(); return; }
+    if (command === 'stepValue') {
+      const [name, direction] = id.split(':');
+      const node = [...this.shadowRoot.querySelectorAll('input')].find((x) => x.getAttribute('name') === name);
+      if (node) {
+        const step = Number(node.step) || 1, value = Number(node.value) + step * Number(direction);
+        node.value = String(Math.round(Math.min(Number(node.max), Math.max(Number(node.min), value)) / step) * step);
+        node.dispatchEvent(new Event('input', {bubbles: true}));
+      }
+      return;
+    }
     if (command === 'suggestName') { this.capture(); this.updateSuggestions(true); return; }
     if (command === 'exportBackup') { await this.exportBackup(); return; }
     if (/^(new|edit)/.test(command)) {

@@ -19,6 +19,7 @@ class ConditionNodeEvaluation:
     result: bool
     matching_since: datetime | None
     ready_at: datetime | None
+    unmatching_since: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -115,25 +116,40 @@ def evaluate_condition(
                 matches = numeric is not None and _numeric_match(
                     node,
                     numeric,
-                    prior.matches if prior is not None else False,
+                    # A result held by the release delay keeps its hysteresis.
+                    prior is not None and (prior.matches or prior.result),
                 )
 
-        matching_since = (
-            prior.matching_since
-            if matches and prior is not None and prior.matches
-            else evaluated_at if matches else None
-        )
+        was_result = prior is not None and prior.result
         duration = node.minimum_duration_seconds or 0.0
-        result = bool(
-            matches
-            and matching_since is not None
-            and (evaluated_at - matching_since).total_seconds() >= duration
-        )
-        ready_at = (
-            matching_since + timedelta(seconds=duration)
-            if matches and not result and matching_since is not None
-            else None
-        )
+        release = node.release_delay_seconds or 0.0
+        unmatching_since: datetime | None = None
+        ready_at: datetime | None = None
+        matching_since: datetime | None = None
+        if matches:
+            matching_since = (
+                prior.matching_since
+                if prior is not None and prior.matches and prior.matching_since
+                else evaluated_at
+            )
+            # Matching again while a release delay holds the result keeps it true.
+            result = was_result or (
+                (evaluated_at - matching_since).total_seconds() >= duration
+            )
+            if not result:
+                ready_at = matching_since + timedelta(seconds=duration)
+        else:
+            result = False
+            if was_result and release > 0 and prior is not None:
+                unmatching_since = (
+                    prior.unmatching_since
+                    if not prior.matches and prior.unmatching_since is not None
+                    else evaluated_at
+                )
+                release_at = unmatching_since + timedelta(seconds=release)
+                if evaluated_at < release_at:
+                    result = True
+                    ready_at = release_at
         evaluations.append(
             ConditionNodeEvaluation(
                 node_id=node.id,
@@ -141,6 +157,7 @@ def evaluate_condition(
                 result=result,
                 matching_since=matching_since,
                 ready_at=ready_at,
+                unmatching_since=unmatching_since,
             )
         )
         return result

@@ -31,7 +31,7 @@ function timebar(i, slot, others, snap) {
   const pct = (m) => `${m / 1440 * 100}%`;
   const edit = overnight
     ? `<div class="sc-tb-edit is-static" style="left:${pct(start)};width:${pct(1440 - start)}"></div>${end ? `<div class="sc-tb-edit is-static" style="left:0;width:${pct(end)}"></div>` : ''}`
-    : `<div class="sc-tb-edit${end - start < 150 ? ' is-narrow' : ''}" data-slot-bar="${i}" style="left:${pct(start)};width:${pct(end - start)}"><span class="sc-tb-handle" data-handle="start"></span><span class="sc-tb-label">${toTime(start)}–${toTime(end)}</span><span class="sc-tb-handle" data-handle="end"></span></div>`;
+    : `<div class="sc-tb-edit${end - start < 300 ? ' is-narrow' : ''}" data-slot-bar="${i}" style="left:${pct(start)};width:${pct(end - start)}"><span class="sc-tb-handle" data-handle="start"></span><span class="sc-tb-label">${toTime(start)}–${toTime(end)}</span><span class="sc-tb-handle" data-handle="end"></span></div>`;
   return `<div class="sc-timebar" data-timebar="${i}" data-magnets="${magnets.join(',')}" data-snap="${snap}">${blocks.map((b) => `<div class="sc-tb-bg" title="${escS(`${b.name} ${toTime(b.from)}–${toTime(b.to)}`)}" style="left:${pct(b.from)};width:${pct(b.to - b.from)};--block-color:${b.color}"></div>`).join('')}${magnets.map((m) => `<div class="sc-tb-magnet" data-min="${m}" style="left:${pct(m)}"></div>`).join('')}${edit}</div><div class="sc-tb-ticks" aria-hidden="true">${[0, 6, 12, 18, 24].map((h) => `<span>${String(h).padStart(2, '0')}:00</span>`).join('')}</div>${overnight ? '<p>Fascia a cavallo della mezzanotte: modifica gli orari nei campi qui sotto.</p>' : blocks.length ? '<p>Trascina la fascia o le maniglie: si aggancia agli inizi/fini degli altri schedule (magnete).</p>' : '<p>Trascina la fascia o le maniglie per cambiare gli orari.</p>'}`;
 }
 
@@ -82,7 +82,7 @@ export function defaultHysteresis(unit, value) {
 }
 
 const valueLabels = {on: 'Acceso / Sì', off: 'Spento / No', home: 'A casa', not_home: 'Fuori casa', open: 'Aperta', closed: 'Chiusa', opening: 'In apertura', closing: 'In chiusura'};
-const DURATIONS = [[0, 'Subito'], [60, '1 min'], [300, '5 min'], [900, '15 min'], [1800, '30 min']];
+const DURATIONS = [[0, 'Subito'], [60, '1 min'], [300, '5 min'], [600, '10 min'], [900, '15 min'], [1800, '30 min']];
 const radios = (name, options, selected, cls = 'sc-choices') => `<div class="${cls}" role="radiogroup">${options.map(([v, label]) => `<label class="sc-choice${String(v) === String(selected) ? ' is-selected' : ''}"><input type="radio" name="${name}" value="${escS(v)}" ${String(v) === String(selected) ? 'checked' : ''}><span>${escS(label)}</span></label>`).join('')}</div>`;
 
 function leafForm(node, path, hass) {
@@ -113,9 +113,9 @@ function leafForm(node, path, hass) {
       : `<div class="sc-field"><span class="sc-field-label">3 · Valore</span>${radios(`${path}_value`, options.map((v) => [v, valueLabels[v] || v]), node.value ?? options[0])}</div>`;
     body = `<div class="sc-field"><span class="sc-field-label">2 · Confronto</span>${radios(`${path}_operator`, ops, op)}</div>${value}`;
   }
-  const duration = Number(node.minimum_duration_seconds || 0);
-  const known = DURATIONS.some(([s]) => s === duration);
-  const durationField = `<div class="sc-field"><span class="sc-field-label">Deve restare vera per</span>${radios(`${path}_minimum_duration_seconds`, [...DURATIONS, ...(known ? [] : [[duration, `${Math.round(duration / 60 * 10) / 10} min`]])], duration)}<p>Evita accensioni e spegnimenti continui: la condizione conta solo dopo essere rimasta vera per questo tempo.</p></div>`;
+  const presets = (seconds) => [...DURATIONS, ...(DURATIONS.some(([s]) => s === seconds) ? [] : [[seconds, `${Math.round(seconds / 60 * 10) / 10} min`]])];
+  const duration = Number(node.minimum_duration_seconds || 0), release = Number(node.release_delay_seconds || 0);
+  const durationField = `<div class="sc-field"><span class="sc-field-label">Diventa vera dopo</span>${radios(`${path}_minimum_duration_seconds`, presets(duration), duration)}</div><div class="sc-field"><span class="sc-field-label">Torna falsa dopo</span>${radios(`${path}_release_delay_seconds`, presets(release), release)}<p>Evita avanti e indietro: la condizione cambia solo se resta vera (o falsa) per questo tempo. Esempio tende: chiudi dopo 10 min sopra 500 lx, riapri dopo 15 min sotto.</p></div>`;
   return `<fieldset class="sc-condition" data-condition="${path}">${entity}${now}${body}${durationField}${remove}</fieldset>`;
 }
 
@@ -135,7 +135,9 @@ export function readCondition(form, path = 'condition') {
   const children = [];
   for (let i = 0; form.querySelector(`[data-condition="${path}.${i}"]`); i++) children.push(readCondition(form, `${path}.${i}`));
   const duration = number('minimum_duration_seconds');
+  const release = number('release_delay_seconds');
   return {
+    ...(release ? {release_delay_seconds: release} : {}),
     operator: op,
     entity_id: logical ? null : value('entity_id'),
     value: logical || ['available', 'numeric_range'].includes(op) ? null : numeric ? number('value') : value('value'),
