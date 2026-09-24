@@ -15,9 +15,10 @@ Serve Home Assistant 2026.9.2 o successivo con HACS gia installato.
    gia installati: crea il config entry e avvia il backend.
 4. In **Impostazioni → Dashboard → ⋮ → Risorse**, aggiungi una risorsa di tipo
    **Modulo JavaScript** con URL
-   `/schedule_creator/frontend/schedule-creator-card.js?v=0.3.2`. Se la risorsa
-   esiste gia, modificala senza duplicarla. Se HACS ha aggiunto `?hacstag=1`,
-   mantieni il parametro e aggiungi `&v=0.3.2` alla fine. Ricarica la pagina.
+   `/schedule_creator/frontend/schedule-creator-card.js`. Se la risorsa esiste
+   gia, non duplicarla. Dopo l'aggiornamento ricarica la dashboard e controlla
+   il badge versione. Solo se resta vecchio, usa temporaneamente `?v=0.3.3`
+   (o `&v=0.3.3` se ci sono già parametri) per diagnosticare la cache.
 5. Modifica una dashboard, scegli **Aggiungi scheda → Manuale** e incolla:
 
    ```yaml
@@ -36,19 +37,33 @@ installata e puo stare nella stessa dashboard.
 
 ## Contratto tecnico
 
+### Vista ed editor 0.3.3
+
+La vista principale è una settimana tipo con colonne lunedì–domenica e asse
+00:00–24:00. Posizione e altezza rappresentano inizio e durata; sovrapposizioni
+affiancate, fasce notturne divise alla mezzanotte. Clicca una fascia per aprire
+l'editor. La lista completa è raccolta in **Gestisci schedule**. Su schermi
+stretti si scorre la griglia orizzontalmente. Date speciali/condizioni restano
+nelle opzioni: la griglia non promette esecuzione in una data specifica.
+
+Profili, gruppi, schedule e timer si modificano in popup modali; Esc o Annulla
+chiudono, Salva invia tramite il backend. Errori e bozza restano nel popup.
+Focus e scroll vengono mantenuti durante i cambi dei controlli. Una preview
+con dati fittizi è disponibile in `frontend/preview.html`.
+
 The integration includes a separate Lovelace card derived from the
 weekly-schedule-card visual style. It does not register or modify the original
 card. After installing the integration and restarting Home Assistant, add a
 Lovelace resource of type **JavaScript module** with URL:
 
-`/schedule_creator/frontend/schedule-creator-card.js?v=0.3.2`
+`/schedule_creator/frontend/schedule-creator-card.js`
 
-When updating an existing installation, **edit the existing Lovelace resource**
-to this URL (do not add a second resource), then reload the dashboard page or
-restart the Home Assistant mobile app. The card header shows the loaded bundle
-version, for example `v0.3.2`. If the badge is absent or shows an earlier
-version, the browser is still using an older card asset. Update the integration
-through HACS and restart Home Assistant before changing the resource URL.
+When updating an existing installation, reload the dashboard page or restart
+the Home Assistant mobile app, then check the loaded bundle badge (`v0.3.3`).
+If an older bundle remains after downloading the update, a version query on the
+existing resource is a cache troubleshooting workaround; do not add a duplicate
+resource. Automatic resource version management is still a roadmap item.
+Do not assume HACS updates the query string on this custom integration route.
 The query string refreshes only the JavaScript card. A server response with code
 `unknown_command` requires checking the backend integration version and a full
 Home Assistant restart. The text `Method not implemented.` alone does not

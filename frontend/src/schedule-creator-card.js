@@ -1,9 +1,10 @@
 import { ScheduleCreatorStateAdapter } from './state-adapter.js';
+import { weeklySegments } from './timeline.js';
 import { clean, messageFor, parseJson, diagnosticFor } from './editor.js';
 import { controllable, targetEntities, actionForm, readAction, blankCondition, conditionForm, readCondition, notificationForm, readNotification, slotsForm, readSlots } from './forms.js';
 
 const STYLE = '__SC_CSS__';
-const CARD_VERSION = '0.3.2';
+const CARD_VERSION = '0.3.3';
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
@@ -19,6 +20,9 @@ class ScheduleCreatorCard extends HTMLElement {
     this.selectedProfile = null; this.selectedGroup = null;
     this.edit = null; this.draft = null; this.localError = null;
     this.localErrorDetails = null;
+    this.shadowRoot.innerHTML = `<style>${STYLE}</style><ha-card></ha-card><dialog class="sc-dialog" aria-labelledby="sc-editor-title"></dialog>`;
+    this.dialog = this.shadowRoot.querySelector('dialog');
+    this.dialog.addEventListener('cancel', event=>{event.preventDefault(); if(!this.adapter.busy) this.closeEditor();});
     this.shadowRoot.addEventListener('click', (e) => this.click(e));
     this.shadowRoot.addEventListener('submit', (e) => this.submit(e));
     this.shadowRoot.addEventListener('keydown', (e) => {
@@ -69,6 +73,12 @@ class ScheduleCreatorCard extends HTMLElement {
   set hass(hass) { this._hass = hass; if (this.isConnected) this.adapter.connect(hass); if (hass?.connection !== this.adapter.connection || !this.edit) this.render(); }
   connectedCallback() { if (this._hass) this.adapter.connect(this._hass); this.render(); }
   disconnectedCallback() { this.adapter.disconnect(); clearInterval(this.clock); this.clock = null; }
+  closeEditor() {
+    this.edit=null; this.draft=null; this.localError=null; this.localErrorDetails=null;
+    this.render();
+    const opener=[...this.shadowRoot.querySelectorAll('button')].find(node=>node.dataset.command===this.editorOpener?.command && node.dataset.id===this.editorOpener?.id);
+    (opener || this.shadowRoot.querySelector('[data-command="newSchedule"]'))?.focus({preventScroll:true});
+  }
   capture() {
     const form = this.shadowRoot.querySelector('form[data-editor]');
     if (!form) return;
@@ -105,8 +115,15 @@ class ScheduleCreatorCard extends HTMLElement {
     const focused = this.shadowRoot.activeElement;
     const hadDetails = this.shadowRoot.querySelector('details');
     const openSections = new Set([...this.shadowRoot.querySelectorAll('details[open]')].map((node)=>node.dataset.section || node.querySelector('summary')?.textContent));
-    const focusName = focused?.name;
-    const selection = focused?.selectionStart;
+    const focusName = focused?.getAttribute('name');
+    const focusCommand = focused?.dataset.command;
+    const focusId = focused?.dataset.id;
+    const selection = focused?.matches('input,textarea') ? focused.selectionStart : null;
+    const focusValue = focused?.type === 'checkbox' ? focused.value : null;
+    const scrollPositions = [...this.shadowRoot.querySelectorAll('[data-scroll],.sc-entities,dialog')].map(node=>[node.dataset.scroll || node.className,node.scrollTop,node.scrollLeft]);
+    const ancestors=[];
+    for(let node=this;node;node=node.parentElement || node.getRootNode()?.host) ancestors.push([node,node.scrollTop,node.scrollLeft]);
+    const pageX=window.scrollX, pageY=window.scrollY;
     const { state, error, loading, busy, writeError } = this.adapter;
     const config = state?.config || {};
     const profiles = config.profiles || [];
@@ -116,10 +133,14 @@ class ScheduleCreatorCard extends HTMLElement {
     const schedules = (config.schedules || []).filter((s) => s.profile_id === profile?.id && (!group || s.group_id === group.id));
     const chips = profiles.map((p) => `<button type="button" class="profile-chip ${p.id === profile?.id ? 'viewed' : ''} ${p.active ? 'active-op' : ''}" style="--pchip-color:${tint(p.color)}" aria-pressed="${p.id === profile?.id}" data-profile="${esc(p.id)}">${esc(p.name)}</button>`).join('');
     const tabs = groups.map((g) => `<button type="button" class="tab ${g.id === group?.id ? 'active' : ''}" aria-pressed="${g.id === group?.id}" data-group="${esc(g.id)}">${esc(g.name)}</button>`).join('');
-    const slots = DAYS.map((day, index) => {
-      const entries = schedules.flatMap((schedule) => (schedule.time_slots || []).filter((slot) => slot.weekdays.includes(index)).map((slot) => `<div class="sc-slot ${schedule.enabled ? '' : 'is-off'}" style="--pchip-color:${tint(profile?.color)}"><time>${esc(slot.start)}–${esc(slot.end)}</time><span>${esc(schedule.name)}${schedule.enabled ? '' : ' · spento'}</span></div>`));
-      return `<div class="sc-day"><strong>${day}</strong>${entries.join('') || '<span class="sc-day-empty">Nessuna fascia</span>'}</div>`;
-    }).join('');
+    const segments=weeklySegments(schedules);
+    const palette=['#087f8c','#7057b5','#b65c21','#317a45','#b34269','#326ab2'];
+    const colorFor=schedule=>palette[schedules.indexOf(schedule)%palette.length];
+    const time=minute=>`${String(Math.floor(minute/60)).padStart(2,'0')}:${String(minute%60).padStart(2,'0')}`;
+    const slots = `<div class="sc-timeline-head"><span>Ora</span>${DAYS.map(day=>`<strong>${day}</strong>`).join('')}</div><div class="sc-timeline-grid"><div class="sc-time-axis">${Array.from({length:13},(_,i)=>`<span style="top:${i/12*100}%">${time(i*120)}</span>`).join('')}</div>${DAYS.map((day,index)=>`<div class="sc-day-track" aria-label="${day}">${segments[index].map(({schedule,start,end,lane,lanes})=>{
+      const label=`${schedule.name} · ${day} ${time(start)}–${time(end)}${schedule.enabled?'':' · Disabilitato'}`;
+      return `<button type="button" class="sc-time-block ${schedule.enabled?'':'is-off'}" data-command="editSchedule" data-id="${esc(schedule.id)}" aria-label="${esc(label)}" title="${esc(label)}" style="top:${start/1440*100}%;height:${(end-start)/1440*100}%;left:${lane/lanes*100}%;width:${100/lanes}%;--block-color:${colorFor(schedule)}"><span>${esc(schedule.name)}</span><small>${time(start)}–${time(end)}</small></button>`;
+    }).join('')}</div>`).join('')}</div>`;
     const status = error ? `<div class="status error" role="alert">${esc(messageFor(error))}</div>` : loading ? '<div class="status">Caricamento…</div>' : '';
     const info = this.localError || writeError;
     const errorDetails = this.localError ? this.localErrorDetails : writeError ? diagnosticFor(writeError, {cardVersion:CARD_VERSION,haVersion:this._hass.config?.version}) : null;
@@ -127,15 +148,34 @@ class ScheduleCreatorCard extends HTMLElement {
     const view = state ? `<div class="profile-status-bar">${profile ? `<span class="sc-badge ${profile.active ? 'is-active' : ''}">${profile.active ? 'Profilo attivo' : 'Profilo inattivo'}</span><span>${esc(profile.profile_type === 'exclusive' ? 'Esclusivo' : 'Condiviso')}</span>` : 'Crea un profilo per iniziare'}<span>· ${state.quick_timers?.length ?? 0} timer attivi</span></div>
       ${groups.length ? `<nav class="tab-bar" aria-label="Gruppi">${tabs}</nav>` : ''}
       <div class="sc-toolbar"><div><h2>${esc(group?.name || 'La tua settimana')}</h2><p>${schedules.length} schedule · ${esc(this._hass.config?.time_zone || 'Fuso Home Assistant')}</p></div>${editable ? `<div class="sc-controls">${group ? button('newSchedule','＋ Schedule') : ''}${button('newTimer','Quick Timer')}</div>` : ''}</div>
-      ${schedules.length ? `<section class="sc-week" aria-label="Programmazione settimanale">${slots}</section><ul class="sc-list">${schedules.map((schedule) => `<li class="sc-entry"><div class="sc-entry-copy"><strong>${esc(schedule.name)}</strong><p class="sc-meta">${esc(schedule.target_entity_ids.map((id)=>this._hass.states[id]?.attributes?.friendly_name || id).join(', '))}</p><p class="sc-meta">${schedule.enabled ? 'Abilitato' : 'Disabilitato'} · ${schedule.time_slots?.length ?? 0} fasce</p></div>${editable ? `<div class="sc-entry-actions">${button('editSchedule','Modifica',schedule.id)}${button('deleteSchedule','Elimina',schedule.id)}</div>` : ''}</li>`).join('')}</ul>` : `<div class="sc-empty"><strong>${!profile ? 'Inizia dal tuo primo profilo' : !group ? 'Aggiungi un gruppo di dispositivi' : 'La settimana è ancora libera'}</strong>${!profile ? 'Organizza la casa per abitudini, ambienti o stagioni.' : !group ? 'Riunisci i dispositivi che vuoi programmare.' : 'Crea uno schedule e scegli giorni, orari e azioni.'}</div>`}
+      ${schedules.length ? `<section class="sc-timeline" data-scroll="timeline" aria-label="Programmazione settimanale">${slots}</section><p class="sc-meta">Settimana tipo · seleziona una fascia per modificarla. Date speciali e condizioni sono nelle opzioni dello schedule.</p><details data-section="schedules"><summary>Gestisci schedule (${schedules.length})</summary><ul class="sc-list">${schedules.map((schedule) => `<li class="sc-entry"><div class="sc-entry-copy"><strong>${esc(schedule.name)}</strong><p class="sc-meta">${esc(schedule.target_entity_ids.map((id)=>this._hass.states[id]?.attributes?.friendly_name || id).join(', '))}</p><p class="sc-meta">${schedule.enabled ? 'Abilitato' : 'Disabilitato'} · ${schedule.time_slots?.length ?? 0} fasce</p></div>${editable ? `<div class="sc-entry-actions">${button('editSchedule','Modifica',schedule.id)}${button('deleteSchedule','Elimina',schedule.id)}</div>` : ''}</li>`).join('')}</ul></details>` : `<div class="sc-empty"><strong>${!profile ? 'Inizia dal tuo primo profilo' : !group ? 'Aggiungi un gruppo di dispositivi' : 'La settimana è ancora libera'}</strong>${!profile ? 'Organizza la casa per abitudini, ambienti o stagioni.' : !group ? 'Riunisci i dispositivi che vuoi programmare.' : 'Crea uno schedule e scegli giorni, orari e azioni.'}</div>`}
       ${editable ? `<details class="sc-management" data-section="management" ${!profile || !group ? 'open' : ''}><summary>Gestisci profili e gruppi</summary><div class="sc-controls">${button('newProfile','＋ Profilo')}${profile ? `${button('editProfile','Modifica profilo',profile.id)}${button('toggleProfile',profile.active ? 'Disattiva profilo' : 'Attiva profilo',profile.id)}${button('deleteProfile','Elimina profilo',profile.id)}${button('newGroup','＋ Gruppo')}` : ''}${group ? `${button('editGroup','Modifica gruppo',group.id)}${button('deleteGroup','Elimina gruppo',group.id)}` : ''}</div></details>` : '<p class="sc-meta">Vista in sola lettura: serve un amministratore per modificare.</p>'}
-      ${this.edit && editable ? this.editor(config, profile, group) : ''}
       <details class="sc-operational" data-section="operational"><summary>Attività · ${state.operational?.occurrences?.length ?? 0} fasce in corso · ${state.quick_timers?.length ?? 0} timer</summary>${(state.operational?.occurrences || []).map((x) => `<p>${esc(config.schedules?.find((s) => s.id === x.schedule_id)?.name || x.schedule_id)}: ${esc(x.state)}, condizione ${esc(x.condition_branch)}, termine ${esc(x.end_utc)}</p>`).join('') || '<p>Nessuna fascia attiva.</p>'}${(state.operational?.leases || []).map((x) => `<p>${esc(x.entity_id)}: ${esc(x.state)} (${esc(x.controller_type)})</p>`).join('')}${(state.quick_timers || []).map((x) => `<p>Timer ${esc(this._hass.states[x.entity_id]?.attributes?.friendly_name || x.entity_id)}: <span data-expiry="${esc(x.expires_at)}"></span> ${editable ? button('cancelTimer','Annulla timer',x.id) : ''}</p>`).join('')}</details>` : '';
-    this.shadowRoot.innerHTML = `<style>${STYLE}</style><ha-card style="--pchip-color:${tint(profile?.color)}"><div class="card-header"><div class="hdr-row1"><span class="card-title">${esc(this.config.title || 'Schedule Creator')}</span><span class="sc-version">v${CARD_VERSION}</span></div><p class="sc-eyebrow">Profili</p><div class="hdr-row2" aria-label="Profili">${chips}</div></div>${status}${info ? `<p class="sc-error" role="alert">${esc(typeof info === 'string' ? info : messageFor(info))}</p>` : ''}${errorDetails ? `<details class="sc-error-details" data-section="error-details"><summary>Dettagli errore</summary><p>Seleziona e copia questo testo per segnalare il problema.</p><textarea readonly aria-label="Dettagli errore da copiare" rows="10">${esc(errorDetails)}</textarea></details>` : ''}${view}</ha-card>`;
+    const errorMarkup = `${info ? `<p class="sc-error" role="alert">${esc(typeof info === 'string' ? info : messageFor(info))}</p>` : ''}${errorDetails ? `<details class="sc-error-details" data-section="error-details"><summary>Dettagli errore</summary><p>Seleziona e copia questo testo per segnalare il problema.</p><textarea readonly aria-label="Dettagli errore da copiare" rows="10">${esc(errorDetails)}</textarea></details>` : ''}`;
+    const surface=this.shadowRoot.querySelector('ha-card');
+    surface.style.setProperty('--pchip-color',tint(profile?.color));
+    surface.innerHTML = `<div class="card-header"><div class="hdr-row1"><span class="card-title">${esc(this.config.title || 'Schedule Creator')}</span><span class="sc-version">v${CARD_VERSION}</span></div><p class="sc-eyebrow">Profili</p><div class="hdr-row2" aria-label="Profili">${chips}</div></div>${status}${this.edit ? '' : errorMarkup}${view}`;
+    if(this.edit && editable) {
+      const wasOpen=this.dialog.open;
+      this.dialog.innerHTML = `<div class="sc-dialog-heading"><strong>Schedule Creator</strong><button type="button" data-command="close" aria-label="Chiudi editor">✕</button></div>${errorMarkup}${this.editor(config,profile,group)}`;
+      if(!wasOpen) {
+        if(this.dialog.showModal) this.dialog.showModal(); else this.dialog.setAttribute('open','');
+        this.dialog.querySelector('input[name="name"],select[name="entity_id"]')?.focus({preventScroll:true});
+      }
+    } else {
+      if(this.dialog.open) { if(this.dialog.close) this.dialog.close(); else this.dialog.removeAttribute('open'); }
+      this.dialog.innerHTML='';
+    }
     this.restoreDraft(); this.updateClock();
     this.shadowRoot.querySelectorAll('details').forEach((node)=>{if (hadDetails) node.open=openSections.has(node.dataset.section || node.querySelector('summary')?.textContent);});
-    const nextFocus = [...this.shadowRoot.querySelectorAll('[name]')].find((x)=>x.name===focusName);
-    if (nextFocus) { nextFocus.focus(); if (selection !== null && selection !== undefined && ['text','search','textarea'].includes(nextFocus.type)) nextFocus.setSelectionRange(selection,selection); }
+    const nextFocus = focusName ? [...this.shadowRoot.querySelectorAll('[name]')].find((x)=>x.getAttribute('name')===focusName && (focusValue===null || x.value===focusValue)) : focusCommand ? [...this.dialog.querySelectorAll('[data-command]')].find(x=>x.dataset.command===focusCommand && x.dataset.id===focusId) : null;
+    if (nextFocus) { nextFocus.focus({preventScroll:true}); if (selection !== null && selection !== undefined && ['text','search','textarea'].includes(nextFocus.type)) nextFocus.setSelectionRange(selection,selection); }
+    for(const [key,top,left] of scrollPositions) {
+      const node=[...this.shadowRoot.querySelectorAll('[data-scroll],.sc-entities,dialog')].find(node=>(node.dataset.scroll || node.className)===key);
+      if(node) {node.scrollTop=top;node.scrollLeft=left;}
+    }
+    for(const [node,top,left] of ancestors) {node.scrollTop=top;node.scrollLeft=left;}
+    if(window.scrollX!==pageX || window.scrollY!==pageY) window.scrollTo(pageX,pageY);
     if (!this.clock && this.isConnected) this.clock = setInterval(() => this.updateClock(), 1000);
     this.shadowRoot.querySelectorAll('button,input,select,textarea').forEach((b) => { b.disabled = busy; });
   }
@@ -181,7 +221,7 @@ class ScheduleCreatorCard extends HTMLElement {
       this.actionDomain = selected?.split('.')[0];
       content = `${select('entity_id','Entità',ids.map((id) => [id, `${this._hass.states[id].attributes?.friendly_name || id} · ${id}`]),selected)}${field('duration_seconds','Durata in secondi (1–604800)',300,'number')}${actionForm('timer','Azione timer',this._hass,selected?[selected]:[],null,false,d)}`;
     }
-    return `<form data-editor="${esc(kind)}" class="sc-editor"><h3>${({profile:id?'Modifica profilo':'Nuovo profilo',group:id?'Modifica gruppo':'Nuovo gruppo',schedule:id?'Modifica schedule':'Nuovo schedule',timer:'Quick Timer'})[kind]}</h3>${content}<div class="sc-actions"><button type="submit">Salva</button>${button('close','Annulla')}</div></form>`;
+    return `<form data-editor="${esc(kind)}" class="sc-editor"><h3 id="sc-editor-title">${({profile:id?'Modifica profilo':'Nuovo profilo',group:id?'Modifica gruppo':'Nuovo gruppo',schedule:id?'Modifica schedule':'Nuovo schedule',timer:'Quick Timer'})[kind]}</h3>${content}<div class="sc-actions"><button type="submit">Salva</button>${button('close','Annulla')}</div></form>`;
   }
   async click(event) {
     const buttonEl = event.target.closest('button'); if (!buttonEl || this.adapter.busy) return;
@@ -206,8 +246,11 @@ class ScheduleCreatorCard extends HTMLElement {
       }
       this.render(); return;
     }
-    if (command === 'close') { this.edit = null; this.draft = null; this.localError = null; this.localErrorDetails = null; this.render(); return; }
+    if (command === 'close') { this.closeEditor(); return; }
     if (/^(new|edit)/.test(command)) {
+      if(this._hass?.user?.is_admin !== true) return;
+      this.editorOpener={command,id};
+      this.adapter.writeError=null;
       const kind = command.replace(/^(new|edit)/,'').toLowerCase();
       const config = this.adapter.state.config;
       const profile = config.profiles.find((p)=>p.id===this.selectedProfile)||config.profiles[0];
@@ -220,7 +263,6 @@ class ScheduleCreatorCard extends HTMLElement {
       this.changedFields = new Set();
       this.slotDraft = null; this.conditionDraft = undefined; this.actionReset = false; this.actionDomain = null;
       this.draft = null; this.localError = null; this.localErrorDetails = null; this.render();
-      this.shadowRoot.querySelector('form[data-editor]')?.scrollIntoView?.({block:'start'});
       return;
     }
     const types = { toggleProfile: 'profile/set_active', deleteProfile: 'profile/delete', deleteGroup: 'group/delete', deleteSchedule: 'schedule/delete', cancelTimer: 'quick_timer/cancel' };
@@ -293,7 +335,7 @@ class ScheduleCreatorCard extends HTMLElement {
       if (!id && kind === 'schedule') { payload.profile_id = this.ownerProfile; payload.group_id = this.ownerGroup; }
       phase = 'salvataggio e aggiornamento della vista';
       const ok = await this.adapter.mutate(type,payload,{ runtime: kind === 'timer', expectedRevision: kind === 'timer' || this.adapter.conflicted ? undefined : this.editRevision });
-      if (ok) { this.edit = null; this.draft = null; this.render(); }
+      if (ok) this.closeEditor();
     } catch (error) {
       this.localError = messageFor(error);
       this.localErrorDetails = diagnosticFor(error, {cardVersion:CARD_VERSION,haVersion:this._hass.config?.version,phase,operation:`schedule_creator/${type}`});
