@@ -1,4 +1,167 @@
-# AI handoff — piano frontend per Sol
+# AI handoff — stato attuale e piano futuro
+
+## Piano attivo dopo 0.3.1 (2026-09-24)
+
+Questa sezione è il punto di ingresso per la prossima IA. Le sezioni successive
+sono lo storico: i vecchi divieti di merge, le autorizzazioni a pubblicare release
+e le esclusioni temporanee del RESET non descrivono l'incarico attuale.
+Richiesta corrente: **registrare il piano**, senza implementare ora le nuove
+funzioni. Ordine del proprietario: bug → aggiornamenti → reset → card Quick Timer
+separata → completamenti. Alla ripresa, leggere questo piano e il riscontro HA
+più recente, poi verificare main e gli eventuali AGENTS.md prima delle modifiche.
+
+### Stato verificato e regole di consegna
+
+- PR [#32](https://github.com/arozoire/schedule_creator/pull/32) unita; main al
+  checkpoint: `82740e6081e9af114fcb1fd152fb8fbd73adbc53`.
+- Versione **0.3.1** in manifest e card; tag `0.3.1` presente nel fetch remoto.
+  CI finale [35982919513](https://github.com/arozoire/schedule_creator/actions/runs/35982919513)
+  conclusa `success`. Build e 19 test Node, più Chromium con WS simulato;
+  questi ultimi non sono una prova sull'HA personale.
+- Corretto il clic Salva perso al blur. **La causa di “Method not implemented.”
+  sull'HA del proprietario resta aperta**: ora sono disponibili Dettagli errore
+  copiabili. Non attribuirla di nuovo alla cache senza evidenza.
+- Filtri dei domini e appartenenza al gruppo confermati dal proprietario;
+  titolo, profili e persistenza avevano già avuto riscontro positivo.
+  Non classificare come completati i percorsi fisici non ancora provati.
+- L'agente prepara PR verificabili e fa merge dopo controlli pertinenti verdi;
+  **tag e release sono del proprietario**. Nessun accesso/deploy sull'HA personale.
+  Versioni conservative: questa modifica documentale resta a 0.3.1; non assegnare
+  un numero a ogni micro-fix. Concordare il prossimo bump per una consegna coerente.
+- Conservare motore e persistenza nel backend, usare API HA supportate, non
+  modificare `arozoire/weekly-schedule-card` né i suoi dati/automazioni.
+
+### 1 — Correggere i bug segnalati dal proprietario
+
+Priorità bloccante: creazione schedule switch. Acquisire testo di **Dettagli
+errore**, versione HA/card, passaggi e risultato atteso. Riprodurre la fase
+identificata (modulo, azione, WebSocket o aggiornamento vista); correggere la
+causa e aggiungere una regressione mirata. Non scambiare l'eccezione iniettata
+nei test per la riproduzione del guasto reale. Conservare bozze e distinguere
+errore prima dell'invio da errore dopo conferma, evitando duplicazioni.
+
+Per ogni nuova segnalazione registrare sintomo, stato (da riprodurre/in corso/
+corretto nel codice/confermato su HA), PR e prova. File iniziali:
+`frontend/src/{schedule-creator-card,forms,editor,state-adapter}.js` e, se la
+diagnosi lo indica, `custom_components/schedule_creator/websocket_api.py`.
+
+Accettazione: salvataggio switch al primo clic, riapertura/modifica, ON iniziale
+e OFF finale su presa di prova; UI senza temperatura per switch. Verificare
+ricerca immediata e Invio senza chiusura, gruppo e dominio coerenti. Il test HA
+del proprietario chiude il bug; se manca, dichiararlo ancora da confermare.
+
+### 2 — Ridurre i riavvii e gli aggiornamenti manuali
+
+Obiettivo richiesto: aggiornare con il minor intervento possibile, senza
+riavviare tutto HA quando tecnicamente evitabile. Separare tre casi:
+
+| Caso | Lavoro e risultato da verificare |
+|---|---|
+| Solo frontend | Risorsa che carichi il bundle aggiornato dopo ricaricamento pagina, senza modificare a mano `hacstag`/`v` a ogni versione. Valutare URL/loader versionato e gestione della risorsa esistente senza duplicati, incluse dashboard YAML. |
+| Ricaricamento integrazione | Verificare setup/unload già presenti, subscription, timer, coordinatori e route statiche: una sola istanza, dati conservati e nessuna azione duplicata. |
+| Nuovo codice Python/dipendenze | Verificare comportamento HACS/HA e documentazione ufficiale per le versioni supportate. Il reload della config entry non dimostra che i moduli Python aggiornati vengano importati. Se serve riavvio HA, indicarlo chiaramente; non promettere hot reload universale. |
+
+Punti di partenza: `custom_components/schedule_creator/__init__.py`
+(`async_setup`, `async_setup_entry`, `async_unload_entry`, guardia asset),
+`frontend/src/state-adapter.js`, `docs/frontend.md`. Escludere manipolazioni
+private di `sys.modules`/registri HA per aggirare limiti del lifecycle.
+Mostrare versione frontend e backend effettivamente in esecuzione e un avviso
+utile se incompatibili; il solo manifest su disco non prova la versione caricata.
+
+Accettazione: prova di aggiornamento da versione precedente senza cambiare URL
+a mano; frontend aggiornato dopo refresh, dati integri, timer e schedule non
+duplicati. Provare reload con timer attivo e due client. Documentare esattamente
+quando basta refresh/reload e quando serve riavvio di HA, distinto dal riavvio Pi.
+
+### 3 — Pulsante di pulizia completa (RESET)
+
+Nuova funzione da implementare, non semplice copia della reset-card legacy.
+Pulsante in Manutenzione, solo amministratori, con riepilogo dei dati eliminati
+e conferma esplicita forte (es. digitare RESET). Proporre prima l'esportazione
+backup del punto 5; nessuna cancellazione sull'istanza del proprietario durante
+lo sviluppo. Il controllo amministratore va applicato anche nell'API backend.
+
+Ambito: profili, gruppi, schedule e dati runtime nativi di Schedule Creator
+(timer, occorrenze, lease, snapshot, journal e dati operativi di sua proprietà).
+L'integrazione rimane installata e utilizzabile vuota. Non eliminare dispositivi,
+entità HA, automazioni/helper estranei, dashboard o dati del vecchio progetto.
+Definire nel contratto il comportamento delle azioni già in corso: proposta
+predefinita, fermare i controlli e lasciare gli stati fisici correnti, spiegandolo
+nella conferma; non equiparare reset a cancel dei timer con ripristino automatico.
+
+Prima di cancellare, bloccare nuove scritture ed effetti, arrestare coordinatori
+e drenare le operazioni in volo; un comando già inviato non è revocabile. Progettare
+una procedura recuperabile in caso di errore/riavvio tra salvataggio config e
+runtime, senza resuscitare vecchi schedule. Invalidare tutti i client e le bozze
+precedenti al reset (anche se le revisioni ripartono), poi riattivare il runtime
+vuoto. Documentare contratto API e storage; mostrare successo solo a pulizia conclusa.
+
+Accettazione mirata: reset vuoto e con timer/fasce attive, annullamento conferma,
+rifiuto non admin, doppio invio, scrittura concorrente/bozza vecchia, errore storage
+e ripresa dopo riavvio. Nessun comando tardivo pianificato dal vecchio runtime;
+si può creare una nuova configurazione e resta vuota dopo reload/riavvio.
+
+### 4 — Card Quick Timer indipendente
+
+Creare `custom:schedule-creator-quick-timer-card`, utilizzabile senza la card
+schedule nella dashboard. Riutilizzare adapter, controlli azioni per dominio
+e API `quick_timer/create`/`cancel`, evitando un secondo motore o archivio.
+Scelta entità comandabile, durata, azione, Avvia, timer attivi, countdown e Annulla;
+editor visuale con titolo e filtro entità facoltativo. Rendere esplicito se una
+card filtra la vista: i timer restano gestiti dal backend condiviso.
+
+Usare metadati/capability HA per switch, luci, climate, fan e altri domini già
+supportati. Countdown solo visuale, scadenza/ripristino e precedenze invariati.
+Registrare la card nel selettore Lovelace e distribuirla via HACS; scegliere
+bundle condiviso o separato senza caricare due volte gli stessi custom element.
+
+Accettazione: card sola e insieme alla principale, due client, avvio/annullamento,
+refresh/riconnessione, scadenza a browser chiuso e reload; timer recuperabili per
+ID, ripristino e precedenza schedule coerenti con backend. Prova mobile/temi,
+non admin in sola lettura e nessuna dipendenza da un profilo selezionato nella UI.
+
+### 5 — Completamenti proposti dall'IA
+
+Ordine suggerito dopo i punti richiesti, salvo il backup utile prima del RESET:
+
+1. **Backup e ripristino della configurazione.** Export versionato di profili,
+   gruppi e schedule; import validato con anteprima e conferma. Non esportare né
+   rigiocare runtime, lease, snapshot o comandi pendenti. Validare schema, entità
+   mancanti, riferimenti/ID e conflitti prima di scrivere; importare i profili
+   inattivi per evitare comandi inattesi. Prove: andata/ritorno senza perdita,
+   file incompatibile o corrotto senza modifiche parziali. Per il reset basta
+   inizialmente l'export; il ripristino completo può seguire.
+2. **Completare le prove funzionali reali.** Condizione vera/falsa (anche falsa
+   all'inizio), azione finale presente/assente, notifiche, date incluse/escluse;
+   timer con dashboard chiusa, annullamento e conflitto con schedule. Verificare
+   mezzanotte e cambio ora Europe/Rome nei test mirati. Provare su dispositivi
+   disponibili le azioni luce/climate/fan e i limiti delle capability condivise.
+   Questi sono gap di verifica, non funzioni da riscrivere senza un difetto.
+3. **Stato operativo comprensibile.** Mostrare motivi verificabili di attesa,
+   rifiuto, mancata esecuzione e ripristino; estendere la proiezione backend solo
+   se il motivo è realmente osservabile/persistito. Evitare etichette interne
+   senza spiegazione. Diagnostica copiabile senza payload sensibili.
+4. **Rifinitura UI dopo stabilità.** Prova mobile, tastiera e temi HA; azioni per
+   capability, errori vicini al campo, sezioni Pro chiuse per default e modifiche
+   senza perdita dei campi avanzati. Valutare duplicazione schedule e viste
+   alternative solo dopo i percorsi essenziali, senza rifacimento generale.
+
+### Come proseguire e aggiornare l'handoff
+
+Prima azione operativa: leggere il prossimo riscontro HA sulla 0.3.1 e chiudere
+il punto 1 se riproducibile. Se mancano i dettagli, registrare il blocco e svolgere
+lo studio del punto 2 senza inventare una causa del bug. PR per traguardo coerente,
+non per micro-modifica; build quando cambia il bundle, test sulle parti mutate,
+CI finale prevista dal repository. Per questa PR documentale: diff controllato,
+nessuna nuova suite o modifica al prodotto; versione sempre 0.3.1.
+
+A ogni traguardo registrare branch/PR/SHA, CI, prove eseguite, prove HA ancora
+pendenti e prossimo passo. Non ripetere tutte le suite per aggiornare solo questa
+nota. Il piano non costituisce esito di test né dichiarazione di implementazione.
+
+---
+
+## Storico delle decisioni e delle consegne
 
 ## Decisione e checkpoint (2026-09-23)
 
