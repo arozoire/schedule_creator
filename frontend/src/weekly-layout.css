@@ -534,6 +534,21 @@ details[open] > summary {
 .sc-editor {
   scroll-margin-top: 16px;
 }
+.sc-error-details textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--card-background-color, #fff);
+  color: var(--primary-text-color, #202a35);
+  border: 1px solid var(--sc-border);
+  border-radius: 8px;
+  padding: 10px;
+  font: 12px/1.5 monospace;
+  resize: vertical;
+}
+.sc-error-details p {
+  font-size: .8rem;
+  color: var(--sc-muted);
+}
 @container (max-width:600px) {
   .sc-slot time {
     display: inline-block;

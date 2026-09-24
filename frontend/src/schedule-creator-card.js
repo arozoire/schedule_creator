@@ -1,9 +1,9 @@
 import { ScheduleCreatorStateAdapter } from './state-adapter.js';
-import { clean, messageFor, parseJson } from './editor.js';
+import { clean, messageFor, parseJson, diagnosticFor } from './editor.js';
 import { controllable, targetEntities, actionForm, readAction, blankCondition, conditionForm, readCondition, notificationForm, readNotification, slotsForm, readSlots } from './forms.js';
 
 const STYLE = '__SC_CSS__';
-const CARD_VERSION = '0.3.0';
+const CARD_VERSION = '0.3.1';
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
@@ -18,6 +18,7 @@ class ScheduleCreatorCard extends HTMLElement {
     this.adapter = new ScheduleCreatorStateAdapter(() => this.render());
     this.selectedProfile = null; this.selectedGroup = null;
     this.edit = null; this.draft = null; this.localError = null;
+    this.localErrorDetails = null;
     this.shadowRoot.addEventListener('click', (e) => this.click(e));
     this.shadowRoot.addEventListener('submit', (e) => this.submit(e));
     this.shadowRoot.addEventListener('keydown', (e) => {
@@ -48,6 +49,10 @@ class ScheduleCreatorCard extends HTMLElement {
         }
       }
       this.capture();
+      // A text/time field emits change on blur, just before a click on Save.
+      // Replacing the form here removes the clicked button before submission.
+      // Only selectors and checkboxes can change which controls are displayed.
+      if (!e.target.matches('select,input[type="checkbox"]')) return;
       const newDomain = (this.edit?.[0] === 'timer' ? this.draft.entity_id : this.draft.selectedEntities[0])?.split('.')[0];
       if (newDomain && previousDomain && newDomain !== previousDomain) {
         for (const key of Object.keys(this.draft)) if (/^(start|end|timer)_/.test(key) && !key.includes('notification')) delete this.draft[key];
@@ -114,6 +119,7 @@ class ScheduleCreatorCard extends HTMLElement {
     }).join('');
     const status = error ? `<div class="status error" role="alert">${esc(messageFor(error))}</div>` : loading ? '<div class="status">Caricamento…</div>' : '';
     const info = this.localError || writeError;
+    const errorDetails = this.localError ? this.localErrorDetails : writeError ? diagnosticFor(writeError, {cardVersion:CARD_VERSION,haVersion:this._hass.config?.version}) : null;
     const editable = this._hass?.user?.is_admin === true && writeError?.code !== 'unauthorized';
     const view = state ? `<div class="profile-status-bar">${profile ? `<span class="sc-badge ${profile.active ? 'is-active' : ''}">${profile.active ? 'Profilo attivo' : 'Profilo inattivo'}</span><span>${esc(profile.profile_type === 'exclusive' ? 'Esclusivo' : 'Condiviso')}</span>` : 'Crea un profilo per iniziare'}<span>· ${state.quick_timers?.length ?? 0} timer attivi</span></div>
       ${groups.length ? `<nav class="tab-bar" aria-label="Gruppi">${tabs}</nav>` : ''}
@@ -122,7 +128,7 @@ class ScheduleCreatorCard extends HTMLElement {
       ${editable ? `<details class="sc-management" data-section="management" ${!profile || !group ? 'open' : ''}><summary>Gestisci profili e gruppi</summary><div class="sc-controls">${button('newProfile','＋ Profilo')}${profile ? `${button('editProfile','Modifica profilo',profile.id)}${button('toggleProfile',profile.active ? 'Disattiva profilo' : 'Attiva profilo',profile.id)}${button('deleteProfile','Elimina profilo',profile.id)}${button('newGroup','＋ Gruppo')}` : ''}${group ? `${button('editGroup','Modifica gruppo',group.id)}${button('deleteGroup','Elimina gruppo',group.id)}` : ''}</div></details>` : '<p class="sc-meta">Vista in sola lettura: serve un amministratore per modificare.</p>'}
       ${this.edit && editable ? this.editor(config, profile, group) : ''}
       <details class="sc-operational" data-section="operational"><summary>Attività · ${state.operational?.occurrences?.length ?? 0} fasce in corso · ${state.quick_timers?.length ?? 0} timer</summary>${(state.operational?.occurrences || []).map((x) => `<p>${esc(config.schedules?.find((s) => s.id === x.schedule_id)?.name || x.schedule_id)}: ${esc(x.state)}, condizione ${esc(x.condition_branch)}, termine ${esc(x.end_utc)}</p>`).join('') || '<p>Nessuna fascia attiva.</p>'}${(state.operational?.leases || []).map((x) => `<p>${esc(x.entity_id)}: ${esc(x.state)} (${esc(x.controller_type)})</p>`).join('')}${(state.quick_timers || []).map((x) => `<p>Timer ${esc(this._hass.states[x.entity_id]?.attributes?.friendly_name || x.entity_id)}: <span data-expiry="${esc(x.expires_at)}"></span> ${editable ? button('cancelTimer','Annulla timer',x.id) : ''}</p>`).join('')}</details>` : '';
-    this.shadowRoot.innerHTML = `<style>${STYLE}</style><ha-card style="--pchip-color:${tint(profile?.color)}"><div class="card-header"><div class="hdr-row1"><span class="card-title">${esc(this.config.title || 'Schedule Creator')}</span><span class="sc-version">v${CARD_VERSION}</span></div><p class="sc-eyebrow">Profili</p><div class="hdr-row2" aria-label="Profili">${chips}</div></div>${status}${info ? `<p class="sc-error" role="alert">${esc(typeof info === 'string' ? info : messageFor(info))}</p>` : ''}${view}</ha-card>`;
+    this.shadowRoot.innerHTML = `<style>${STYLE}</style><ha-card style="--pchip-color:${tint(profile?.color)}"><div class="card-header"><div class="hdr-row1"><span class="card-title">${esc(this.config.title || 'Schedule Creator')}</span><span class="sc-version">v${CARD_VERSION}</span></div><p class="sc-eyebrow">Profili</p><div class="hdr-row2" aria-label="Profili">${chips}</div></div>${status}${info ? `<p class="sc-error" role="alert">${esc(typeof info === 'string' ? info : messageFor(info))}</p>` : ''}${errorDetails ? `<details class="sc-error-details" data-section="error-details"><summary>Dettagli errore</summary><p>Seleziona e copia questo testo per segnalare il problema.</p><textarea readonly aria-label="Dettagli errore da copiare" rows="10">${esc(errorDetails)}</textarea></details>` : ''}${view}</ha-card>`;
     this.restoreDraft(); this.updateClock();
     this.shadowRoot.querySelectorAll('details').forEach((node)=>{if (hadDetails) node.open=openSections.has(node.dataset.section || node.querySelector('summary')?.textContent);});
     const nextFocus = [...this.shadowRoot.querySelectorAll('[name]')].find((x)=>x.name===focusName);
@@ -197,7 +203,7 @@ class ScheduleCreatorCard extends HTMLElement {
       }
       this.render(); return;
     }
-    if (command === 'close') { this.edit = null; this.draft = null; this.localError = null; this.render(); return; }
+    if (command === 'close') { this.edit = null; this.draft = null; this.localError = null; this.localErrorDetails = null; this.render(); return; }
     if (/^(new|edit)/.test(command)) {
       const kind = command.replace(/^(new|edit)/,'').toLowerCase();
       const config = this.adapter.state.config;
@@ -210,7 +216,7 @@ class ScheduleCreatorCard extends HTMLElement {
       this.editRevision = this.adapter.state.revision;
       this.changedFields = new Set();
       this.slotDraft = null; this.conditionDraft = undefined; this.actionReset = false; this.actionDomain = null;
-      this.draft = null; this.localError = null; this.render();
+      this.draft = null; this.localError = null; this.localErrorDetails = null; this.render();
       this.shadowRoot.querySelector('form[data-editor]')?.scrollIntoView?.({block:'start'});
       return;
     }
@@ -225,25 +231,36 @@ class ScheduleCreatorCard extends HTMLElement {
   async submit(event) {
     const form = event.target.closest('form[data-editor]'); if (!form) return;
     event.preventDefault(); if (this.adapter.busy) return;
-    this.capture(); this.localError = null;
+    this.localError = null; this.localErrorDetails = null;
     const [kind,id] = this.edit;
-    const data = Object.fromEntries(new FormData(form));
-    const config = this.adapter.state.config;
-    const profile = config.profiles.find((p) => p.id === this.selectedProfile) || config.profiles[0];
-    const group = config.groups.find((g) => g.id === this.selectedGroup) || config.groups.find((g) => g.profile_id === profile?.id);
-    let payload;
+    const type = kind === 'timer' ? 'quick_timer/create' : `${kind}/${id ? 'update' : 'create'}`;
+    let phase = 'lettura del modulo';
     try {
+      this.capture();
+      const data = Object.fromEntries(new FormData(form));
+      const config = this.adapter.state.config;
+      let payload;
+      phase = 'validazione del nome';
+      if (kind !== 'timer' && !data.name?.trim()) throw new Error('Inserisci un nome prima di salvare.');
+      phase = 'preparazione dei dati';
       if (kind === 'profile') payload = { name: data.name.trim(), profile_type: data.profile_type, icon: data.icon || null, color: data.color || null, order: Number(data.order) };
       if (kind === 'group') payload = { name: data.name.trim(), entity_ids: this.draft.selectedEntities, icon: data.icon || null, color: data.color || null, order: Number(data.order) };
       if (kind === 'schedule') {
+        phase = 'validazione delle entità';
         const owner = config.groups.find((g)=>g.id===this.ownerGroup);
         const domain = this.draft.selectedEntities[0]?.split('.')[0];
         if (!domain || !this.draft.selectedEntities.every((x)=>x.startsWith(`${domain}.`) && owner?.entity_ids.includes(x))) throw new Error('Scegli entità dello stesso tipo appartenenti al gruppo.');
+        phase = 'lettura delle fasce orarie';
         const slots = readSlots(form);
         if (!slots.length || slots.some((s)=>!s.weekdays.length || !s.start || !s.end || s.start===s.end)) throw new Error('Ogni fascia richiede almeno un giorno e orari diversi.');
         const dates = (str)=>[...new Set(str.split(',').map((x)=>x.trim()).filter(Boolean))].sort();
+        phase = 'lettura azione iniziale';
+        const startAction = readAction(form,'start',domain);
+        phase = 'lettura azione finale';
+        const endAction = readAction(form,'end',domain);
+        phase = 'lettura condizioni e notifiche';
         payload = {name:data.name.trim(),enabled:form.elements.enabled.checked,target_entity_ids:this.draft.selectedEntities,
-          time_slots:slots,start_action:readAction(form,'start',domain),end_action:readAction(form,'end',domain),
+          time_slots:slots,start_action:startAction,end_action:endAction,
           condition:readCondition(form),override_policy:data.override_policy,inclusion_dates:dates(data.inclusion_dates),exclusion_dates:dates(data.exclusion_dates),
           start_notification:readNotification(form,'start_notification'),end_notification:readNotification(form,'end_notification')};
         if (form.elements.pro_config_enabled.checked) {
@@ -257,6 +274,7 @@ class ScheduleCreatorCard extends HTMLElement {
       }
       if (kind === 'timer') { const domain = data.entity_id.split('.')[0]; payload = {entity_id:data.entity_id,duration_seconds:Number(data.duration_seconds),action:readAction(form,'timer',domain)}; if (payload.duration_seconds<1 || payload.duration_seconds>604800) throw new Error('La durata deve essere tra 1 e 604800 secondi.'); }
       if (!payload) throw new Error('Editor non disponibile.');
+      phase = 'confronto con la configurazione esistente';
       if (this.adapter.conflicted && !confirm('I dati sono cambiati su un altro client. Hai confrontato la bozza con i nuovi dati prima di salvare?')) return;
       if (id) {
         if (kind === 'schedule' && !this.actionReset) {
@@ -270,10 +288,14 @@ class ScheduleCreatorCard extends HTMLElement {
       }
       if (!id && kind === 'group') payload.profile_id = this.ownerProfile;
       if (!id && kind === 'schedule') { payload.profile_id = this.ownerProfile; payload.group_id = this.ownerGroup; }
-      const type = kind === 'timer' ? 'quick_timer/create' : `${kind}/${id ? 'update' : 'create'}`;
+      phase = 'salvataggio e aggiornamento della vista';
       const ok = await this.adapter.mutate(type,payload,{ runtime: kind === 'timer', expectedRevision: kind === 'timer' || this.adapter.conflicted ? undefined : this.editRevision });
       if (ok) { this.edit = null; this.draft = null; this.render(); }
-    } catch (error) { this.localError = error.message; this.render(); }
+    } catch (error) {
+      this.localError = messageFor(error);
+      this.localErrorDetails = diagnosticFor(error, {cardVersion:CARD_VERSION,haVersion:this._hass.config?.version,phase,operation:`schedule_creator/${type}`});
+      this.render();
+    }
   }
 }
 class ScheduleCreatorCardEditor extends HTMLElement {

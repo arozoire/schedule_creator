@@ -501,3 +501,37 @@ conclusa `success` (frontend, HACS e Python). Questo aggiornamento handoff è
 il checkpoint finale del branch; controllare la CI del nuovo head e unire la
 PR. Il proprietario pubblica eventualmente la release dopo revisione della
 preview e prova HA, e domani riporta i bug con log e versione della card.
+
+### Salvataggio switch: screenshot v0.3.0 e diagnosi (2026-09-24)
+
+Il proprietario conferma creazione di un nuovo schedule per una presa switch;
+lo screenshot mostra badge `v0.3.0` e solo `Method not implemented.`. Tag 0.3.0
+presente. Non attribuire il problema a cache o mancato riavvio: la versione
+frontend è confermata e il proprietario riavvia il Pi dopo HACS.
+
+Branch `codex/fix-native-schedule-save`, base
+`2b02b7523d8006b56f5d724d0f5263db42d73c05`. Il percorso switch ON/OFF passa sia
+nel DOM test sia in Chromium reale con trasporto WS simulato; l'errore specifico
+dell'istanza non è ancora riprodotto. Lo screenshot è compatibile con il catch
+locale che mostrava solo `error.message`, perdendo fase e stack.
+
+0.3.1 conserva e mostra **Dettagli errore** copiabili (fase, operazione, versioni,
+codice, conferma server e stack disponibile). Corretto il blocco busy se il
+render prima dell'invio genera un'eccezione. Le eccezioni dopo conferma server
+sono distinte per evitare un secondo tentativo che duplichi lo schedule. Nome
+vuoto verificato prima dell'invio. Un generico `Method not implemented.` non
+porta più a una raccomandazione automatica di reinstallare/riavviare.
+
+Questa consegna abilita la diagnosi del guasto reale, non lo dichiara risolto.
+Prossimo dato necessario: testo della sezione **Dettagli errore** generato
+dall'HA del proprietario. Registrare test/CI prima del merge; release al
+proprietario, come concordato.
+
+Durante la prova Chromium è stato individuato un difetto distinto ma concreto:
+il `change` del campo nome al blur ricostruiva il form durante il clic su Salva,
+facendo perdere il clic. Ora testo/orari aggiornano la bozza senza ricostruire
+il modulo; select e checkbox continuano ad aggiornare i controlli dinamici.
+Build e 19 test Node superati. Chromium reale, trasporto simulato: ON/OFF switch
+inviato; eccezione locale iniettata per verificare fase/stack e bozza conservata,
+zero invii in errore; screenshot controllato a 390 px, senza overflow orizzontale.
+L'eccezione iniettata verifica la diagnosi, non riproduce la causa sull'HA reale.

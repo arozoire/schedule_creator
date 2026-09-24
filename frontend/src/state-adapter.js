@@ -89,21 +89,26 @@ export class ScheduleCreatorStateAdapter {
     const generation = this.generation;
     this.busy = true;
     this.writeError = null;
-    this.onChange();
+    let phase = 'aggiornamento interfaccia prima dell’invio';
+    let acknowledged = false;
     try {
+      this.onChange();
+      phase = 'invio comando WebSocket';
       await connection.sendMessagePromise({
         type: `schedule_creator/${type}`,
         expected_revision: expectedRevision ?? (runtime ? this.state.runtime_summary.revision : this.state.revision),
         ...fields,
       });
+      acknowledged = true;
       if (this.closed || generation !== this.generation) return false;
+      phase = 'aggiornamento vista dopo conferma del server';
       await this.refresh();
       this.conflicted = false;
       return true;
     } catch (error) {
       if (this.closed || generation !== this.generation) return false;
-      this.writeError = { code: error?.code, message: error?.message, operation: `schedule_creator/${type}` };
-      if (error.code === 'revision_conflict') {
+      this.writeError = { code: error?.code, message: error?.message || String(error), name: error?.name, stack: error?.stack, operation: `schedule_creator/${type}`, phase, acknowledged };
+      if (error?.code === 'revision_conflict') {
         this.conflicted = true;
         await this.refresh();
       }
