@@ -535,3 +535,14 @@ Build e 19 test Node superati. Chromium reale, trasporto simulato: ON/OFF switch
 inviato; eccezione locale iniettata per verificare fase/stack e bozza conservata,
 zero invii in errore; screenshot controllato a 390 px, senza overflow orizzontale.
 L'eccezione iniettata verifica la diagnosi, non riproduce la causa sull'HA reale.
+
+Consegna ripresa su richiesta del proprietario: mantenere la sola versione
+**0.3.1**, fare merge dopo verifica; tag e release restano al proprietario.
+PR [#32](https://github.com/arozoire/schedule_creator/pull/32), primo head
+`f2f942a49cc0c6f86a0952a09b318e3f9411ef6b`; CI
+[run 35982750396](https://github.com/arozoire/schedule_creator/actions/runs/35982750396):
+frontend e bundle superati, altri controlli ancora in corso al checkpoint.
+Verificare tutti i controlli sul nuovo head prima del merge. Dopo la release,
+provare la creazione dello schedule switch con nome, giorni, orari e azioni
+ON/OFF; se fallisce, copiare integralmente **Dettagli errore**. Nessun ulteriore
+incremento di versione previsto per questa consegna.
