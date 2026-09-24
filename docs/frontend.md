@@ -58,6 +58,22 @@ della cache. Il primo passaggio alla 0.3.5 richiede ancora riavvio e refresh.
 
 ## Contratto tecnico
 
+### Card timeline per entità 0.3.9
+
+Terza card nello stesso file JS (mockup direzione B):
+
+```yaml
+type: custom:schedule-creator-timeline-card
+title: Oggi                         # facoltativo
+entities: [climate.camera, cover.camera]   # facoltativo: filtro e ordine
+```
+
+Una riga per dispositivo con la barra 00–24 del giorno scelto (Lun…Dom della
+settimana corrente), costruita con gli schedule di **tutti i profili attivi**
+insieme; stato a fianco (in corso fino alle…, in pausa per condizione, timer,
+prossima fascia), linea dell'ora sul giorno di oggi, blocchi climate colorati per
+temperatura, timer rigati. Sola lettura: le modifiche restano nella card principale.
+
 ### Card Quick Timer separata 0.3.8
 
 Nello stesso file JS (nessuna risorsa in più) c'è `custom:schedule-creator-quick-timer-card`,
