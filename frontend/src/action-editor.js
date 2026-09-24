@@ -105,6 +105,12 @@ export function rangeField(name, label, value, min, max, step = 1, unit = '') {
   return `<div class="sc-field sc-range"><div class="sc-range-head"><span class="sc-field-label" id="${name}-label">${escA(label)}</span><span class="sc-range-value"><input type="number" data-mirror="${name}" aria-labelledby="${name}-label" min="${min}" max="${max}" step="${step}" value="${v}">${escA(unit)}</span></div><input type="range" name="${name}" aria-labelledby="${name}-label" min="${min}" max="${max}" step="${step}" value="${v}" style="--sc-fill:${fill}%"><div class="sc-range-labels" aria-hidden="true"><span>${min}</span><span>${max}</span></div></div>`;
 }
 
+// Big value with − / + like the weekly-schedule-card editor (climate temperature).
+export function stepperField(name, label, value, min, max, step, unit = '') {
+  const v = Math.min(max, Math.max(min, Number(value ?? min)));
+  return `<div class="sc-field sc-stepper"><span class="sc-field-label" id="${name}-label">${escA(label)}</span><div class="sc-stepper-row"><button type="button" class="sc-step" data-command="stepValue" data-id="${name}:-1" aria-label="Diminuisci">−</button><span class="sc-stepper-value"><input type="number" name="${name}" aria-labelledby="${name}-label" min="${min}" max="${max}" step="${step}" value="${v}" inputmode="decimal"><span>${escA(unit)}</span></span><button type="button" class="sc-step" data-command="stepValue" data-id="${name}:1" aria-label="Aumenta">+</button></div><div class="sc-range-labels" aria-hidden="true"><span>${min}</span><span>${max}</span></div></div>`;
+}
+
 export function describeState(state, domain) {
   if (!state) return '';
   const a = state.attributes || {};
@@ -133,8 +139,8 @@ export function actionForm(prefix, label, hass, ids, value, optional, draft = {}
   const name = (key) => `${prefix}_${key}`;
   fields.push(choices(name('mode'), domain === 'climate' ? 'Modalità HVAC' : domain === 'cover' ? 'Comando' : 'Stato', modes, mode, {primary: true, icons: true}));
   if (domain === 'climate' && !['none', 'off'].includes(mode)) {
-    if (mode !== 'fan_only' && caps.temperature) fields.push(rangeField(name('temperature'), `Temperatura (${caps.unit})`, get('temperature'), caps.min, caps.max, caps.step));
-    if (mode !== 'fan_only' && caps.range) fields.push(rangeField(name('target_temp_low'), `Minima (${caps.unit})`, get('target_temp_low'), caps.min, caps.max, caps.step), rangeField(name('target_temp_high'), `Massima (${caps.unit})`, get('target_temp_high'), caps.min, caps.max, caps.step));
+    if (mode !== 'fan_only' && caps.temperature) fields.push(stepperField(name('temperature'), 'Temperatura', get('temperature'), caps.min, caps.max, caps.step, caps.unit));
+    if (mode !== 'fan_only' && caps.range) fields.push(stepperField(name('target_temp_low'), 'Minima', get('target_temp_low'), caps.min, caps.max, caps.step, caps.unit), stepperField(name('target_temp_high'), 'Massima', get('target_temp_high'), caps.min, caps.max, caps.step, caps.unit));
     fields.push(choices(name('fan_mode'), 'Ventola', caps.fan_modes, get('fan_mode')));
     more.push(choices(name('preset_mode'), 'Preset', caps.preset_modes, get('preset_mode')));
     more.push(choices(name('swing_mode'), 'Swing', caps.swing_modes, get('swing_mode')));

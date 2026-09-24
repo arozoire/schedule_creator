@@ -81,6 +81,7 @@ def _condition(value: object) -> dict[str, Any]:
             "children",
             "minimum_duration_seconds",
             "hysteresis",
+            "release_delay_seconds",
         },
         "condition",
     )
@@ -98,6 +99,11 @@ def _condition(value: object) -> dict[str, Any]:
         "children": [_condition(child) for child in children],
         "minimum_duration_seconds": item.get("minimum_duration_seconds"),
         "hysteresis": item.get("hysteresis"),
+        **(
+            {"release_delay_seconds": item["release_delay_seconds"]}
+            if item.get("release_delay_seconds") is not None
+            else {}
+        ),
     }
 
 

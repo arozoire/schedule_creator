@@ -58,6 +58,21 @@ della cache. Il primo passaggio alla 0.3.5 richiede ancora riavvio e refresh.
 
 ## Contratto tecnico
 
+### Grafica "Agenda viva" 0.3.7
+
+Scelta del proprietario tra tre direzioni (mockup: https://claude.ai/artifact/RuCLR9CE1dnWvoVjGhw7Z8).
+- Intestazione con giorno/ora nel fuso di HA e numero di fasce in corso; profili
+  in un selettore a segmenti.
+- Riquadri "Adesso": fasce in corso (azione, fino a quando) o in pausa
+  (condizione falsa / priorità a un altro controllo) e Quick Timer attivi.
+- Settimana: colonna di oggi evidenziata, linea dell'ora, blocchi climate colorati
+  per temperatura (azzurro → arancio), bordo verde sulla fascia in corso,
+  tratteggio su quella in pausa; legenda. Si aggiorna a ogni minuto.
+- Editor: pannello dal basso sul telefono; dispositivi a pillole; temperatura
+  con − / + e valore grande; "Alla fine", "Condizioni", "Notifiche", "Altre
+  opzioni" come righe riassuntive apribili; "Salva schedule" a tutta larghezza.
+- Condizioni: "Diventa vera dopo" e "Torna falsa dopo" (vedi `websocket-api.md`).
+
 ### Editor schedule 0.3.6
 
 - **Fasce**: barra 00–24 per ogni fascia con gli altri schedule delle stesse

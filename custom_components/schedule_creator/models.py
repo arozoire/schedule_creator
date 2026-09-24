@@ -162,7 +162,10 @@ def _fail(path: str, message: str) -> Never:
 
 
 def _strict_record(
-    data: object, model: type[VersionedModel], path: str
+    data: object,
+    model: type[VersionedModel],
+    path: str,
+    optional: frozenset[str] = frozenset(),
 ) -> dict[str, Any]:
     if not isinstance(data, dict):
         _fail(path, "must be an object")
@@ -172,7 +175,7 @@ def _strict_record(
     expected = {field.name for field in fields(model)}
     actual = set(data)
     unknown = sorted(actual - expected)
-    missing = sorted(expected - actual)
+    missing = sorted(expected - actual - optional)
     if unknown:
         _fail(path, f"unknown fields: {', '.join(unknown)}")
     if missing:
@@ -602,6 +605,8 @@ class ConditionNode(VersionedModel):
     children: tuple[ConditionNode, ...]
     minimum_duration_seconds: float | None
     hysteresis: float | None
+    # Added in 0.3.7: optional in storage and omitted from JSON when unset.
+    release_delay_seconds: float | None = None
 
     def __post_init__(self) -> None:
         VersionedModel.__post_init__(self)
@@ -627,6 +632,11 @@ class ConditionNode(VersionedModel):
             self.minimum_duration_seconds, "condition.minimum_duration_seconds"
         )
         hysteresis = _optional_number(self.hysteresis, "condition.hysteresis")
+        release = _optional_number(
+            self.release_delay_seconds, "condition.release_delay_seconds"
+        )
+        if release is not None and release < 0:
+            _fail("condition.release_delay_seconds", "must not be negative")
         if duration is not None and duration < 0:
             _fail("condition.minimum_duration_seconds", "must not be negative")
         if hysteresis is not None and hysteresis < 0:
@@ -694,6 +704,16 @@ class ConditionNode(VersionedModel):
         object.__setattr__(self, "children", children)
         object.__setattr__(self, "minimum_duration_seconds", duration)
         object.__setattr__(self, "hysteresis", hysteresis)
+        object.__setattr__(self, "release_delay_seconds", release)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Encode the tree; an unset release delay keeps the 0.3.6 shape."""
+
+        payload = VersionedModel.to_dict(self)
+        if self.release_delay_seconds is None:
+            payload.pop("release_delay_seconds")
+        payload["children"] = [child.to_dict() for child in self.children]
+        return payload
 
     @classmethod
     def from_dict(cls, data: object) -> Self:
@@ -710,7 +730,9 @@ class ConditionNode(VersionedModel):
         if remaining_nodes[0] == 0:
             _fail("condition", f"must not exceed {MAX_CONDITION_NODES} total nodes")
         remaining_nodes[0] -= 1
-        item = _strict_record(data, cls, path)
+        item = _strict_record(
+            data, cls, path, optional=frozenset({"release_delay_seconds"})
+        )
         raw_children = item["children"]
         if not isinstance(raw_children, list | tuple):
             _fail(f"{path}.children", "must be an array")
@@ -746,6 +768,9 @@ class ConditionNode(VersionedModel):
                 f"{path}.minimum_duration_seconds",
             ),
             hysteresis=_optional_number(item["hysteresis"], f"{path}.hysteresis"),
+            release_delay_seconds=_optional_number(
+                item.get("release_delay_seconds"), f"{path}.release_delay_seconds"
+            ),
         )
 
 

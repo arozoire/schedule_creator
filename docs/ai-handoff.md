@@ -1,5 +1,19 @@
 # AI handoff — stato attuale e piano futuro
 
+## Direzione grafica A e ritardo in uscita — 0.3.7 (2026-09-24)
+
+Il proprietario ha scelto la direzione **A "Agenda viva"** (mockup
+https://claude.ai/artifact/RuCLR9CE1dnWvoVjGhw7Z8), ha scartato la C (frasi) e
+vuole la B (timeline per entità con tutti i profili attivi) come **card
+separata**. Anche il Quick Timer diventa una **card separata** come nella
+weekly-schedule-card. Ordine concordato: 1) card principale A (fatto), 2) ritardo
+in uscita condizioni (fatto), 3) card Quick Timer, 4) card timeline per entità.
+Branch `codex/agenda-redesign-release-delay`. Backend: `release_delay_seconds`
+in `ConditionNode` (facoltativo, omesso se nullo, `_strict_record(optional=)`),
+valutazione in `conditions.py` (memoria solo in RAM). Frontend: `haNow`,
+`temperatureColor`, `nowTiles`, `entityPills`, `stepperField`, righe `sc-row`.
+Verifiche: 40 test Node, anteprima 700px e 375px, ruff/mypy; pytest in CI.
+
 ## Editor schedule come weekly-schedule-card, notifiche di stato — 0.3.6 (2026-09-24)
 
 Riscontro proprietario sulla 0.3.5: backup e RESET funzionano. Richieste
