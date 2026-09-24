@@ -1,61 +1,149 @@
 # Schedule Creator
 
-Schedule Creator is a native Home Assistant scheduling integration. It is being
-developed as the independent server-side backend for Weekly Schedule Card and does
-not depend on Scheduler Component.
+Weekly schedules, conditions and quick timers for Home Assistant, run by a native
+integration instead of dashboard helpers. Schedules keep running when no dashboard
+is open, survive restarts and come with three Lovelace cards.
 
-Current status: Phase 2 backend complete and phase 3A read-only Lovelace card
-available. Install version 0.1.0 from HACS as a custom integration and follow
-the [installation guide](docs/frontend.md). The card is read-only; profile,
-schedule and timer editing from the new card will follow in later phases.
+Schedule Creator is the server-side successor of
+[weekly-schedule-card](https://github.com/arozoire/weekly-schedule-card). The two
+can live side by side; nothing is imported from the old card automatically.
 
-The integration lifecycle, strict
-version-one models, configuration/runtime/audit Stores and the side-effect-free
-journal recovery planner are operational and documented in
-[`docs/storage-schema.md`](docs/storage-schema.md). The authenticated
-[`schedule_creator/get_state` WebSocket API](docs/websocket-api.md) exposes
-configuration and runtime counts without modifying stores or controlling entities.
-Administrative profile create, update, delete and activation commands use
-optimistic configuration revisions and the same native Store.
-Administrative group create, update and delete commands preserve profile ownership
-and schedule target references.
-Administrative schedule create, update and delete commands validate the complete
-nested schedule model without executing schedules or calling entity services.
-The pure planner projects frozen occurrences across local-time, overnight and DST
-boundaries without writing runtime state or scheduling callbacks.
-Bounded projections can now be reconciled atomically into the Runtime Store;
-repeated projections are true no-ops and historical records are preserved.
-Setup, successful configuration mutations and one lifecycle-owned daily callback
-reconcile a rolling 14-day horizon without entity execution. Unload cancels the
-callback before releasing storage.
-Schedule edits and deactivation now replace or remove only future pending
-occurrences that have no operational references.
-One lifecycle-owned callback advances the nearest occurrence boundary and persists
-clock-only `active` and `completed` states without controlling entities.
-Terminal occurrence history is retained for 30 days and pruned only when no
-snapshot, operation or lease references it.
-Effective schedule and Quick Timer controllers can now be ranked into immutable,
-deterministic winner plans without persisting ownership or touching entities.
-Those plans are now reconciled atomically into deterministic active and suspended
-entity leases. Structured conditions are evaluated from referenced Home Assistant
-states on setup, lifecycle changes, state-change events and duration deadlines.
-Their branches are persisted before arbitration. Active lease winners now capture
-one immutable starting snapshot per target entity before any future action. It then
-prepares deterministic journal intents for the winning lease generation. Due intents
-revalidate that lease immediately before a blocking Home Assistant service call,
-persist `sent` first, and then persist success or a bounded retry/final failure.
-Target actions left `sent` by an interrupted process now fail closed at startup as
-unknown outcomes and are never blindly replayed. The shared boundary coordinator
-also persists Quick Timer expiry as `completed`. A successfully applied timer then
-restores its captured state through journaled `scene.apply`, unless another
-controller already owns the entity. Explicit schedule end actions and conditional
-fallbacks use the same journal and ownership protections; a normal schedule without
-an end action still does nothing. Start/end notifications are journaled and
-deduplicated. Administrative WebSocket commands create and cancel Quick Timers with
-optimistic runtime revisions and immediate lifecycle reconciliation.
+> The card interface is currently in **Italian**. The screenshots below come from
+> the repository preview (`frontend/preview.html`) with demo data, not from a
+> real installation.
 
-## Design requirements
+![Main card: profiles, what is running now and the week](docs/images/main.png)
 
-The validated requirements, technical review, architecture decisions and
-implementation plan are maintained in the companion `weekly-schedule-card`
-repository until this repository is published.
+## Highlights
+
+- **Profiles and groups** – organise the house by habits (home, away, night) and
+  rooms. Exclusive profiles switch each other off; shared ones run together.
+- **Weekly time slots** – drag a slot on a 24 h bar that shows the other
+  schedules of the same devices and snaps to their edges. Weekday / weekend
+  shortcuts, several slots per schedule, overnight slots.
+- **Desired-state actions** – climate mode, temperature, fan and swing in one
+  step; brightness, cover position and fan speed as percentage sliders; an
+  optional action at the end of the slot.
+- **Conditions** – pick an entity first, then only the comparisons that fit it
+  (numbers with units, on/off, options). Hysteresis plus *become true after* and
+  *become false after* delays stop devices from flapping.
+- **Live status** – "now" tiles, today's column with a now line, running and
+  paused slots, temperature-coloured climate blocks, optional persistent
+  notification for the whole slot.
+- **Quick timers** – "cool to 23° for 30 minutes": the previous state is
+  restored when the timer ends.
+- **Safe by design** – every command goes through a durable journal with
+  retries; nothing is replayed blindly after a restart.
+- **Backup, restore and RESET** from the card.
+
+## Screenshots
+
+| Schedule editor (phone) | Start action | Conditions |
+| --- | --- | --- |
+| ![Slot editor with time bar and day shortcuts](docs/images/editor.png) | ![Climate start action with mode buttons and temperature stepper](docs/images/action.png) | ![Lux condition with hysteresis and delays](docs/images/conditions.png) |
+
+| Timeline card | Quick Timer card |
+| --- | --- |
+| ![Per-device timeline across active profiles](docs/images/timeline.png) | ![Quick Timer card for a climate entity](docs/images/quicktimer.png) |
+
+## Installation
+
+Requires Home Assistant 2026.9.2 or newer and [HACS](https://hacs.xyz).
+
+1. In HACS open **⋮ → Custom repositories**, add
+   `https://github.com/arozoire/schedule_creator` as an **Integration**.
+2. Download **Schedule Creator** and restart Home Assistant.
+3. Go to **Settings → Devices & services → Add integration** and add
+   **Schedule Creator**.
+4. Add a card to a dashboard (**Add card → Manual**):
+
+   ```yaml
+   type: custom:schedule-creator-card
+   title: Schedule Creator
+   ```
+
+The cards load automatically; you do not need to add a Lovelace resource.
+An existing resource pointing to `/schedule_creator/frontend/schedule-creator-card.js`
+keeps working.
+
+## Cards
+
+All three cards ship in the same file and share the same backend data.
+
+### Main card
+
+```yaml
+type: custom:schedule-creator-card
+title: Schedule Creator   # optional
+```
+
+Create profiles, groups and schedules, see what is running now and manage
+backups. Editing requires an administrator; other users get a read-only view.
+
+### Timeline card
+
+```yaml
+type: custom:schedule-creator-timeline-card
+title: Today                               # optional
+entities: [climate.bedroom, cover.bedroom] # optional filter and order
+```
+
+One 24 h row per device for the selected weekday, combining the schedules of
+**all active profiles**, with the current status next to each row. Read-only.
+
+### Quick Timer card
+
+```yaml
+type: custom:schedule-creator-quick-timer-card
+entity: climate.bedroom   # optional: without it the card offers a searchable list
+presets: [5, 15, 30, 60]  # optional, minutes
+```
+
+Choose what the device should do during the timer and for how long (presets,
+slider or "until" a time). While a timer runs the card shows a countdown and a
+cancel button; when it ends the previous state is restored.
+
+## How it works
+
+- **Priority** – when two slots control the same entity the one that started last
+  wins; on a tie a quick timer beats a conditional schedule, which beats a plain
+  one. Only schedules of active profiles run.
+- **Conditions** – while a condition is false the end action runs (if any);
+  when it becomes true again the start action is applied. Example for sun
+  blinds: lux > 500, hysteresis 100, become true after 10 min, become false after
+  15 min, start action *close*, end action *open*.
+- **Notifications** – start/end notifications with suggested text, an optional
+  persistent status notification during the slot, and a dashboard path opened
+  when a notification is tapped in the companion app.
+
+## Updating
+
+After a HACS update restart Home Assistant (new Python code is only loaded on
+restart) and reload the dashboard. The card compares its version with the
+running integration and tells you whether a page reload or a restart is still
+needed. No cache clearing or `?v=` parameters are required.
+
+## Documentation
+
+- [Card and installation details](docs/frontend.md) (Italian)
+- [WebSocket API](docs/websocket-api.md)
+- [Storage schema and journal](docs/storage-schema.md)
+- [Development hand-off notes](docs/ai-handoff.md) (Italian)
+
+## Development
+
+```bash
+cd frontend
+npm ci
+npm run build   # writes custom_components/schedule_creator/frontend/schedule-creator-card.js
+npm test
+```
+
+Python checks run in CI (`ruff`, `mypy`, `pytest` with
+`pytest-homeassistant-custom-component`). To refresh the screenshots, serve the
+repository root on port 8765, start a Chromium browser with
+`--remote-debugging-port=9333` and run `node frontend/screenshots.mjs`.
+
+## License
+
+[MIT](LICENSE)
