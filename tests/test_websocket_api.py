@@ -35,6 +35,7 @@ from custom_components.schedule_creator.storage import (
     StorageNotLoadedError,
 )
 from custom_components.schedule_creator.websocket_api import (
+    _previous_state,
     websocket_get_state,
     websocket_subscribe_runtime,
 )
@@ -277,6 +278,7 @@ async def test_get_state_populated(hass, hass_ws_client, hass_storage):
                     "action": item.action.action,
                     "data": dict(item.action.data),
                 },
+                "previous": _previous_state(reconciled_runtime, item),
             }
             for item in reconciled_runtime.quick_timers
             if item.state.value == "active"

@@ -54,6 +54,45 @@ def async_register_commands(hass: HomeAssistant) -> None:
     hass.data[_REGISTERED] = True
 
 
+# Attributes the cards need to describe a restored state; the rest stays private.
+_PREVIOUS_ATTRIBUTES = (
+    "brightness",
+    "current_position",
+    "fan_mode",
+    "hvac_mode",
+    "percentage",
+    "preset_mode",
+    "temperature",
+)
+
+
+def _previous_state(runtime: Any, timer: Any) -> dict[str, Any] | None:
+    """State the timer restores when it ends, from its initial snapshot."""
+
+    snapshot = next(
+        (
+            item
+            for item in runtime.snapshots
+            if item.id == timer.snapshot_id
+            or (
+                item.occurrence_id == timer.controller_id
+                and item.entity_id == timer.entity_id
+            )
+        ),
+        None,
+    )
+    if snapshot is None:
+        return None
+    return {
+        "state": snapshot.state,
+        "attributes": {
+            key: snapshot.attributes[key]
+            for key in _PREVIOUS_ATTRIBUTES
+            if key in snapshot.attributes
+        },
+    }
+
+
 @websocket_command({"type": "schedule_creator/get_state"})
 @callback
 def websocket_get_state(
@@ -116,6 +155,7 @@ def websocket_get_state(
                         key: timer.action.to_dict()[key]
                         for key in ("domain", "action", "data")
                     },
+                    "previous": _previous_state(runtime, timer),
                 }
                 for timer in runtime.quick_timers
                 if timer.state is QuickTimerState.ACTIVE
