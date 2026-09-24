@@ -1,5 +1,14 @@
 # AI handoff — stato attuale e piano futuro
 
+## README inglese con schermate — 2026-09-24
+
+README riscritto in inglese con schermate in `docs/images/` generate da
+`frontend/preview.html#shot=<scenario>` tramite `frontend/screenshots.mjs`
+(Chromium con `--remote-debugging-port=9333`, server statico su 8765).
+**Lacuna scoperta:** `override_policy` ("Comandi manuali" nell'editor) è salvato
+ma nessun modulo del motore lo legge: l'opzione non ha effetto. Da implementare
+o nascondere; non dichiararla nel README finché non funziona.
+
 ## Card timeline per entità — 0.3.9 (2026-09-24)
 
 Punto 4 dell'ordine concordato: `frontend/src/timeline-card.js` + `timeline-card.css`

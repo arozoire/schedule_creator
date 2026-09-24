@@ -329,7 +329,7 @@ function stepperField(name, label, value, min, max, step, unit = '') {
 function describeState(state, domain) {
   if (!state) return '';
   const a = state.attributes || {};
-  const parts = [pretty(state.state)];
+  const parts = [{open: 'Aperta', closed: 'Chiusa', opening: 'In apertura', closing: 'In chiusura'}[state.state] || pretty(state.state)];
   if (!['off', 'unknown', 'unavailable'].includes(state.state)) {
     if (domain === 'climate' && a.temperature != null && state.state !== 'fan_only') parts.push(`${a.temperature}${a.temperature_unit || '°C'}`);
     if (domain === 'climate' && a.fan_mode) parts.push(pretty(a.fan_mode));
