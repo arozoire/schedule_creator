@@ -6,12 +6,12 @@ const bundle = readFileSync(new URL('../../custom_components/schedule_creator/fr
 const tick=()=>new Promise((r)=>setImmediate(r));
 const services={cover:{open_cover:{},close_cover:{},set_cover_position:{}},switch:{turn_on:{},turn_off:{}},light:{turn_on:{},turn_off:{}},climate:{set_temperature:{},set_hvac_mode:{},set_fan_mode:{}},fan:{turn_on:{},turn_off:{},set_percentage:{},set_preset_mode:{}},automation:{trigger:{}},update:{install:{}}};
 function setup() {
-  const dom=new JSDOM('<body></body>',{runScripts:'dangerously',virtualConsole:new VirtualConsole()});
+  const dom=new JSDOM('<body></body>',{url:'http://ha.local/lovelace/casa',runScripts:'dangerously',virtualConsole:new VirtualConsole()});
   dom.window.structuredClone=structuredClone;
   dom.window.confirm=()=>true;
   dom.window.eval(bundle);
   const states=Object.fromEntries([
-    ['switch.a',{friendly_name:'Lampada test'}],['switch.outside',{friendly_name:'Fuori gruppo'}],['sensor.temperature',{}],['automation.test',{}],['update.test',{}],
+    ['switch.a',{friendly_name:'Lampada test'}],['switch.outside',{friendly_name:'Fuori gruppo'}],['sensor.temperature',{unit_of_measurement:'°C',friendly_name:'Temperatura'}],['automation.test',{}],['update.test',{}],
     ['light.rgb',{supported_color_modes:['rgb','color_temp'],min_color_temp_kelvin:2000,max_color_temp_kelvin:6500}],
     ['climate.room',{hvac_modes:['heat','cool','off'],fan_modes:['low','high'],supported_features:9,min_temp:7,max_temp:30}],
     ['fan.room',{supported_features:9,preset_modes:['eco']}],
@@ -33,7 +33,7 @@ test('group lists controllable entities and search really hides nonmatches',asyn
  assert.equal(t.root.querySelector('[name="entities"][value="sensor.temperature"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="automation.test"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="update.test"]'),null);
- assert.equal(t.root.querySelector('.sc-version').textContent,'v0.3.5');
+ assert.equal(t.root.querySelector('.sc-version').textContent,'v0.3.6');
  t.set('entity_search','lampada','input');
  const hidden=t.root.querySelector('[value="switch.outside"]').parentElement;
  assert.equal(hidden.hidden,true);
@@ -102,7 +102,7 @@ test('local action failure exposes phase and stack, keeps draft and permits retr
  const details=t.root.querySelector('.sc-error-details textarea').value;
  assert.match(details,/Fase: lettura azione iniziale/);
  assert.match(details,/Traccia:\nError: Method not implemented/);
- assert.match(details,/Schedule Creator: 0.3.5/);
+ assert.match(details,/Schedule Creator: 0.3.6/);
  assert.match(t.root.querySelector('.sc-error').textContent,/La bozza è conservata/);
  t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
  assert.equal(t.writes.length,1);
@@ -156,12 +156,12 @@ test('editors use one persistent dialog, preserve scroll and close on Escape',as
 });
 test('timer adapts from switch to light and climate capabilities',async()=>{
  const t=setup();try {await tick();t.click('newTimer');
- t.set('entity_id','switch.a');assert.equal(t.root.querySelector('[name="timer_temperature"]'),null);
- t.set('entity_id','light.rgb');t.set('timer_brightness_pct','42','input');t.set('timer_color_mode','rgb');t.set('timer_color','#ff0000','input');
+ t.pick('entity_id','switch.a');assert.equal(t.root.querySelector('[name="timer_temperature"]'),null);
+ t.set('entity_search','rgb','input');assert.equal(t.root.querySelector('[value="switch.a"]').closest('label').hidden,true);t.pick('entity_id','light.rgb');t.set('timer_brightness_pct','42','input');t.set('timer_color_mode','rgb');t.set('timer_color','#ff0000','input');
  assert.equal(t.root.querySelector('[data-mirror="timer_brightness_pct"]').value,'42');
  t.submit();await tick();
  assert.deepEqual(t.writes[0].action,{domain:'light',action:'turn_on',data:{brightness_pct:42,rgb_color:[255,0,0]}});
- t.click('newTimer');t.set('entity_id','climate.room');
+ t.click('newTimer');t.pick('entity_id','climate.room');
  assert.deepEqual([...t.root.querySelectorAll('[name="timer_mode"]')].map((n)=>n.value),['heat','cool','off']);
  assert.ok(t.root.querySelector('[name="timer_temperature"]'));
  t.pick('timer_mode','off');
@@ -230,7 +230,7 @@ test('name and notification texts are suggested until the user edits them',async
 test('version mismatch explains reload or restart',async()=>{
  const t=setup();try {await tick();
  assert.match(t.root.querySelector('.sc-warning').textContent,/Riavvia Home Assistant/);
- t.card.adapter.state={...structuredClone(t.snapshot),integration_version:'0.3.5'};t.card.render();
+ t.card.adapter.state={...structuredClone(t.snapshot),integration_version:'0.3.6'};t.card.render();
  assert.equal(t.root.querySelector('.sc-warning'),null);
  t.card.adapter.state.integration_version='0.4.0';t.card.render();
  assert.match(t.root.querySelector('.sc-warning').textContent,/Ricarica la pagina/);
@@ -272,15 +272,80 @@ test('profile overview explains which profiles share entities',async()=>{
  assert.match(overview,/Possono essere attivi insieme/);
  }finally{t.close();}
 });
-test('condition tree, multiple slots and notifications can be saved using controls',async()=>{
+test('conditions start from the entity and offer fitting comparisons',async()=>{
  const t=setup();try {await tick();t.click('newSchedule');t.set('name','Condizionato','input');t.click('addSlot');
- t.click('addCondition');t.set('condition_operator','and');
- t.set('condition.0_entity_id','sensor.temperature');t.set('condition.0_operator','numeric_greater');t.set('condition.0_value','20','input');
- t.set('condition.1_entity_id','switch.a');t.set('condition.1_operator','state_equals');t.set('condition.1_value','off','input');
+ t.click('addCondition');
+ assert.equal(t.root.querySelector('[name="condition_value"]'),null);
+ t.set('condition_entity_id','sensor.temperature','input');
+ assert.deepEqual([...t.root.querySelectorAll('[name="condition_operator"]')].map((n)=>n.value),['numeric_greater','numeric_greater_or_equal','numeric_less','numeric_less_or_equal','numeric_range','available']);
+ assert.equal(t.root.querySelector('[name="condition_hysteresis"]').value,'0.5');
+ t.set('condition_value','20','input');t.pick('condition_minimum_duration_seconds','300');
+ t.click('addCondition');
+ assert.ok(t.root.querySelector('[name="condition.0_value"]'));
+ t.set('condition.1_entity_id','switch.a','input');
+ assert.deepEqual([...t.root.querySelectorAll('[name="condition.1_value"]')].map((n)=>n.value),['on','off']);
+ t.pick('condition.1_value','off');t.pick('condition_operator','or');
  t.set('start_notification_enabled',true);t.set('start_notification_message','Avvio','input');
- t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
- assert.equal(t.writes.length,1,t.root.textContent);assert.equal(t.writes[0].condition.children[0].value,20);
+ t.submit();await tick();
+ assert.equal(t.writes.length,1,t.root.querySelector('.sc-error')?.textContent);
+ const c=t.writes[0].condition;
+ assert.equal(c.operator,'or');
+ assert.deepEqual(c.children[0],{operator:'numeric_greater',entity_id:'sensor.temperature',value:20,lower:null,upper:null,children:[],minimum_duration_seconds:300,hysteresis:0.5});
+ assert.deepEqual(c.children[1],{operator:'state_equals',entity_id:'switch.a',value:'off',lower:null,upper:null,children:[],minimum_duration_seconds:null,hysteresis:null});
  assert.equal(t.writes[0].time_slots.length,2);assert.equal(t.writes[0].start_notification.message,'Avvio');
+ assert.deepEqual(t.writes[0].time_slots[1],{weekdays:[0,1,2,3,4,5,6],start:'09:00',end:'10:00'});
+ }finally{t.close();}
+});
+test('removing one of two conditions collapses the group',async()=>{
+ const t=setup();try {await tick();t.click('newSchedule');t.click('addCondition');t.set('condition_entity_id','switch.a','input');t.click('addCondition');
+ t.root.querySelector('[data-command="removeCondition"][data-id="condition.1"]').click();
+ assert.ok(t.root.querySelector('[name="condition_entity_id"]'));assert.equal(t.card.conditionDraft.entity_id,'switch.a');
+ }finally{t.close();}
+});
+test('day shortcuts, snap and time bar with other schedules as magnets',async()=>{
+ const t=setup();try {await tick();
+ const other={id:'o',profile_id:'p',group_id:'g',name:'Mattina',enabled:true,target_entity_ids:['switch.a'],time_slots:[{weekdays:[0,1,2,3,4],start:'06:00',end:'07:30'}],start_action:{domain:'switch',action:'turn_on',data:{}},end_action:null,condition:null};
+ t.card.adapter.state={...structuredClone(t.snapshot),config:{...structuredClone(t.snapshot.config),schedules:[other]}};t.card.render();
+ t.click('newSchedule');
+ t.root.querySelector('[data-command="slotDays"][data-id="0:weekend"]').click();
+ assert.deepEqual([...t.root.querySelectorAll('[name="slot_0_days"]:checked')].map((n)=>n.value),['5','6']);
+ assert.equal(t.root.querySelectorAll('.sc-tb-bg').length,0);
+ t.root.querySelector('[data-command="slotDays"][data-id="0:workdays"]').click();
+ const bar=t.root.querySelector('.sc-timebar');
+ assert.equal(t.root.querySelectorAll('.sc-tb-bg').length,1);
+ assert.equal(bar.dataset.magnets,'360,450');
+ t.root.querySelector('[data-command="setSnap"][data-id="30"]').click();
+ assert.equal(t.root.querySelector('.sc-timebar').dataset.snap,'30');
+ t.set('slot_0_start','07:00','input');
+ assert.equal(t.root.querySelector('.sc-tb-label').textContent,'07:00–09:00');
+ }finally{t.close();}
+});
+test('magnet snap prefers nearby schedule edges over the grid',async()=>{
+ const {magnetSnap}=await import('../src/schedule-editor.js');
+ assert.equal(magnetSnap(452,[450],20,15),450);
+ assert.equal(magnetSnap(500,[450],20,15),495);
+});
+test('group icon and colour are chosen from lists',async()=>{
+ const t=setup();try {await tick();t.click('newGroup');t.set('name','Camera','input');
+ t.pick('icon','mdi:bed');t.pick('color','#43a047');
+ t.root.querySelector('[name="entities"][value="switch.a"]').checked=true;
+ t.submit();await tick();
+ assert.equal(t.writes[0].icon,'mdi:bed');assert.equal(t.writes[0].color,'#43a047');
+ t.click('newGroup');t.set('name','Altro','input');
+ const custom=t.root.querySelector('[data-color-custom]');custom.value='#123456';custom.dispatchEvent(new t.dom.window.Event('input',{bubbles:true}));
+ t.submit();await tick();
+ assert.equal(t.writes[1].color,'#123456');assert.equal(t.writes[1].icon,null);
+ }finally{t.close();}
+});
+test('status notification and tap target are configured from the schedule editor',async()=>{
+ const t=setup();try {await tick();t.click('newSchedule');
+ t.set('status_notification',true);
+ t.submit();await tick();
+ assert.equal(t.writes[0].status_notification,true);
+ t.click('newSchedule');
+ const link=t.root.querySelector('[data-command="setNotificationUrl"]');
+ assert.equal(link.dataset.id,'/lovelace/casa');link.click();await tick();
+ assert.deepEqual(t.writes[1],{type:'schedule_creator/settings/update',expected_revision:3,notification_url:'/lovelace/casa'});
  }finally{t.close();}
 });
 test('renaming preserves opaque action data, draft revision and open options',async()=>{

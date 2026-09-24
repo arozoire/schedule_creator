@@ -30,6 +30,7 @@ from .journal import RecoveryInstruction, build_recovery_plan
 from .reconciliation import async_reconcile_horizon
 from .retention import async_prune_terminal_occurrences
 from .snapshots import SnapshotCoordinator
+from .status_notifications import StatusNotificationCoordinator
 from .storage import ScheduleCreatorStorage
 from .websocket_api import async_register_commands
 
@@ -48,6 +49,7 @@ class ScheduleCreatorRuntimeData:
     snapshots: SnapshotCoordinator
     action_execution: ActionExecutionCoordinator
     completions: CompletionCoordinator
+    status_notifications: StatusNotificationCoordinator
     loaded: bool = True
 
     async def async_shutdown(self) -> None:
@@ -59,6 +61,7 @@ class ScheduleCreatorRuntimeData:
         self.conditions.shutdown()
         self.snapshots.shutdown()
         self.action_execution.shutdown()
+        self.status_notifications.shutdown()
         await self.storage.async_shutdown()
 
 
@@ -112,9 +115,7 @@ async def async_setup_entry(
         actions = ActionPreparationCoordinator(
             storage.runtime, action_execution.async_refresh
         )
-        snapshots = SnapshotCoordinator(
-            hass, storage.runtime, actions.async_refresh
-        )
+        snapshots = SnapshotCoordinator(hass, storage.runtime, actions.async_refresh)
         conditions = ConditionCoordinator(
             hass, storage.runtime, snapshots.async_refresh
         )
@@ -139,12 +140,16 @@ async def async_setup_entry(
             snapshots=snapshots,
             action_execution=action_execution,
             completions=completions,
+            status_notifications=StatusNotificationCoordinator(
+                hass, storage.config, storage.runtime
+            ),
         )
         action_execution.start(now)
         snapshots.start()
         conditions.start(now)
         occurrence_boundaries.start(now)
         horizon_refresh.start()
+        entry.runtime_data.status_notifications.start()
     return True
 
 

@@ -58,6 +58,26 @@ della cache. Il primo passaggio alla 0.3.5 richiede ancora riavvio e refresh.
 
 ## Contratto tecnico
 
+### Editor schedule 0.3.6
+
+- **Fasce**: barra 00–24 per ogni fascia con gli altri schedule delle stesse
+  entità (e le altre fasce) sui giorni scelti. Trascina la fascia o le maniglie;
+  aggancio magnetico a inizi/fini degli altri blocchi, passo 5/10/15/30 min.
+  Orari sempre modificabili nei campi. Scorciatoie Tutti/Feriali/Weekend e giorni
+  a pallini. «Fascia successiva» parte dalla fine della precedente. Le fasce oltre
+  la mezzanotte si modificano dai campi.
+- **Condizioni**: prima l'entità, poi solo i confronti adatti: sensori numerici
+  (> ≥ < ≤ tra, con unità e isteresi proposta: 0,5° per temperature, 2 per %,
+  altrimenti ~5% della soglia), on/off per binary_sensor/input_boolean/switch,
+  opzioni per input_select, modalità HVAC per climate, casa/fuori per persone.
+  «Deve restare vera per» (Subito…30 min) = durata minima anti-oscillazione.
+  Con più condizioni: «Tutte» o «Almeno una». Gli attributi (es. temperatura
+  attuale del climate) non sono supportati dal motore: usare il sensore.
+- **Notifiche**: notifica persistente di stato per tutta la fascia; pulsante
+  «Apri questa dashboard» per aprire la card toccando le notifiche.
+- **Gruppi/profili**: icona da griglia e colore da tavolozza (+ colore libero).
+- **Quick Timer**: entità cercabile per nome o ID.
+
 ### Editor azioni, suggerimenti e manutenzione 0.3.5
 
 - Climate: pulsanti modalità HVAC con icone, temperatura con cursore e campo

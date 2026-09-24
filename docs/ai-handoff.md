@@ -1,5 +1,21 @@
 # AI handoff — stato attuale e piano futuro
 
+## Editor schedule come weekly-schedule-card, notifiche di stato — 0.3.6 (2026-09-24)
+
+Riscontro proprietario sulla 0.3.5: backup e RESET funzionano. Richieste
+implementate nel branch `codex/editor-ux-timebar-conditions` (dettagli in
+`docs/frontend.md` §0.3.6 e `docs/websocket-api.md` §0.3.6): barra oraria con
+magnete/passo e scorciatoie giorni, condizioni guidate dall'entità con isteresi
+proposta e durata minima spiegata, icona/colore da elenco, ricerca entità nel
+Quick Timer, notifica persistente di stato (`status_notifications.py`, opt-in in
+`settings`) e link al tocco (`settings.notification_url`, clickAction/url).
+Nuovo modulo `frontend/src/schedule-editor.js`. Nessuna migrazione dati: tutto
+in `settings` (JSON libero). Limite noto: condizioni su attributi non supportate.
+Verifiche: 38 test Node, preview Chromium (drag + magnete 18:38→18:30), ruff,
+mypy; pytest in CI (`test_status_notifications.py`). Prove HA del proprietario:
+trascinamento su telefono, condizione con sensore reale, notifica di stato e
+tocco sulla notifica dall'app Companion.
+
 ## Aggiornamenti automatici, editor stile Quick Timer, backup e RESET — 0.3.5 (2026-09-24)
 
 Nota versioni: il tag `0.3.4` contiene il codice 0.3.3 (manifest/badge 0.3.3);

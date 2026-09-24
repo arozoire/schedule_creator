@@ -180,6 +180,28 @@ def _service_request(
     return domain, service, {"title": title, "message": message}, deduplication_key
 
 
+def _with_link(
+    hass: HomeAssistant, domain: str, data: dict[str, Any]
+) -> dict[str, Any]:
+    """Open the configured dashboard when the notification is tapped."""
+
+    from .mutation_api import _loaded_runtime
+    from .status_notifications import notification_url
+
+    runtime = _loaded_runtime(hass)
+    config = None if runtime is None else runtime.storage.config.data
+    url = None if config is None else notification_url(config.settings)
+    if url is None:
+        return data
+    if domain == "notify":
+        # Companion apps: clickAction (Android) and url (iOS).
+        return {**data, "data": {"clickAction": url, "url": url}}
+    if domain == "persistent_notification":
+        link = f"[Apri Schedule Creator]({url})"
+        return {**data, "message": f"{data['message']}\n\n{link}"}
+    return data
+
+
 async def async_execute_notifications(
     hass: HomeAssistant, repository: RuntimeRepository, now: datetime
 ) -> RuntimeStoreData:
@@ -205,6 +227,7 @@ async def async_execute_notifications(
             continue
         try:
             domain, service, data, deduplication_key = _service_request(operation)
+            data = _with_link(hass, domain, data)
         except ValueError:
             await journal.async_fail_final(
                 operation.id, now=wall_clock, error_code="invalid_payload"

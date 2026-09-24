@@ -23,6 +23,7 @@ from .mutation_api import (
     MutationResponse,
     async_mutate_config,
 )
+from .status_notifications import STATUS_SETTING, URL_SETTING, opted_in
 
 _REVISION = vol.All(int, vol.Range(min=0))
 _RECORD_ID = vol.All(str, vol.Length(min=1))
@@ -134,6 +135,23 @@ def _nested_changes(msg: dict[str, Any]) -> dict[str, Any]:
     return changes
 
 
+def _with_status(
+    config: IntegrationConfig, schedule_id: str, enabled: bool | None
+) -> dict[str, Any]:
+    """Return settings with the live status opt-in for one schedule updated."""
+
+    settings = dict(config.settings)
+    if enabled is None:
+        return settings
+    selected = set(opted_in(config.settings))
+    if enabled:
+        selected.add(schedule_id)
+    else:
+        selected.discard(schedule_id)
+    settings[STATUS_SETTING] = tuple(sorted(selected))
+    return settings
+
+
 async def _mutate(
     hass: HomeAssistant,
     connection: ActiveConnection,
@@ -171,6 +189,7 @@ async def _mutate(
         vol.Optional("end_notification", default=None): vol.Any(None, _OBJECT),
         vol.Optional("inclusion_dates", default=[]): _DATES,
         vol.Optional("exclusion_dates", default=[]): _DATES,
+        vol.Optional("status_notification"): bool,
     }
 )
 @async_response
@@ -198,6 +217,7 @@ async def websocket_create_schedule(
             config,
             revision=config.revision + 1,
             schedules=(*config.schedules, schedule),
+            settings=_with_status(config, schedule_id, msg.get("status_notification")),
             updated_at=max(config.updated_at, now),
         )
 
@@ -231,6 +251,7 @@ async def websocket_create_schedule(
         vol.Optional("end_notification"): vol.Any(None, _OBJECT),
         vol.Optional("inclusion_dates"): _DATES,
         vol.Optional("exclusion_dates"): _DATES,
+        vol.Optional("status_notification"): bool,
     }
 )
 @async_response
@@ -242,8 +263,17 @@ async def websocket_update_schedule(
     def mutation(config: IntegrationConfig, now: datetime) -> IntegrationConfig:
         current = _schedule(config, msg["schedule_id"])
         changes = _nested_changes(msg)
-        if not changes:
+        status = msg.get("status_notification")
+        if not changes and status is None:
             raise ValueError("no schedule fields supplied")
+        settings = _with_status(config, current.id, status)
+        if not changes:
+            return replace(
+                config,
+                revision=config.revision + 1,
+                settings=settings,
+                updated_at=max(config.updated_at, now),
+            )
         payload = current.to_dict()
         payload.update(changes)
         payload.update(
@@ -257,9 +287,9 @@ async def websocket_update_schedule(
             config,
             revision=config.revision + 1,
             schedules=tuple(
-                updated if item.id == updated.id else item
-                for item in config.schedules
+                updated if item.id == updated.id else item for item in config.schedules
             ),
+            settings=settings,
             updated_at=max(config.updated_at, now),
         )
 
@@ -298,6 +328,7 @@ async def websocket_delete_schedule(
             schedules=tuple(
                 item for item in config.schedules if item.id != schedule_id
             ),
+            settings=_with_status(config, schedule_id, False),
             updated_at=max(config.updated_at, now),
         )
 
@@ -313,7 +344,46 @@ async def websocket_delete_schedule(
     )
 
 
+@require_admin
+@websocket_command(
+    {
+        vol.Required("type"): "schedule_creator/settings/update",
+        vol.Required("expected_revision"): _REVISION,
+        vol.Required("notification_url"): vol.Any(
+            None, vol.All(str, vol.Match(r"^/[^\s]*$"))
+        ),
+    }
+)
+@async_response
+async def websocket_update_settings(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Set the dashboard path opened by notifications."""
+
+    def mutation(config: IntegrationConfig, now: datetime) -> IntegrationConfig:
+        settings = dict(config.settings)
+        if msg["notification_url"] is None:
+            settings.pop(URL_SETTING, None)
+        else:
+            settings[URL_SETTING] = msg["notification_url"]
+        return replace(
+            config,
+            revision=config.revision + 1,
+            settings=settings,
+            updated_at=max(config.updated_at, now),
+        )
+
+    await _mutate(
+        hass,
+        connection,
+        msg,
+        mutation,
+        lambda config: {"revision": config.revision, "settings": dict(config.settings)},
+    )
+
+
 SCHEDULE_COMMANDS = (
+    websocket_update_settings,
     websocket_create_schedule,
     websocket_update_schedule,
     websocket_delete_schedule,
