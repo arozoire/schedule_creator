@@ -380,3 +380,35 @@ tempo; se torna vera prima, il conteggio riparte. Durante l'attesa l'isteresi
 resta applicata. `minimum_duration_seconds` resta il ritardo in entrata. Il campo
 è omesso dal JSON quando non impostato, quindi i dati 0.3.6 non cambiano forma.
 Esempio tende: lux > 500, isteresi 100, entrata 600 s, uscita 900 s.
+
+## Import dalla weekly-schedule-card (0.3.12)
+
+`schedule_creator/import/merge` (solo admin) **aggiunge** profili, gruppi e
+schedule in un'unica scrittura; non sostituisce nulla.
+
+```json
+{"type": "schedule_creator/import/merge", "expected_revision": 7,
+ "source": "weekly-schedule-card", "source_created_at": "2026-09-25T06:26:00.000Z",
+ "profiles": [{"name": "Default (WSC)", "profile_type": "exclusive", "color": null,
+   "groups": [{"name": "AC", "color": "#E91E63", "entity_ids": ["climate.camera"],
+     "schedules": [{"name": "AC Camera · Freddo 26°", "enabled": true,
+       "target_entity_ids": ["climate.camera"],
+       "time_slots": [{"weekdays": [0,1,2,3,4,5,6], "start": "09:30", "end": "18:00"}],
+       "start_action": {"domain": "climate", "action": "apply_state", "data": {"state": "cool", "temperature": 26}},
+       "end_action": {"domain": "climate", "action": "apply_state", "data": {"state": "off"}},
+       "condition": null}]}]}]}
+```
+
+- Gli schedule usano gli stessi campi di `schedule/create` (senza ID, generati dal server).
+- I profili importati sono sempre **disattivati**, con `order` dopo quelli esistenti.
+- Tutto viene validato come configurazione completa: un solo record non valido
+  rifiuta l'intero import (`invalid_import` per campi sconosciuti,
+  `invalid_payload` per errori del modello).
+- Limiti: 20 profili, 100 gruppi, 500 schedule per import.
+- `migration_metadata.imports` conserva gli ultimi 20 import
+  (`source`, `source_created_at`, `imported_at`, `profile_ids`); la card lo usa
+  per avvisare se lo stesso backup è già stato importato.
+- Risposta: `{"revision", "profile_ids", "schedules"}`.
+
+La conversione dal file della WSC avviene nella card (`frontend/src/wsc-import.js`),
+che mostra l'anteprima prima di inviare il comando.

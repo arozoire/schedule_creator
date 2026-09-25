@@ -69,7 +69,7 @@ export function conditionKind(hass, entityId) {
   if (BOOLEAN_DOMAINS.includes(domain)) return {kind: 'boolean', options: ['on', 'off'], current: state.state};
   if (domain === 'input_select' || domain === 'select') return {kind: 'select', options: a.options || [], current: state.state};
   if (domain === 'climate') return {kind: 'select', options: a.hvac_modes || [], current: state.state};
-  if (domain === 'cover') return {kind: 'select', options: ['open', 'closed', 'opening', 'closing'], current: state.state};
+  if (domain === 'cover' || domain === 'valve') return {kind: 'select', options: ['open', 'closed', 'opening', 'closing'], current: state.state};
   return {kind: 'select', options: [...new Set([state.state].filter((x) => !['unknown', 'unavailable'].includes(x)))], current: state.state, free: true};
 }
 

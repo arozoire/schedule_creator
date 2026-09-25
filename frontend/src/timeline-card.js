@@ -21,7 +21,7 @@ export function shortAction(action) {
   if (d.brightness_pct != null) return `${d.brightness_pct}%`;
   if (d.position != null) return `${d.position}%`;
   if (d.percentage != null) return `${d.percentage}%`;
-  return {turn_on: 'ON', turn_off: 'OFF', open_cover: 'Apri', close_cover: 'Chiudi'}[action.action] || describeAction(action);
+  return {turn_on: 'ON', turn_off: 'OFF', open_cover: 'Apri', close_cover: 'Chiudi', open_valve: 'Apri', close_valve: 'Chiudi'}[action.action] || describeAction(action);
 }
 
 // Blocks of one weekday for one entity, overnight slots split at midnight.

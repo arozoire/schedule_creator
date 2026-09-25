@@ -6,7 +6,8 @@ is open, survive restarts and come with five Lovelace cards.
 
 Schedule Creator is the server-side successor of
 [weekly-schedule-card](https://github.com/arozoire/weekly-schedule-card). The two
-can live side by side; nothing is imported from the old card automatically.
+can live side by side; schedules can be imported from the old card's backup
+(see [Moving from weekly-schedule-card](#moving-from-weekly-schedule-card)).
 
 > The card interface is currently in **Italian**. The screenshots below come from
 > the repository preview (`frontend/preview.html`) with demo data, not from a
@@ -35,6 +36,8 @@ can live side by side; nothing is imported from the old card automatically.
 - **Safe by design** – every command goes through a durable journal with
   retries; nothing is replayed blindly after a restart.
 - **Backup, restore and RESET** from the card.
+- **Import from weekly-schedule-card** – load its backup file, review what
+  each schedule becomes and add it as a new, inactive profile.
 
 ## Screenshots
 
@@ -138,6 +141,19 @@ cancel button; when it ends the previous state is restored.
 - **Notifications** – start/end notifications with suggested text, an optional
   persistent status notification during the slot, and a dashboard path opened
   when a notification is tapped in the companion app.
+
+## Moving from weekly-schedule-card
+
+1. In weekly-schedule-card open **Groups → Maintenance → Save configuration**.
+2. In Schedule Creator open **Maintenance → Import from Weekly Schedule Card**
+   and choose that file.
+3. Review the preview: every schedule is marked ready, to check, imported
+   disabled or not imported, with the reason (e.g. conditions on attributes,
+   one-off schedules and sunrise/sunset times are not supported yet).
+4. Import. Everything lands in a new profile that stays **inactive**.
+5. Turn the old schedules off in weekly-schedule-card (or Scheduler), then
+   activate the imported profile. Nothing in weekly-schedule-card or Scheduler
+   is changed by the import.
 
 ## Updating
 

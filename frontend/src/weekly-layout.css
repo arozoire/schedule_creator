@@ -837,3 +837,58 @@ button.sc-empty:hover { border-color: var(--sc-accent); }
   .sc-now-tile { padding: 10px 12px; gap: 3px; border-radius: 12px; }
   .sc-now-tile strong { font-size: 1rem; }
 }
+.sc-import {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.sc-import-row {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--sc-surface);
+}
+.sc-import-row > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.sc-import-mark {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #fff;
+  background: var(--success-color, #1f9d55);
+}
+.sc-import-row.is-note .sc-import-mark {
+  background: var(--warning-color, #b7791f);
+}
+.sc-import-row.is-off .sc-import-mark {
+  background: var(--secondary-text-color, #647180);
+}
+.sc-import-row.is-skip {
+  opacity: 0.75;
+}
+.sc-import-row.is-skip .sc-import-mark {
+  background: var(--error-color, #b3261e);
+}
+.sc-import-notes {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 0.78rem;
+  color: var(--sc-muted);
+}
+.sc-import-warning {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--warning-color, #f0a500) 16%, transparent);
+  font-size: 0.85rem;
+}
