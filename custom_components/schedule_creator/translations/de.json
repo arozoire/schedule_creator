@@ -57,7 +57,7 @@
         },
         "data": {
           "name": "Daten",
-          "description": "Dienstdaten, z. B. {\"state\": \"cool\", \"temperature\": 23} mit apply_state."
+          "description": "Dienstdaten, z. B. state: cool, temperature: 23 mit apply_state."
         }
       }
     },
