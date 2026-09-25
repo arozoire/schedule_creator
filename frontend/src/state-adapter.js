@@ -132,3 +132,26 @@ export class ScheduleCreatorStateAdapter {
     this.unsubscribe = null;
   }
 }
+
+// Entities a card shows: groups, schedule targets, condition sensors, timers.
+// Cached per state snapshot, which the adapter replaces on every change.
+const watchedCache = new WeakMap();
+export function watchedEntities(state) {
+  if (!state?.config) return null;
+  if (watchedCache.has(state)) return watchedCache.get(state);
+  const ids = new Set();
+  const walk = (node) => { if (!node) return; if (node.entity_id) ids.add(node.entity_id); (node.children || []).forEach(walk); };
+  for (const group of state.config.groups || []) for (const id of group.entity_ids || []) ids.add(id);
+  for (const schedule of state.config.schedules || []) { for (const id of schedule.target_entity_ids || []) ids.add(id); walk(schedule.condition); }
+  for (const timer of state.quick_timers || []) ids.add(timer.entity_id);
+  watchedCache.set(state, ids);
+  return ids;
+}
+
+// HA replaces a state object when it changes, so identity is enough. Updates of
+// unrelated entities (many per second in a busy home) no longer re-render.
+export function hassChanged(previous, next, ids) {
+  if (!previous || !ids || previous.connection !== next?.connection || previous.user !== next?.user || previous.config !== next?.config || previous.language !== next?.language) return true;
+  for (const id of ids) if (previous.states?.[id] !== next.states?.[id]) return true;
+  return false;
+}

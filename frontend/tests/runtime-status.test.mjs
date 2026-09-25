@@ -42,3 +42,19 @@ test('failed commands are announced and listed in Activity', async () => {
     assert.match(root.querySelector('.sc-failures').textContent, /Sera · Luce divano · azione iniziale: il servizio ha restituito un errore o non ha risposto \(3 tentativi\)/);
   } finally { t.close(); }
 });
+
+test('updates of unrelated entities do not re-render the cards', async () => {
+  const t = card({occurrences: [], leases: []});
+  await tick();
+  try {
+    let renders = 0;
+    const original = t.element.render.bind(t.element);
+    t.element.render = () => { renders += 1; original(); };
+    const hass = t.element._hass;
+    t.element.hass = {...hass, states: {...hass.states, 'sensor.power': {entity_id: 'sensor.power', state: '120', attributes: {}}}};
+    assert.equal(renders, 0);
+    const next = t.element._hass;
+    t.element.hass = {...next, states: {...next.states, 'light.sofa': {entity_id: 'light.sofa', state: 'off', attributes: {friendly_name: 'Luce divano'}}}};
+    assert.equal(renders, 1);
+  } finally { t.close(); }
+});

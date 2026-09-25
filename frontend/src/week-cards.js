@@ -1,6 +1,6 @@
 // Whole-week views of every active profile: serpentine (mockup D) and ring (mockup E).
 // Read-only: tapping a block shows its details and hands editing to the main card.
-import { ScheduleCreatorStateAdapter } from './state-adapter.js';
+import { ScheduleCreatorStateAdapter, watchedEntities, hassChanged } from './state-adapter.js';
 import { uiEscape } from './forms.js';
 import { messageFor } from './editor.js';
 import { describeAction } from './action-editor.js';
@@ -117,7 +117,7 @@ class ScheduleCreatorWeekCard extends HTMLElement {
   static getStubConfig() { return {}; }
   getCardSize() { return 8; }
   setConfig(config) { this.config = config || {}; this.render(); }
-  set hass(hass) { this._hass = hass; if (this.isConnected) this.adapter.connect(hass); this.render(); }
+  set hass(hass) { const previous = this._hass; this._hass = hass; if (this.isConnected) this.adapter.connect(hass); if (hassChanged(previous, hass, watchedEntities(this.adapter.state))) this.render(); }
   connectedCallback() {
     if (this._hass) this.adapter.connect(this._hass);
     this.clock ??= setInterval(() => this.render(), 60000);

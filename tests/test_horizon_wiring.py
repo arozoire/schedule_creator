@@ -10,10 +10,14 @@ from homeassistant import config_entries
 
 from custom_components.schedule_creator.const import DOMAIN
 from custom_components.schedule_creator.horizon import HORIZON_REFRESH_INTERVAL
+from custom_components.schedule_creator.reconciliation import PLANNING_HORIZON
 from custom_components.schedule_creator.storage import (
     CONFIG_STORE_KEY,
     RuntimeRepository,
 )
+
+# One occurrence per day of the horizon, plus the one already running.
+_HORIZON_DAYS = {PLANNING_HORIZON.days, PLANNING_HORIZON.days + 1}
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "models_v1.json"
 
@@ -108,7 +112,7 @@ async def test_setup_reconciles_horizon_and_reload_is_idempotent(
     runtime = entry.runtime_data.storage.runtime.data
 
     assert runtime.revision == 6
-    assert len(runtime.occurrences) in {14, 15}
+    assert len(runtime.occurrences) in _HORIZON_DAYS
     occurrence_ids = tuple(item.id for item in runtime.occurrences)
 
     assert await hass.config_entries.async_reload(entry.entry_id)
@@ -128,7 +132,7 @@ async def test_schedule_mutation_reconciles_active_horizon(hass, hass_ws_client)
     assert response["success"] is True
     runtime = entry.runtime_data.storage.runtime.data
     assert runtime.revision == 3
-    assert len(runtime.occurrences) in {14, 15}
+    assert len(runtime.occurrences) in _HORIZON_DAYS
 
 
 async def test_schedule_update_replans_only_future_pending_records(

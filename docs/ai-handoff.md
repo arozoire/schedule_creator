@@ -1,5 +1,19 @@
 # AI handoff — stato attuale e piano futuro
 
+## Ottimizzazioni dall'audit (O1–O4) — 0.3.14 (2026-09-25)
+
+- **O1** `state-adapter.js`: `watchedEntities(state)` (gruppi, target, sensori
+  delle condizioni, timer; cache per snapshot) e `hassChanged(prev, next, ids)`.
+  Card principale, timeline, serpentina/anello e Quick Timer ridisegnano solo se
+  cambia una di quelle entità (o connessione/utente/config/lingua); gli orologi
+  interni restano.
+- **O2** `condition_runtime`: ogni condizione distinta (firma = ID dei nodi) è
+  valutata una volta per refresh; un aggiornamento di sensore che non cambia
+  alcun ramo non ricalcola lease/snapshot/azioni (`_async_refresh_if_changed`).
+- **O3** `PLANNING_HORIZON` 14 → 3 giorni (refresh giornaliero).
+- **O4** `recovery_plan` lasciato: calcolato una volta all'avvio, serve alla
+  diagnostica.
+
 ## Correzioni dall'audit (B1–B6) — 0.3.13 (2026-09-25)
 
 Piano approvato dal proprietario: prima tutti i bug (B), poi le ottimizzazioni

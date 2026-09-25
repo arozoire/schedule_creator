@@ -1,6 +1,6 @@
 // Per-entity day timeline across every active profile (mockup direction B).
 // Read-only: editing stays in the main card.
-import { ScheduleCreatorStateAdapter } from './state-adapter.js';
+import { ScheduleCreatorStateAdapter, watchedEntities, hassChanged } from './state-adapter.js';
 import { uiEscape } from './forms.js';
 import { messageFor } from './editor.js';
 import { describeAction, describeState } from './action-editor.js';
@@ -69,7 +69,7 @@ export class ScheduleCreatorTimelineCard extends HTMLElement {
   static getStubConfig() { return {}; }
   getCardSize() { return 6; }
   setConfig(config) { this.config = config || {}; this.render(); }
-  set hass(hass) { this._hass = hass; if (this.isConnected) this.adapter.connect(hass); this.render(); }
+  set hass(hass) { const previous = this._hass; this._hass = hass; if (this.isConnected) this.adapter.connect(hass); if (hassChanged(previous, hass, watchedEntities(this.adapter.state))) this.render(); }
   connectedCallback() { if (this._hass) this.adapter.connect(this._hass); this.render(); this.clock ??= setInterval(() => this.render(), 60000); }
   disconnectedCallback() { this.adapter.disconnect(); clearInterval(this.clock); this.clock = null; }
   now() {
