@@ -29,7 +29,12 @@ jobs:
         with:
           category: integration
           comment: false
-          ignore: topics description
+
+  hassfest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: home-assistant/actions/hassfest@master
 
   scaffold:
     runs-on: ubuntu-latest
