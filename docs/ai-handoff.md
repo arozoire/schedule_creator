@@ -1,5 +1,22 @@
 # AI handoff — stato attuale e piano futuro
 
+## Rifiniture editor — 0.4.2 (2026-09-25)
+
+- Tolti dalla card principale il pulsante "Quick Timer" e l'editor del timer
+  (i timer si avviano dalla card Quick Timer; quelli in corso restano in
+  "Attività" con "Annulla timer").
+- Tolto dall'editor il selettore "Comandi manuali" (`override_policy`, non
+  applicato dal motore); il valore salvato resta invariato.
+- Pulsante "Elimina" nell'editor di schedule, profili e gruppi esistenti
+  (comando `deleteCurrent`, con conferma).
+- Slider 0–100: `rangeField(..., ends)` con `RANGE_ENDS` (icona + significato
+  agli estremi: tende/valvole tutta chiusa/aperta, luminosità, temperatura
+  colore, ventola).
+- Switch con `EntityCategory.CONFIG`, sensore `DIAGNOSTIC`: fuori da dashboard
+  e preferiti automatici.
+- Traduzioni: il generatore non è nel repo; `frontend/src/i18n-strings.js` è la
+  fonte, si aggiungono le voci direttamente nelle 4 lingue.
+
 ## Controllo da automazioni (F1) — 0.3.17 (2026-09-25)
 
 - `mutation_api.async_commit_config(hass, mutation, expected_revision=None)`:

@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.switch import SwitchEntity
+from homeassistant.const import EntityCategory
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
@@ -55,6 +56,8 @@ class _ConfigSwitch(SwitchEntity):
 
     _attr_has_entity_name = True
     _attr_should_poll = False
+    # Settings, not devices: kept out of automatic dashboards and favourites.
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(
         self, entry: ScheduleCreatorConfigEntry, kind: str, record_id: str

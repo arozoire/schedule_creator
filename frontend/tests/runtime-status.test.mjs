@@ -76,3 +76,32 @@ test('the schedule editor shows activity counters and offers the previous state'
     assert.equal(describeAction({domain: 'light', action: 'restore_previous', data: {}}), 'Stato precedente');
   } finally { t.close(); }
 });
+
+test('an existing schedule can be deleted from its editor', async () => {
+  const t = card({occurrences: [], leases: []});
+  await tick();
+  try {
+    const sent = [];
+    const original = t.element._hass.connection.sendMessagePromise;
+    t.element._hass.connection.sendMessagePromise = (msg) => { sent.push(msg.type); return original(msg); };
+    t.dom.window.confirm = () => true;
+    const root = t.element.shadowRoot;
+    root.querySelector('[data-command="editSchedule"][data-id="s"]').click();
+    assert.equal(root.querySelector('[data-command="newTimer"]'), null);
+    assert.equal(root.querySelector('[name="override_policy"]'), null);
+    root.querySelector('.sc-delete').click();
+    await tick(); await tick();
+    assert.ok(sent.includes('schedule_creator/schedule/delete'));
+    assert.equal(t.element.edit, null);
+  } finally { t.close(); }
+});
+
+test('0–100 sliders say what each end means', () => {
+  const t = card({occurrences: [], leases: []});
+  try {
+    const {rangeField} = t.dom.window;
+    const html = rangeField('start_position', 'Posizione', 30, 0, 100, 1, '%', [['window-shutter', 'Tutta chiusa'], ['window-shutter-open', 'Tutta aperta']]);
+    assert.match(html, /mdi:window-shutter".*0% · Tutta chiusa/);
+    assert.match(html, /mdi:window-shutter-open".*100% · Tutta aperta/);
+  } finally { t.close(); }
+});

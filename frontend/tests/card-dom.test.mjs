@@ -33,7 +33,7 @@ test('group lists controllable entities and search really hides nonmatches',asyn
  assert.equal(t.root.querySelector('[name="entities"][value="sensor.temperature"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="automation.test"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="update.test"]'),null);
- assert.equal(t.root.querySelector('.sc-version').textContent,'v0.4.1');
+ assert.equal(t.root.querySelector('.sc-version').textContent,'v0.4.2');
  t.set('entity_search','lampada','input');
  const hidden=t.root.querySelector('[value="switch.outside"]').parentElement;
  assert.equal(hidden.hidden,true);
@@ -102,7 +102,7 @@ test('local action failure exposes phase and stack, keeps draft and permits retr
  const details=t.root.querySelector('.sc-error-details textarea').value;
  assert.match(details,/Fase: lettura azione iniziale/);
  assert.match(details,/Traccia:\nError: Method not implemented/);
- assert.match(details,/Schedule Creator: 0.4.1/);
+ assert.match(details,/Schedule Creator: 0.4.2/);
  assert.match(t.root.querySelector('.sc-error').textContent,/La bozza è conservata/);
  t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
  assert.equal(t.writes.length,1);
@@ -152,24 +152,6 @@ test('editors use one persistent dialog, preserve scroll and close on Escape',as
    assert.equal(t.card.edit,null);
    assert.equal(dialog.open,false);
  }
- }finally{t.close();}
-});
-test('timer adapts from switch to light and climate capabilities',async()=>{
- const t=setup();try {await tick();t.click('newTimer');
- t.pick('entity_id','switch.a');assert.equal(t.root.querySelector('[name="timer_temperature"]'),null);
- t.set('entity_search','rgb','input');assert.equal(t.root.querySelector('[value="switch.a"]').closest('label').hidden,true);t.pick('entity_id','light.rgb');t.set('timer_brightness_pct','42','input');t.set('timer_color_mode','rgb');t.set('timer_color','#ff0000','input');
- assert.equal(t.root.querySelector('[data-mirror="timer_brightness_pct"]').value,'42');
- t.submit();await tick();
- assert.deepEqual(t.writes[0].action,{domain:'light',action:'turn_on',data:{brightness_pct:42,rgb_color:[255,0,0]}});
- t.click('newTimer');t.pick('entity_id','climate.room');
- assert.deepEqual([...t.root.querySelectorAll('[name="timer_mode"]')].map((n)=>n.value),['heat','cool','off']);
- assert.ok(t.root.querySelector('[name="timer_temperature"]'));
- t.pick('timer_mode','off');
- assert.equal(t.root.querySelector('[name="timer_temperature"]'),null);
- assert.equal(t.root.querySelector('[name="timer_fan_mode"]'),null);
- t.pick('timer_mode','cool');t.set('timer_temperature','23','input');t.pick('timer_fan_mode','high');
- t.submit();await tick();
- assert.deepEqual(t.writes[1].action,{domain:'climate',action:'apply_state',data:{state:'cool',temperature:23,fan_mode:'high'}});
  }finally{t.close();}
 });
 test('climate schedule sets a desired state at start and turns off at end',async()=>{
@@ -233,7 +215,7 @@ test('name and notification texts are suggested until the user edits them',async
 test('version mismatch explains reload or restart',async()=>{
  const t=setup();try {await tick();
  assert.match(t.root.querySelector('.sc-warning').textContent,/Riavvia Home Assistant/);
- t.card.adapter.state={...structuredClone(t.snapshot),integration_version:'0.4.1'};t.card.render();
+ t.card.adapter.state={...structuredClone(t.snapshot),integration_version:'0.4.2'};t.card.render();
  assert.equal(t.root.querySelector('.sc-warning'),null);
  t.card.adapter.state.integration_version='9.9.0';t.card.render();
  assert.match(t.root.querySelector('.sc-warning').textContent,/Ricarica la pagina/);
