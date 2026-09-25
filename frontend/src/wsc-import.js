@@ -10,6 +10,19 @@ const WSC_OPERATORS = {'>': 'numeric_greater', '<': 'numeric_less', '>=': 'numer
 const WSC_SCHEDULER_MATCH = {is: 'state_equals', not: 'state_not_equals', above: 'numeric_greater', below: 'numeric_less'};
 const WSC_POSITION = new Set(['cover', 'valve']);
 const wscTime = (value) => /^\d{2}:\d{2}(:\d{2})?$/.test(String(value || '')) ? String(value).slice(0, 5) : null;
+const wscClock = (m) => `${String(Math.floor(((m % 1440) + 1440) % 1440 / 60)).padStart(2, '0')}:${String(((m % 60) + 60) % 60).padStart(2, '0')}`;
+// Scheduler boundary: "07:30", or "sunrise+00:30" / "sunset-01:00" (seconds optional).
+// Sun boundaries keep an approximate time from today's sun for the week views.
+function wscBoundary(value, sun) {
+  const fixed = wscTime(value);
+  if (fixed) return {time: fixed};
+  const m = /^(sunrise|sunset)([+-])(\d{2}):(\d{2})(?::\d{2})?$/.exec(String(value || ''));
+  if (!m) return null;
+  const offset = (m[2] === '-' ? -1 : 1) * (Number(m[3]) * 60 + Number(m[4]));
+  if (Math.abs(offset) > 360) return null;
+  const base = sun?.[m[1]] ?? (m[1] === 'sunrise' ? 390 : 1140);
+  return {time: wscClock(base + offset), sun: m[1], offset};
+}
 
 export function isWscBackup(value) {
   return !!value && typeof value === 'object' && value.schema === WSC_SCHEMA && value.version === 1 && !!value.profileData && Array.isArray(value.schedules);
@@ -123,7 +136,7 @@ function wscConditionOf(link, slot, notes) {
 const wscNotifyAction = (service) => { const s = String(service || '').trim(); return !s ? null : s.includes('.') ? s : `notify.${s}`; };
 
 // Returns {profiles: drafts for import/merge, rows: one line per source schedule}.
-export function convertWscBackup(backup, {existingProfileNames = [], entityName = (id) => id} = {}) {
+export function convertWscBackup(backup, {existingProfileNames = [], entityName = (id) => id, sun = null} = {}) {
   if (!isWscBackup(backup)) throw new Error('Il file non è un backup della weekly-schedule-card.');
   const byId = new Map(backup.schedules.map((s) => [s.entityId, s.config]));
   const used = new Set(existingProfileNames.map((n) => String(n).toLowerCase()));
@@ -160,17 +173,25 @@ export function convertWscBackup(backup, {existingProfileNames = [], entityName 
       let start = null, entityId = null;
       for (const slot of config.timeslots || []) {
         const calls = wscSlotCalls(slot), entities = [...new Set(calls.flatMap(wscCallEntity))];
-        const from = wscTime(slot.start);
-        if (!from) { row.notes.push(`Fascia “${slot.start}” (alba/tramonto?) non supportata.`); continue; }
-        let to = wscTime(slot.stop);
-        if (!to) { const m = (Number(from.slice(0, 2)) * 60 + Number(from.slice(3)) + 1) % 1440; to = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; row.notes.push('Azione puntuale: diventa una fascia di un minuto.'); }
-        if (from === to) { row.notes.push('Fascia di durata zero ignorata.'); continue; }
+        const first = wscBoundary(slot.start, sun);
+        if (!first) { row.notes.push(`Orario “${slot.start}” non supportato.`); continue; }
+        let last = slot.stop ? wscBoundary(slot.stop, sun) : null;
+        if (slot.stop && !last) { row.notes.push(`Orario “${slot.stop}” non supportato.`); continue; }
+        if (!last) {
+          last = first.sun ? {time: wscClock(Number(first.time.slice(0, 2)) * 60 + Number(first.time.slice(3)) + 1), sun: first.sun, offset: first.offset + 1} : {time: wscClock(Number(first.time.slice(0, 2)) * 60 + Number(first.time.slice(3)) + 1)};
+          row.notes.push('Azione puntuale: diventa una fascia di un minuto.');
+        }
+        const from = first.time, to = last.time;
+        if (!first.sun && !last.sun && from === to) { row.notes.push('Fascia di durata zero ignorata.'); continue; }
         if (entities.length !== 1 || (entityId && entities[0] !== entityId)) { row.notes.push('Fascia con più dispositivi: ignorata.'); continue; }
         const action = wscStartAction(calls, entities[0], link.extras, row.notes);
         if (!action) { row.notes.push(`Comando non riconosciuto per ${entities[0]}.`); continue; }
         if (start && JSON.stringify(start) !== JSON.stringify(action)) { row.notes.push('Fasce con azioni diverse: importata solo la prima azione.'); continue; }
         start = action; entityId = entities[0];
-        slots.push({weekdays: days, start: from, end: to});
+        const entry = {weekdays: days, start: from, end: to};
+        if (first.sun) Object.assign(entry, {start_sun: first.sun, start_offset_minutes: first.offset});
+        if (last.sun) Object.assign(entry, {end_sun: last.sun, end_offset_minutes: last.offset});
+        slots.push(entry);
       }
       if (!slots.length) { skip(row.notes.pop() || 'Nessuna fascia importabile.'); continue; }
       const {condition, broken} = wscConditionOf(link, (config.timeslots || [])[0], row.notes);

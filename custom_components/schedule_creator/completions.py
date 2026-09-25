@@ -17,6 +17,7 @@ from .actions import (
 )
 from .journal import JournalCoordinator
 from .models import (
+    RESTORE_PREVIOUS_ACTION,
     ConditionBranch,
     FrozenJsonValue,
     LeaseState,
@@ -163,6 +164,10 @@ async def async_prepare_schedule_end_actions(
             for lease in runtime.leases
             if lease.state is LeaseState.ACTIVE
         }
+        snapshots = {
+            (snapshot.occurrence_id, snapshot.entity_id): snapshot
+            for snapshot in runtime.snapshots
+        }
         candidates = tuple(
             (occurrence, entity_id, occurrence.frozen_schedule.end_action)
             for occurrence in runtime.occurrences
@@ -171,6 +176,11 @@ async def async_prepare_schedule_end_actions(
             for entity_id in occurrence.frozen_schedule.target_entity_ids
             if (occurrence.id, entity_id) in successful_targets
             and _schedule_end_id(occurrence.id, entity_id) not in existing_ids
+            and (
+                occurrence.frozen_schedule.end_action.action
+                != RESTORE_PREVIOUS_ACTION
+                or (occurrence.id, entity_id) in snapshots
+            )
         )
         if not candidates:
             return None
@@ -181,19 +191,27 @@ async def async_prepare_schedule_end_actions(
                 sequence=runtime.operation_counter + offset,
                 occurrence_id=occurrence.id,
                 entity_id=entity_id,
-                kind=OperationKind.TARGET_ACTION,
+                kind=(
+                    OperationKind.RESTORE
+                    if action.action == RESTORE_PREVIOUS_ACTION
+                    else OperationKind.TARGET_ACTION
+                ),
                 state=(
                     OperationState.SUPERSEDED
                     if entity_id in active_entities
                     else OperationState.PREPARED
                 ),
-                payload={
-                    "phase": "schedule_end",
-                    "action_id": action.id,
-                    "domain": action.domain,
-                    "action": action.action,
-                    "data": action.data,
-                },
+                payload=(
+                    _restore_payload(snapshots[(occurrence.id, entity_id)])
+                    if action.action == RESTORE_PREVIOUS_ACTION
+                    else {
+                        "phase": "schedule_end",
+                        "action_id": action.id,
+                        "domain": action.domain,
+                        "action": action.action,
+                        "data": action.data,
+                    }
+                ),
                 attempt_count=0,
                 created_at=persisted_at,
                 updated_at=persisted_at,
@@ -285,8 +303,14 @@ async def async_prepare_condition_fallbacks(
                 continue
             for entity_id in occurrence.frozen_schedule.target_entity_ids:
                 applied = successful.get((occurrence.id, entity_id))
+                end_action = occurrence.frozen_schedule.end_action
+                if (
+                    end_action is not None
+                    and end_action.action == RESTORE_PREVIOUS_ACTION
+                ):
+                    end_action = None
                 if applied is None:
-                    if occurrence.frozen_schedule.end_action is None:
+                    if end_action is None:
                         continue
                     source_id = "initial_false"
                 else:
@@ -296,7 +320,7 @@ async def async_prepare_condition_fallbacks(
                 )
                 if operation_id in existing_ids:
                     continue
-                action = occurrence.frozen_schedule.end_action
+                action = end_action
                 snapshot = snapshots.get((occurrence.id, entity_id))
                 if action is None and snapshot is None:
                     continue
@@ -388,6 +412,17 @@ async def async_prepare_condition_fallbacks(
         )
 
     return await repository.async_update_if_changed(mutation)
+
+
+def _restore_payload(snapshot: Snapshot) -> dict[str, FrozenJsonValue]:
+    return {
+        "phase": "schedule_end",
+        "snapshot_id": snapshot.id,
+        "domain": snapshot.domain,
+        "state": snapshot.state,
+        "attributes": snapshot.attributes,
+        "checksum": snapshot.checksum,
+    }
 
 
 def _due_restores(

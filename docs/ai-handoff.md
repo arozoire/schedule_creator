@@ -1,5 +1,24 @@
 # AI handoff — stato attuale e piano futuro
 
+## Alba/tramonto, stato precedente, statistiche — 0.3.15 (2026-09-25)
+
+- **F2** `TimeSlot` ha campi opzionali `start_sun`/`end_sun` (`sunrise`|`sunset`)
+  e `*_offset_minutes` (±360), omessi dal JSON quando assenti. `plan_occurrences`
+  riceve un `SunResolver` (`reconciliation.sun_resolver(hass)` →
+  `get_astral_event_date`); giorno senza evento → nessuna occorrenza; fine che
+  precede l'inizio → giorno dopo. `start`/`end` restano un orario approssimato
+  per le viste (calcolato dalla card da `sun.sun`). Editor: `boundaryField`,
+  `readSlots(form, sunMinutes(hass))`, `boundaryLabel`. L'import WSC converte
+  `sunrise±HH:MM`.
+- **F3** azione finale `restore_previous` (`RESTORE_PREVIOUS_ACTION`): a fine
+  fascia diventa un'operazione RESTORE dello snapshot iniziale; nella
+  condizione falsa vale come "nessuna azione finale" (ripristino). Vietata come
+  azione iniziale o del timer.
+- **F4** `stats.py`: Store `schedule_creator.stats` (salvataggio ritardato 30 s),
+  conteggi per schedule (attivazioni, fasce bloccate dalla condizione, ultime
+  date), una volta per occorrenza; `get_state.stats`; RESET li cancella. Card:
+  riga "Statistiche" in fondo all'editor.
+
 ## Ottimizzazioni dall'audit (O1–O4) — 0.3.14 (2026-09-25)
 
 - **O1** `state-adapter.js`: `watchedEntities(state)` (gruppi, target, sensori

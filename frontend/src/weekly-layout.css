@@ -903,3 +903,43 @@ button.sc-empty:hover { border-color: var(--sc-accent); }
   padding-left: 18px;
   font-size: 0.82rem;
 }
+.sc-stats {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 16px;
+  margin: 0;
+  font-size: 0.85rem;
+}
+.sc-stats dt {
+  color: var(--sc-muted);
+}
+.sc-stats dd {
+  margin: 0;
+  font-weight: 700;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.sc-bound {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.sc-bound-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.sc-bound-row select {
+  flex: 0 1 auto;
+}
+.sc-bound-row input[type="time"] {
+  flex: 1 1 110px;
+}
+.sc-bound-row input[type="number"] {
+  width: 76px;
+}
+.sc-bound-row small {
+  color: var(--sc-muted);
+  font-size: 0.75rem;
+}

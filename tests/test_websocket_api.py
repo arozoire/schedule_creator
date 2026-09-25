@@ -125,6 +125,7 @@ async def test_get_state_empty(
                 "quick_timers": [],
                 "operational": {"occurrences": [], "leases": []},
                 "failures": [],
+                "stats": {},
             },
         }
         for operation in (load, save, delay, service):
@@ -307,6 +308,7 @@ async def test_get_state_populated(hass, hass_ws_client, hass_storage):
             ],
         },
         "failures": [],
+        "stats": entry.runtime_data.stats.data["schedules"],
     }
     assert (
         storage.config.data,

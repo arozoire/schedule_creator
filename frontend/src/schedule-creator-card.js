@@ -2,12 +2,12 @@ import { ScheduleCreatorStateAdapter, watchedEntities, hassChanged } from './sta
 import { weeklySegments } from './timeline.js';
 import { clean, messageFor, parseJson, diagnosticFor } from './editor.js';
 import { controllable, targetEntities, notificationForm, readNotification } from './forms.js';
-import { blankCondition, conditionForm, readCondition, slotsForm, readSlots, magnetSnap, toMinutes, toTime, DAY_SHORTCUTS, iconPicker, colorPicker } from './schedule-editor.js';
+import { blankCondition, conditionForm, readCondition, slotsForm, readSlots, magnetSnap, toMinutes, toTime, DAY_SHORTCUTS, iconPicker, colorPicker, sunMinutes, boundaryLabel } from './schedule-editor.js';
 import { actionForm, readAction, describeAction, describeState, pretty } from './action-editor.js';
 import { isWscBackup, convertWscBackup, wscImportPayload } from './wsc-import.js';
 
 const STYLE = '__SC_CSS__';
-const CARD_VERSION = '0.3.14';
+const CARD_VERSION = '0.3.15';
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
@@ -176,7 +176,7 @@ class ScheduleCreatorCard extends HTMLElement {
       if (!['entities'].includes(node.name) && !node.name.endsWith('_days')) this.draft[node.name] = node.checked ? 'on' : '';
     }
     this.draft.selectedEntities = [...form.querySelectorAll('[name="entities"]:checked')].map((x) => x.value);
-    this.slotDraft = readSlots(form);
+    this.slotDraft = readSlots(form, sunMinutes(this._hass));
     this.conditionDraft = readCondition(form);
   }
   restoreDraft() {
@@ -420,9 +420,9 @@ class ScheduleCreatorCard extends HTMLElement {
     if (!domain) return null;
     const attempt = (prefix) => { try { return readAction(form, prefix, domain); } catch { return null; } };
     const start = attempt('start'), end = attempt('end');
-    const slots = readSlots(form), slot = slots[0];
+    const slots = readSlots(form, sunMinutes(this._hass)), slot = slots[0];
     const who = `${this._hass.states[ids[0]]?.attributes?.friendly_name || ids[0]}${ids.length > 1 ? ` +${ids.length - 1}` : ''}`;
-    const when = slot?.weekdays.length ? `${daysLabel(slot.weekdays)} ${slot.start}–${slot.end}${slots.length > 1 ? ` (+${slots.length - 1})` : ''}` : '';
+    const when = slot?.weekdays.length ? `${daysLabel(slot.weekdays)} ${boundaryLabel(slot, 'start')}–${boundaryLabel(slot, 'end')}${slots.length > 1 ? ` (+${slots.length - 1})` : ''}` : '';
     return {
       name: [who, describeAction(start), when].filter(Boolean).join(' · '),
       start_notification_message: `${who}: ${describeAction(start) || 'avvio'}${slot ? ` alle ${slot.start}` : ''}`,
@@ -467,7 +467,7 @@ class ScheduleCreatorCard extends HTMLElement {
     const mark = {ok: ['✓', 'Pronto'], note: ['!', 'Da controllare'], off: ['⏸', 'Importato disattivato'], skip: ['✕', 'Non importato']};
     const symbol = {numeric_greater: '>', numeric_less: '<', numeric_greater_or_equal: '≥', numeric_less_or_equal: '≤', state_equals: '=', state_not_equals: '≠'};
     const condText = (node) => !node ? '' : ['and', 'or'].includes(node.operator) ? node.children.map(condText).join(node.operator === 'and' ? ' e ' : ' o ') : `${hass.states[node.entity_id]?.attributes?.friendly_name || node.entity_id} ${symbol[node.operator] || node.operator} ${node.value}${node.hysteresis ? ` (isteresi ${node.hysteresis})` : ''}`;
-    const rows = converted.rows.map((r) => `<li class="sc-import-row is-${r.status}"><span class="sc-import-mark" title="${esc(mark[r.status][1])}" aria-label="${esc(mark[r.status][1])}">${mark[r.status][0]}</span><div><strong>${esc(r.name || r.source)}</strong>${r.slots ? `<span class="sc-meta">${esc(r.slots.map((x) => `${daysLabel(x.weekdays)} ${x.start}–${x.end}`).join(' · '))} · ${esc(describeAction(r.start))}${r.end ? ` → alla fine ${esc(describeAction(r.end))}` : ''}${r.condition ? ` · se ${esc(condText(r.condition))}` : ''}</span>` : ''}${r.notes.length ? `<ul class="sc-import-notes">${r.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}</div></li>`).join('');
+    const rows = converted.rows.map((r) => `<li class="sc-import-row is-${r.status}"><span class="sc-import-mark" title="${esc(mark[r.status][1])}" aria-label="${esc(mark[r.status][1])}">${mark[r.status][0]}</span><div><strong>${esc(r.name || r.source)}</strong>${r.slots ? `<span class="sc-meta">${esc(r.slots.map((x) => `${daysLabel(x.weekdays)} ${boundaryLabel(x, 'start')}–${boundaryLabel(x, 'end')}`).join(' · '))} · ${esc(describeAction(r.start))}${r.end ? ` → alla fine ${esc(describeAction(r.end))}` : ''}${r.condition ? ` · se ${esc(condText(r.condition))}` : ''}</span>` : ''}${r.notes.length ? `<ul class="sc-import-notes">${r.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}</div></li>`).join('');
     const count = (status) => converted.rows.filter((r) => r.status === status).length;
     const profiles = converted.profiles.map((p) => `<p>Profilo <strong>«${esc(p.name)}»</strong> · ${p.profile_type === 'exclusive' ? 'esclusivo' : 'condiviso'} · ${p.groups.length} gruppi (${esc(p.groups.map((g) => g.name).join(', '))})${p.wasActive ? ' · era attivo nella weekly-schedule-card' : ''}</p>`).join('');
     return `${intro}${input}<div class="sc-summary"><strong>${esc(data.file)}</strong><p>Salvato il ${esc(String(backup.createdAt || '').replace('T', ' ').slice(0, 16) || 'data sconosciuta')} · ${count('ok') + count('note')} pronti · ${count('off')} disattivati · ${count('skip')} non importati</p>${profiles}
@@ -475,6 +475,14 @@ class ScheduleCreatorCard extends HTMLElement {
       ${missing.length ? `<p class="sc-error">Entità non presenti in questo Home Assistant: ${esc(missing.join(', '))}</p>` : ''}
       <p class="sc-import-warning">Prima di attivare il profilo importato spegni gli stessi schedule nella weekly-schedule-card (o in Scheduler): altrimenti i dispositivi ricevono i comandi due volte.</p></div>
       <ul class="sc-import">${rows}</ul>`;
+  }
+  // Activity counters of one schedule (debug aid, bottom of the editor).
+  statsOf(id) { return this.adapter.state?.stats?.[id] || {activations: 0, muted: 0, last_activation: null, last_muted: null}; }
+  statsSummary(id) { const s = this.statsOf(id); return `${s.activations} ${s.activations === 1 ? 'attivazione' : 'attivazioni'}`; }
+  statsBody(id) {
+    const s = this.statsOf(id);
+    const when = (iso) => iso ? new Intl.DateTimeFormat('it-IT', {timeZone: this._hass?.config?.time_zone || undefined, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}).format(new Date(iso)) : 'mai';
+    return `<dl class="sc-stats"><dt>Attivazioni</dt><dd>${s.activations}</dd><dt>Fasce bloccate dalla condizione</dt><dd>${s.muted}</dd><dt>Ultima attivazione</dt><dd>${esc(when(s.last_activation))}</dd><dt>Ultimo blocco per condizione</dt><dd>${esc(when(s.last_muted))}</dd></dl><p class="sc-meta">Conteggi da quando è installata la versione 0.3.15; una fascia conta una volta sola.</p>`;
   }
   // One readable line for a command that failed for good.
   failureText(f) {
@@ -507,7 +515,7 @@ class ScheduleCreatorCard extends HTMLElement {
       if (isWscBackup(backup)) {
         // A weekly-schedule-card backup is imported next to existing data, never restored over it.
         const config = this.adapter.state.config;
-        const converted = convertWscBackup(backup, {existingProfileNames: config.profiles.map((p) => p.name), entityName: (id) => this._hass.states[id]?.attributes?.friendly_name || id});
+        const converted = convertWscBackup(backup, {existingProfileNames: config.profiles.map((p) => p.name), entityName: (id) => this._hass.states[id]?.attributes?.friendly_name || id, sun: sunMinutes(this._hass)});
         this.importData = {backup, converted, file: input.files[0].name};
         if (this.edit) this.edit = ['import', null];
       } else if (backup?.format === 'schedule_creator.backup' && backup.config) {
@@ -561,6 +569,7 @@ class ScheduleCreatorCard extends HTMLElement {
         ${row('row-conditions','Condizioni',conditionSummary,`${conditionForm(condition,this._hass)}<datalist id="sc-condition-entities">${Object.keys(this._hass.states||{}).sort().map((id)=>`<option value="${esc(id)}">${esc(this._hass.states[id].attributes?.friendly_name||id)}</option>`).join('')}</datalist><p>Se falsa: azione finale se presente, altrimenti ripristino deciso dal motore. La fine fascia senza azione finale non invia comandi.</p>`)}
         ${row('row-notifications','Notifiche',notificationSummary,`${notificationForm('start_notification','Notifica iniziale',item?.start_notification,this._hass,d)}${notificationForm('end_notification','Notifica finale',item?.end_notification,this._hass,d)}${this.notificationExtras(config,item)}`)}
         ${row('row-options','Altre opzioni',item?.enabled === false ? 'Disabilitato' : 'Abilitato',`<label class="sc-check"><input name="enabled" type="checkbox" ${item?.enabled !== false ? 'checked' : ''}>Schedule abilitato</label><p>Orari nel fuso ${esc(this._hass.config?.time_zone || 'di Home Assistant')}. Se la fine precede l’inizio, la fascia termina il giorno successivo.</p>${select('override_policy','Comandi manuali', [['cooperative','Cooperativa'],['manual_override','Priorità al comando manuale']],item?.override_policy || 'cooperative')}${field('inclusion_dates','Date incluse (AAAA-MM-GG, separate da virgola)',(item?.inclusion_dates || []).join(', '))}${field('exclusion_dates','Date escluse (AAAA-MM-GG, separate da virgola)',(item?.exclusion_dates || []).join(', '))}`)}
+        ${id ? row('row-stats','Statistiche',this.statsSummary(id),this.statsBody(id)) : ''}
         </div>
         <details><summary>Pro · configurazione JSON</summary><label class="sc-check"><input type="checkbox" name="pro_config_enabled">Usa JSON per condizioni, fasce e notifiche</label>${area('pro_config','Configurazione avanzata',json({time_slots:slots,condition:condition||null,start_notification:item?.start_notification||null,end_notification:item?.end_notification||null}),8)}</details>`;
     }
@@ -720,7 +729,7 @@ class ScheduleCreatorCard extends HTMLElement {
         const domain = this.draft.selectedEntities[0]?.split('.')[0];
         if (!domain || !this.draft.selectedEntities.every((x)=>x.startsWith(`${domain}.`) && owner?.entity_ids.includes(x))) throw new Error('Scegli entità dello stesso tipo appartenenti al gruppo.');
         phase = 'lettura delle fasce orarie';
-        const slots = readSlots(form);
+        const slots = readSlots(form, sunMinutes(this._hass));
         if (!slots.length || slots.some((s)=>!s.weekdays.length || !s.start || !s.end || s.start===s.end)) throw new Error('Ogni fascia richiede almeno un giorno e orari diversi.');
         const dates = (str)=>[...new Set(str.split(',').map((x)=>x.trim()).filter(Boolean))].sort();
         phase = 'lettura azione iniziale';

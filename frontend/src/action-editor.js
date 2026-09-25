@@ -4,11 +4,13 @@ import { uiEscape, check } from './forms.js';
 
 const escA = uiEscape;
 export const APPLY_STATE = 'apply_state';
+// End action that puts back the state captured when the slot started.
+export const RESTORE_PREVIOUS = 'restore_previous';
 const intersect = (states, key) => states.length ? (states[0].attributes?.[key] || []).filter((value) => states.every((s) => (s.attributes?.[key] || []).includes(value))) : [];
 const every = (states, test) => states.length > 0 && states.every(test);
 const features = (s) => s.attributes?.supported_features || 0;
-export const modeLabels = {off:'Spento',on:'Acceso',auto:'Auto',heat_cool:'Caldo/Freddo',cool:'Freddo',heat:'Caldo',dry:'Deumidifica',fan_only:'Ventola',open:'Apri',close:'Chiudi',stop:'Ferma',position:'Posizione',none:'Nessuna azione'};
-const modeIcons = {off:'power',on:'power',auto:'autorenew',heat_cool:'sun-snowflake',cool:'snowflake',heat:'fire',dry:'water-percent',fan_only:'fan',open:'arrow-up',close:'arrow-down',stop:'stop',position:'tune-vertical',none:'minus-circle-outline'};
+export const modeLabels = {off:'Spento',on:'Acceso',auto:'Auto',heat_cool:'Caldo/Freddo',cool:'Freddo',heat:'Caldo',dry:'Deumidifica',fan_only:'Ventola',open:'Apri',close:'Chiudi',stop:'Ferma',position:'Posizione',none:'Nessuna azione',restore:'Stato precedente'};
+const modeIcons = {off:'power',on:'power',auto:'autorenew',heat_cool:'sun-snowflake',cool:'snowflake',heat:'fire',dry:'water-percent',fan_only:'fan',open:'arrow-up',close:'arrow-down',stop:'stop',position:'tune-vertical',none:'minus-circle-outline',restore:'history'};
 export const pretty = (value) => modeLabels[value] || String(value).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 const round = (value, step) => Math.round(value / step) * step;
 // Covers and valves share open/close/stop/position commands and feature bits.
@@ -56,6 +58,7 @@ function capabilities(hass, ids) {
 // Translate a stored action into editable controls; null means "keep as Pro".
 export function actionToUi(domain, action, caps) {
   if (!action) return {mode: 'none'};
+  if (action.action === RESTORE_PREVIOUS) return {mode: 'restore'};
   const data = action.data || {};
   const keys = Object.keys(data);
   const only = (...allowed) => keys.every((key) => allowed.includes(key));
@@ -138,12 +141,12 @@ export function actionForm(prefix, label, hass, ids, value, optional, draft = {}
   const base = {...defaults(caps, false), ...(value ? parsed || {} : optional ? {mode: 'none'} : {})};
   const get = (key) => draft[`${prefix}_${key}`] ?? base[key];
   const pro = (draft[`${prefix}_pro`] ?? (value && !parsed ? 'on' : '')) === 'on';
-  const modes = [...(optional ? ['none'] : []), ...caps.modes];
+  const modes = [...(optional ? ['none', 'restore'] : []), ...caps.modes];
   const mode = modes.includes(get('mode')) ? get('mode') : modes[0];
   const fields = [], more = [];
   const name = (key) => `${prefix}_${key}`;
   fields.push(choices(name('mode'), domain === 'climate' ? 'Modalità HVAC' : POSITION_ACTIONS[domain] ? 'Comando' : 'Stato', modes, mode, {primary: true, icons: true}));
-  if (domain === 'climate' && !['none', 'off'].includes(mode)) {
+  if (domain === 'climate' && !['none', 'off', 'restore'].includes(mode)) {
     if (mode !== 'fan_only' && caps.temperature) fields.push(stepperField(name('temperature'), 'Temperatura', get('temperature'), caps.min, caps.max, caps.step, caps.unit));
     if (mode !== 'fan_only' && caps.range) fields.push(stepperField(name('target_temp_low'), 'Minima', get('target_temp_low'), caps.min, caps.max, caps.step, caps.unit), stepperField(name('target_temp_high'), 'Massima', get('target_temp_high'), caps.min, caps.max, caps.step, caps.unit));
     fields.push(choices(name('fan_mode'), 'Ventola', caps.fan_modes, get('fan_mode')));
@@ -184,6 +187,7 @@ export function readAction(form, prefix, domain) {
   }
   const mode = val('mode');
   if (mode === 'none') return null;
+  if (mode === 'restore') return {domain, action: RESTORE_PREVIOUS, data: {}};
   if (!mode) throw new Error('Scegli cosa deve fare il dispositivo.');
   const data = {};
   const put = (key, value) => { if (value !== undefined && value !== '') data[key] = value; };
@@ -215,6 +219,7 @@ export function readAction(form, prefix, domain) {
 // Short human text used for suggested names and notification messages.
 export function describeAction(action) {
   if (!action) return '';
+  if (action.action === RESTORE_PREVIOUS) return 'Stato precedente';
   const d = action.data || {};
   if (action.action === APPLY_STATE) {
     const parts = [pretty(d.state)];

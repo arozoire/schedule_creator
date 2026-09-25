@@ -796,3 +796,49 @@ async def test_hanging_service_times_out_into_a_retry(hass) -> None:
     operation = result.pending_operations[0]
     assert operation.state is OperationState.RETRY_WAIT
     assert operation.error_code == "service_error"
+
+
+async def test_restore_previous_end_action_restores_the_start_snapshot(hass) -> None:
+    """The "previous state" end action replays the state captured at start."""
+    repository, _store = await _repository(hass)
+    ended_at = NOW + timedelta(minutes=1)
+    await _applied_schedule(hass, repository, ended_at)
+
+    def complete(current):
+        occurrence = current.occurrences[0]
+        schedule = occurrence.frozen_schedule
+        assert schedule.end_action is not None
+        restore = replace(schedule.end_action, action="restore_previous", data={})
+        return replace(
+            current,
+            revision=current.revision + 1,
+            occurrences=(
+                replace(
+                    occurrence,
+                    state=OccurrenceState.COMPLETED,
+                    frozen_schedule=replace(schedule, end_action=restore),
+                ),
+            ),
+            leases=(),
+            updated_at=ended_at,
+        )
+
+    await repository.async_update(complete)
+
+    prepared = await async_prepare_schedule_end_actions(repository, ended_at)
+    end_operation = prepared.pending_operations[-1]
+    assert end_operation.kind is OperationKind.RESTORE
+    assert end_operation.payload["phase"] == "schedule_end"
+
+    with patch.object(type(hass.services), "async_call", AsyncMock()) as service_call:
+        result = await async_execute_restores(hass, repository, ended_at)
+
+    assert result.pending_operations[-1].state is OperationState.SUCCEEDED
+    service_call.assert_awaited_once_with(
+        "scene",
+        "apply",
+        service_data={
+            "entities": {"light.living_room": {"brightness": None, "state": "off"}}
+        },
+        blocking=True,
+    )

@@ -13,7 +13,7 @@ from homeassistant.helpers.event import async_track_time_interval
 from .boundaries import async_advance_occurrence_states
 from .const import DOMAIN
 from .leases import async_reconcile_entity_leases
-from .reconciliation import async_reconcile_horizon
+from .reconciliation import async_reconcile_horizon, sun_resolver
 from .retention import async_prune_terminal_occurrences
 
 if TYPE_CHECKING:
@@ -90,6 +90,7 @@ class HorizonRefreshCoordinator:
                     config,
                     ZoneInfo(self._hass.config.time_zone),
                     now,
+                    sun_resolver(self._hass),
                 )
                 await async_advance_occurrence_states(self._storage.runtime, now)
                 if self._on_runtime_changed is None:
