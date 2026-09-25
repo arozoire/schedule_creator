@@ -7,7 +7,7 @@ import { actionForm, readAction, describeAction, describeState, pretty } from '.
 import { isWscBackup, convertWscBackup, wscImportPayload } from './wsc-import.js';
 
 const STYLE = '__SC_CSS__';
-const CARD_VERSION = '0.3.12';
+const CARD_VERSION = '0.3.13';
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
@@ -27,6 +27,13 @@ export function temperatureColor(value) {
   const stops = [[74, 144, 217], [150, 196, 232], [240, 138, 75]];
   const [a, b, f] = t < 0.5 ? [stops[0], stops[1], t * 2] : [stops[1], stops[2], (t - 0.5) * 2];
   return `rgb(${a.map((c, i) => Math.round(c + (b[i] - c) * f)).join(',')})`;
+}
+// A running slot without an active lease waits for another schedule or timer.
+// Integrations older than 0.3.13 do not report lease owners.
+export function slotWaiting(state, item) {
+  const leases = state?.operational?.leases || [];
+  if (item.state === 'suspended') return true;
+  return leases.some((l) => 'occurrence_id' in l) && item.condition_branch !== 'false' && !leases.some((l) => l.state === 'active' && l.occurrence_id === item.id);
 }
 const FULL_DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
 const byOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0) || String(a.name).localeCompare(String(b.name));
@@ -223,10 +230,11 @@ class ScheduleCreatorCard extends HTMLElement {
     const now=haNow(this._hass?.config?.time_zone);
     this.clockMinute=now.minutes;
     const occurrences=state?.operational?.occurrences||[];
+    const waitingFor=(item)=>slotWaiting(state,item);
     const runningState=(scheduleId)=>{
       const item=occurrences.find((x)=>x.schedule_id===scheduleId);
       if(!item) return '';
-      return item.condition_branch==='false' || item.state==='suspended' ? 'is-paused' : 'is-running';
+      return item.condition_branch==='false' || waitingFor(item) ? 'is-paused' : 'is-running';
     };
     const time=minute=>`${String(Math.floor(minute/60)).padStart(2,'0')}:${String(minute%60).padStart(2,'0')}`;
     const slots = `<div class="sc-timeline-head"><span>Ora</span>${DAYS.map((day,index)=>`<strong class="${index===now.weekday?'is-today':''}">${day}${index===now.weekday?'<span class="sc-today-tag"> · oggi</span>':''}</strong>`).join('')}</div><div class="sc-timeline-grid"><div class="sc-time-axis">${Array.from({length:13},(_,i)=>`<span style="top:${i/12*100}%">${time(i*120)}</span>`).join('')}</div>${DAYS.map((day,index)=>`<div class="sc-day-track ${index===now.weekday?'is-today':''}" data-day="${index}" aria-label="${day}" title="${this._hass?.user?.is_admin===true && group ? 'Clicca uno spazio libero per aggiungere uno schedule' : ''}">${segments[index].map(({schedule,start,end,lane,lanes})=>{
@@ -236,7 +244,9 @@ class ScheduleCreatorCard extends HTMLElement {
     }).join('')}${index===now.weekday?`<span class="sc-now-line" style="top:${now.minutes/1440*100}%" aria-label="Ora ${now.label}"></span>`:''}</div>`).join('')}</div>`;
     const legend = `<div class="sc-legend" aria-hidden="true"><span><i class="sc-legend-temp"></i>Clima: freddo → caldo</span><span><i class="sc-legend-running"></i>In corso</span><span><i class="sc-legend-paused"></i>In pausa</span><span><i class="sc-legend-now"></i>Ora</span></div>`;
     const advice = state ? versionAdvice(state.integration_version) : '';
-    const status = `${error ? `<div class="status error" role="alert">${esc(messageFor(error))}</div>` : loading ? '<div class="status">Caricamento…</div>' : ''}${advice ? `<div class="status sc-warning" role="status">${esc(advice)}</div>` : ''}${this.notice && !this.edit ? `<div class="status sc-notice" role="status">${esc(this.notice)}</div>` : ''}`;
+    const failures = state?.failures || [], recentFailures = failures.filter((f) => Date.now() - new Date(f.at) < 86400000);
+    const failureBanner = recentFailures.length ? `<div class="status sc-warning" role="status">${recentFailures.length === 1 ? 'Un comando non è riuscito' : `${recentFailures.length} comandi non sono riusciti`} nelle ultime 24 ore: dettagli in “Attività”.</div>` : '';
+    const status = `${error ? `<div class="status error" role="alert">${esc(messageFor(error))}</div>` : loading ? '<div class="status">Caricamento…</div>' : ''}${advice ? `<div class="status sc-warning" role="status">${esc(advice)}</div>` : ''}${failureBanner}${this.notice && !this.edit ? `<div class="status sc-notice" role="status">${esc(this.notice)}</div>` : ''}`;
     const info = this.localError || writeError;
     const errorDetails = this.localError ? this.localErrorDetails : writeError ? diagnosticFor(writeError, {cardVersion:CARD_VERSION,haVersion:this._hass.config?.version}) : null;
     const editable = this._hass?.user?.is_admin === true && writeError?.code !== 'unauthorized';
@@ -247,7 +257,7 @@ class ScheduleCreatorCard extends HTMLElement {
       ${editable ? `<details class="sc-management" data-section="management" ${!profile || !group ? 'open' : ''}><summary>Gestisci profili e gruppi</summary><div class="sc-controls">${button('newProfile','＋ Profilo')}${profile ? `${button('editProfile','Modifica profilo',profile.id)}${button('toggleProfile',profile.active ? 'Disattiva profilo' : 'Attiva profilo',profile.id)}${button('deleteProfile','Elimina profilo',profile.id)}${button('newGroup','＋ Gruppo')}` : ''}${group ? `${button('editGroup','Modifica gruppo',group.id)}${button('deleteGroup','Elimina gruppo',group.id)}` : ''}</div></details>` : '<p class="sc-meta">Vista in sola lettura: serve un amministratore per modificare.</p>'}
       ${profiles.length ? this.overview(config, profiles) : ''}
       ${editable ? `<details class="sc-maintenance" data-section="maintenance"><summary>Manutenzione · backup, import e RESET</summary><p class="sc-meta">Il backup salva profili, gruppi e schedule in un file JSON. Il ripristino li sostituisce e lascia i profili disattivati. L’import dalla weekly-schedule-card li aggiunge in un nuovo profilo disattivato. RESET cancella tutti i dati di Schedule Creator.</p><div class="sc-controls">${button('exportBackup','Salva backup')}${button('newRestore','Ripristina backup')}${button('newImport','Importa da Weekly Schedule Card')}${button('newReset','RESET…')}</div></details>` : ''}
-      <details class="sc-operational" data-section="operational"><summary>Attività · ${state.operational?.occurrences?.length ?? 0} fasce in corso · ${state.quick_timers?.length ?? 0} timer</summary>${(state.operational?.occurrences || []).map((x) => `<p>${esc(config.schedules?.find((s) => s.id === x.schedule_id)?.name || x.schedule_id)}: ${esc(x.state)}, condizione ${esc(x.condition_branch)}, termine ${esc(x.end_utc)}</p>`).join('') || '<p>Nessuna fascia attiva.</p>'}${(state.operational?.leases || []).map((x) => `<p>${esc(x.entity_id)}: ${esc(x.state)} (${esc(x.controller_type)})</p>`).join('')}${(state.quick_timers || []).map((x) => `<p>Timer ${esc(this._hass.states[x.entity_id]?.attributes?.friendly_name || x.entity_id)}: <span data-expiry="${esc(x.expires_at)}"></span> ${editable ? button('cancelTimer','Annulla timer',x.id) : ''}</p>`).join('')}</details>` : '';
+      <details class="sc-operational" data-section="operational"><summary>Attività · ${state.operational?.occurrences?.length ?? 0} fasce in corso · ${state.quick_timers?.length ?? 0} timer${failures.length ? ` · ${failures.length} errori` : ''}</summary>${failures.length ? `<div class="sc-failures"><strong>Comandi non riusciti</strong><ul>${failures.map((f) => `<li>${esc(this.failureText(f))}</li>`).join('')}</ul></div>` : ''}${(state.operational?.occurrences || []).map((x) => `<p>${esc(config.schedules?.find((s) => s.id === x.schedule_id)?.name || x.schedule_id)}: ${esc(x.state)}, condizione ${esc(x.condition_branch)}, termine ${esc(x.end_utc)}</p>`).join('') || '<p>Nessuna fascia attiva.</p>'}${(state.operational?.leases || []).map((x) => `<p>${esc(x.entity_id)}: ${esc(x.state)} (${esc(x.controller_type)})</p>`).join('')}${(state.quick_timers || []).map((x) => `<p>Timer ${esc(this._hass.states[x.entity_id]?.attributes?.friendly_name || x.entity_id)}: <span data-expiry="${esc(x.expires_at)}"></span> ${editable ? button('cancelTimer','Annulla timer',x.id) : ''}</p>`).join('')}</details>` : '';
     const errorMarkup = `${info ? `<p class="sc-error" role="alert">${esc(typeof info === 'string' ? info : messageFor(info))}</p>` : ''}${errorDetails ? `<details class="sc-error-details" data-section="error-details"><summary>Dettagli errore</summary><p>Seleziona e copia questo testo per segnalare il problema.</p><textarea readonly aria-label="Dettagli errore da copiare" rows="10">${esc(errorDetails)}</textarea></details>` : ''}`;
     const surface=this.shadowRoot.querySelector('ha-card');
     surface.style.setProperty('--pchip-color',tint(profile?.color));
@@ -315,7 +325,7 @@ class ScheduleCreatorCard extends HTMLElement {
     const tiles = occurrences.map((item) => {
       const schedule = (config.schedules || []).find((s) => s.id === item.schedule_id);
       if (!schedule) return '';
-      const paused = item.condition_branch === 'false', waiting = item.state === 'suspended';
+      const paused = item.condition_branch === 'false', waiting = !paused && slotWaiting(this.adapter.state, item);
       const kind = paused || waiting ? 'is-paused' : 'is-running';
       const label = paused ? 'In pausa' : waiting ? 'In attesa' : 'Adesso';
       const detail = paused ? 'La condizione non è soddisfatta' : waiting ? 'Un altro schedule o timer ha la priorità' : `Fino alle ${clock(item.end_utc)}${schedule.condition ? ' · condizione vera' : ''}`;
@@ -461,6 +471,15 @@ class ScheduleCreatorCard extends HTMLElement {
       ${missing.length ? `<p class="sc-error">Entità non presenti in questo Home Assistant: ${esc(missing.join(', '))}</p>` : ''}
       <p class="sc-import-warning">Prima di attivare il profilo importato spegni gli stessi schedule nella weekly-schedule-card (o in Scheduler): altrimenti i dispositivi ricevono i comandi due volte.</p></div>
       <ul class="sc-import">${rows}</ul>`;
+  }
+  // One readable line for a command that failed for good.
+  failureText(f) {
+    const when = new Intl.DateTimeFormat('it-IT', {timeZone: this._hass?.config?.time_zone || undefined, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}).format(new Date(f.at));
+    const who = f.quick_timer ? 'Quick Timer' : f.schedule_name || 'Schedule eliminato';
+    const what = f.kind === 'notification' ? 'notifica' : f.kind === 'restore' ? 'ripristino dello stato' : f.phase === 'schedule_end' ? 'azione finale' : f.phase === 'condition_fallback' ? 'azione a condizione falsa' : 'azione iniziale';
+    const why = {sent_outcome_unknown: 'esito sconosciuto: Home Assistant si è riavviato durante l’invio', service_failed: `il servizio ha restituito un errore o non ha risposto (${f.attempts} tentativi)`, restore_failed: `ripristino non riuscito (${f.attempts} tentativi)`, notification_failed: `notifica non inviata (${f.attempts} tentativi)`, invalid_payload: 'dati del comando non validi', invalid_snapshot: 'stato iniziale non disponibile'}[f.error_code] || f.error_code || 'errore sconosciuto';
+    const entity = f.entity_id ? ` · ${this._hass?.states?.[f.entity_id]?.attributes?.friendly_name || f.entity_id}` : '';
+    return `${when} · ${who}${entity} · ${what}: ${why}`;
   }
   async exportBackup() {
     this.localError = null; this.notice = null;

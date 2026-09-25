@@ -124,6 +124,7 @@ async def test_get_state_empty(
                 },
                 "quick_timers": [],
                 "operational": {"occurrences": [], "leases": []},
+                "failures": [],
             },
         }
         for operation in (load, save, delay, service):
@@ -299,11 +300,13 @@ async def test_get_state_populated(hass, hass_ws_client, hass_storage):
                 {
                     "entity_id": item.entity_id,
                     "controller_type": item.controller_type.value,
+                    "occurrence_id": item.occurrence_id,
                     "state": item.state.value,
                 }
                 for item in reconciled_runtime.leases
             ],
         },
+        "failures": [],
     }
     assert (
         storage.config.data,

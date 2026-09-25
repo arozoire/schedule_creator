@@ -9,7 +9,7 @@ from uuid import UUID, uuid5
 
 from homeassistant.exceptions import HomeAssistantError
 
-from .actions import ACTION_RETRY_INTERVAL, MAX_ACTION_ATTEMPTS
+from .actions import ACTION_RETRY_INTERVAL, MAX_ACTION_ATTEMPTS, async_call_service
 from .journal import JournalCoordinator
 from .models import OccurrenceState, OperationKind, OperationState, PendingOperation
 from .storage import RuntimeRepository, RuntimeStoreData
@@ -59,10 +59,10 @@ async def async_prepare_notifications(
             for phase, rule in rules:
                 if rule is None:
                     continue
-                eligible = (
-                    occurrence.id in successful_starts
-                    if phase == "start"
-                    else occurrence.state is OccurrenceState.COMPLETED
+                # An end notice only follows a slot that actually acted.
+                eligible = occurrence.id in successful_starts and (
+                    phase == "start"
+                    or occurrence.state is OccurrenceState.COMPLETED
                 )
                 key = _deduplication_key(occurrence.id, phase, rule.id)
                 if (
@@ -235,7 +235,8 @@ async def async_execute_notifications(
             continue
         sent = await journal.async_mark_sent(operation.id, wall_clock)
         try:
-            await hass.services.async_call(
+            await async_call_service(
+                hass,
                 domain,
                 service,
                 service_data=data,

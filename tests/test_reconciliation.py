@@ -4,7 +4,7 @@ import asyncio
 import json
 from copy import deepcopy
 from dataclasses import replace
-from datetime import UTC, datetime, time
+from datetime import UTC, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -14,6 +14,7 @@ from custom_components.schedule_creator.models import (
     ConditionBranch,
     IntegrationConfig,
     OccurrenceState,
+    Snapshot,
 )
 from custom_components.schedule_creator.planner import plan_occurrences
 from custom_components.schedule_creator.reconciliation import (
@@ -288,3 +289,98 @@ async def test_replan_temporal_edit_replaces_occurrence_ids(hass, config):
         item.id for item in original
     )
     assert {item.local_start[11:19] for item in result.occurrences} == {"19:00:00"}
+
+
+_IN_SLOT = datetime(2026, 9, 14, 17, tzinfo=UTC)  # Monday 19:00 in Rome
+
+
+async def _running(hass, config, *, snapshot=False):
+    """A slot of the fixture schedule started at 18:30 and still running."""
+    repository, _store = await _repository(hass)
+    first = _project(config, 14, 15)[0]
+    active = replace(first, state=OccurrenceState.ACTIVE)
+    snapshots = ()
+    if snapshot:
+        bundle = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+        snapshots = (
+            replace(Snapshot.from_dict(bundle["snapshot"]), occurrence_id=first.id),
+        )
+        active = replace(active, snapshot_ids=(snapshots[0].id,))
+    await repository.async_update(
+        lambda current: replace(
+            current,
+            revision=current.revision + 1,
+            occurrences=(active,),
+            snapshots=snapshots,
+        )
+    )
+    return repository, active
+
+
+async def _replan(repository, config):
+    return await async_replan_window(
+        repository, config, _IN_SLOT, _IN_SLOT + timedelta(days=1), ROME, _IN_SLOT
+    )
+
+
+async def test_running_slot_is_cancelled_when_its_schedule_stops(hass, config):
+    """Disabling the schedule (or its profile) ends the slot in progress."""
+    repository, active = await _running(hass, config)
+    disabled = replace(
+        config, schedules=(replace(config.schedules[0], enabled=False),)
+    )
+
+    result = await _replan(repository, disabled)
+
+    assert [(item.id, item.state) for item in result.occurrences] == [
+        (active.id, OccurrenceState.CANCELLED)
+    ]
+
+
+async def test_running_slot_keeps_going_after_a_rename(hass, config):
+    """Names and notifications do not interrupt a running slot."""
+    repository, active = await _running(hass, config)
+    renamed = replace(
+        config,
+        schedules=(replace(config.schedules[0], revision=5, name="Renamed"),),
+    )
+
+    result = await _replan(repository, renamed)
+
+    running = [item for item in result.occurrences if item.start_utc <= _IN_SLOT]
+    assert running == [active]
+
+
+async def test_running_slot_is_replaced_when_its_action_changes(hass, config):
+    """The new version takes over now and keeps the pre-slot snapshot."""
+    repository, active = await _running(hass, config, snapshot=True)
+    schedule = config.schedules[0]
+    changed = replace(
+        config,
+        schedules=(
+            replace(
+                schedule,
+                revision=5,
+                start_action=replace(
+                    schedule.start_action, data={"brightness": 10}
+                ),
+            ),
+        ),
+    )
+
+    result = await _replan(repository, changed)
+
+    old = next(item for item in result.occurrences if item.id == active.id)
+    new = next(
+        item
+        for item in result.occurrences
+        if item.id != active.id and item.start_utc == active.start_utc
+    )
+    assert old.state is OccurrenceState.CANCELLED
+    assert new.id == f"{active.id}#r5"
+    assert new.state is OccurrenceState.PENDING
+    assert new.condition_branch is active.condition_branch
+    assert new.frozen_schedule.start_action.data == {"brightness": 10}
+    copied = next(item for item in result.snapshots if item.occurrence_id == new.id)
+    assert new.snapshot_ids == (copied.id,)
+    assert copied.state == result.snapshots[0].state

@@ -24,6 +24,22 @@ export function shortAction(action) {
   return {turn_on: 'ON', turn_off: 'OFF', open_cover: 'Apri', close_cover: 'Chiudi', open_valve: 'Apri', close_valve: 'Chiudi'}[action.action] || describeAction(action);
 }
 
+// The occurrence that really controls an entity now, from the lease it holds;
+// a slot paused by its condition holds no lease. Null when a timer or nothing
+// controls it. Older integrations without lease owners fall back to any slot.
+export function liveOccurrence(state, schedules, entityId) {
+  const occurrences = state.operational?.occurrences || [], leases = state.operational?.leases || [];
+  const covers = (o) => schedules.find((s) => s.id === o.schedule_id)?.target_entity_ids.includes(entityId);
+  if (leases.length && !leases.some((l) => 'occurrence_id' in l)) {
+    const o = occurrences.find((x) => x.state !== 'pending' && covers(x));
+    return o ? {occurrence: o, paused: o.condition_branch === 'false' || o.state === 'suspended'} : null;
+  }
+  const lease = leases.find((l) => l.entity_id === entityId && l.state === 'active');
+  if (lease) { const o = occurrences.find((x) => x.id === lease.occurrence_id); return o ? {occurrence: o, paused: false} : null; }
+  const o = occurrences.find((x) => x.condition_branch === 'false' && covers(x));
+  return o ? {occurrence: o, paused: true} : null;
+}
+
 // Blocks of one weekday for one entity, overnight slots split at midnight.
 export function dayBlocks(schedules, entityId, day) {
   const blocks = [];
@@ -73,7 +89,6 @@ export class ScheduleCreatorTimelineCard extends HTMLElement {
     const activeIds = new Set(active.map((p) => p.id));
     const schedules = (config.schedules || []).filter((s) => activeIds.has(s.profile_id));
     const timers = state.quick_timers || [];
-    const occurrences = state.operational?.occurrences || [];
     const wanted = Array.isArray(this.config.entities) && this.config.entities.length ? this.config.entities : null;
     const entities = [...new Set([...schedules.flatMap((s) => s.target_entity_ids), ...timers.map((t) => t.entity_id)])].filter((id) => !wanted || wanted.includes(id));
     if (wanted) entities.sort((a, b) => wanted.indexOf(a) - wanted.indexOf(b)); else entities.sort((a, b) => (hass.states[a]?.attributes?.friendly_name || a).localeCompare(hass.states[b]?.attributes?.friendly_name || b));
@@ -86,12 +101,12 @@ export class ScheduleCreatorTimelineCard extends HTMLElement {
     const rows = entities.map((entityId) => {
       const st = hass.states[entityId], domain = entityId.split('.')[0];
       const blocks = dayBlocks(schedules, entityId, day);
-      const running = today ? occurrences.find((o) => o.state !== 'pending' && schedules.find((s) => s.id === o.schedule_id)?.target_entity_ids.includes(entityId)) : null;
+      const live = today ? liveOccurrence(state, schedules, entityId) : null, running = live?.occurrence;
       const timer = timers.find((t) => t.entity_id === entityId);
       const next = today ? blocks.find((b) => b.start > now.minutes) : blocks[0];
       let status = '', kind = '';
       if (timer) { status = `Timer · fino alle ${clock(timer.expires_at)}`; kind = 'is-timer'; }
-      else if (running) { const paused = running.condition_branch === 'false' || running.state === 'suspended'; status = paused ? 'In pausa · condizione' : `${shortAction(schedules.find((s) => s.id === running.schedule_id)?.start_action)} · fino alle ${clock(running.end_utc)}`; kind = paused ? 'is-paused' : 'is-running'; }
+      else if (running) { const paused = live.paused; status = paused ? 'In pausa · condizione' : `${shortAction(schedules.find((s) => s.id === running.schedule_id)?.start_action)} · fino alle ${clock(running.end_utc)}`; kind = paused ? 'is-paused' : 'is-running'; }
       else if (next) status = `${today ? 'Prossima' : 'Dalle'} ${tlTime(next.start)}`;
       else status = st ? describeState(st, domain) : 'Non disponibile';
       const bars = blocks.map((b) => {

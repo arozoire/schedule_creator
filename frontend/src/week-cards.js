@@ -5,7 +5,7 @@ import { uiEscape } from './forms.js';
 import { messageFor } from './editor.js';
 import { describeAction } from './action-editor.js';
 import { temperatureColor } from './schedule-creator-card.js';
-import { shortAction } from './timeline-card.js';
+import { shortAction, liveOccurrence } from './timeline-card.js';
 
 const wkEsc = uiEscape;
 const WK_STYLE = '__SC_WK_CSS__';
@@ -144,7 +144,7 @@ class ScheduleCreatorWeekCard extends HTMLElement {
     const hass = this._hass, config = state.config || {}, now = this.now();
     const active = (config.profiles || []).filter((p) => p.active), activeIds = new Set(active.map((p) => p.id));
     const schedules = (config.schedules || []).filter((s) => activeIds.has(s.profile_id));
-    const timers = state.quick_timers || [], occurrences = state.operational?.occurrences || [];
+    const timers = state.quick_timers || [];
     const wanted = Array.isArray(this.config.entities) && this.config.entities.length ? this.config.entities : null;
     const name = (id) => hass.states[id]?.attributes?.friendly_name || id;
     let entities = [...new Set([...schedules.flatMap((s) => s.target_entity_ids), ...timers.map((t) => t.entity_id)])].filter((id) => !wanted || wanted.includes(id));
@@ -154,8 +154,7 @@ class ScheduleCreatorWeekCard extends HTMLElement {
     const lanes = entities.map((entityId, index) => {
       const base = WK_PALETTE[index % WK_PALETTE.length];
       const colorOf = (schedule) => { const d = schedule.start_action?.data || {}; if (schedule.start_action?.domain !== 'climate') return base; return d.state === 'off' ? '#9aa5ad' : d.temperature != null ? temperatureColor(d.temperature) : base; };
-      const running = occurrences.find((o) => o.state !== 'pending' && schedules.find((s) => s.id === o.schedule_id)?.target_entity_ids.includes(entityId));
-      const paused = running && (running.condition_branch === 'false' || running.state === 'suspended');
+      const live = liveOccurrence(state, schedules, entityId), running = live?.occurrence, paused = !!live?.paused;
       const timer = timers.find((t) => t.entity_id === entityId);
       const blocks = weekBlocks(schedules, entityId).map((b, i) => {
         const live = running?.schedule_id === b.schedule.id && ((b.start <= now.week && now.week < b.end) || (b.start <= now.week + WEEK && now.week + WEEK < b.end));

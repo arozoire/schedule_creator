@@ -892,3 +892,14 @@ button.sc-empty:hover { border-color: var(--sc-accent); }
   background: color-mix(in srgb, var(--warning-color, #f0a500) 16%, transparent);
   font-size: 0.85rem;
 }
+.sc-failures {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--error-color, #b3261e) 8%, var(--card-background-color, #fff));
+}
+.sc-failures ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 0.82rem;
+}

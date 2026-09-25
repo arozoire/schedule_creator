@@ -1,5 +1,6 @@
 """Test idempotent target-action journal preparation."""
 
+import asyncio
 import json
 from copy import deepcopy
 from dataclasses import replace
@@ -776,3 +777,22 @@ async def test_execution_coordinator_runs_due_retry_and_cancels_callback(
         coordinator.shutdown()
 
     cancel.assert_called_once_with()
+
+
+async def test_hanging_service_times_out_into_a_retry(hass) -> None:
+    """A device that never answers is retried instead of blocking the lock."""
+    repository, _store = await _repository(hass)
+    await async_prepare_target_actions(repository, NOW)
+
+    async def never_answers(*_args, **_kwargs) -> None:
+        await asyncio.Event().wait()
+
+    with (
+        patch("custom_components.schedule_creator.actions.SERVICE_CALL_TIMEOUT", 0.01),
+        patch.object(type(hass.services), "async_call", never_answers),
+    ):
+        result = await async_execute_target_actions(hass, repository, NOW)
+
+    operation = result.pending_operations[0]
+    assert operation.state is OperationState.RETRY_WAIT
+    assert operation.error_code == "service_error"

@@ -12,6 +12,7 @@ from homeassistant.exceptions import HomeAssistantError
 from .actions import (
     ACTION_RETRY_INTERVAL,
     MAX_ACTION_ATTEMPTS,
+    async_call_service,
     async_execute_target_actions,
 )
 from .journal import JournalCoordinator
@@ -35,6 +36,10 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 _COMPLETION_NAMESPACE = UUID("8d180d6c-f980-4c36-a5c7-0bfa750ba435")
+
+
+# A slot cancelled by a configuration change ends like a completed one.
+_ENDED_STATES = {OccurrenceState.COMPLETED, OccurrenceState.CANCELLED}
 
 
 def _utc(value: datetime) -> datetime:
@@ -161,7 +166,7 @@ async def async_prepare_schedule_end_actions(
         candidates = tuple(
             (occurrence, entity_id, occurrence.frozen_schedule.end_action)
             for occurrence in runtime.occurrences
-            if occurrence.state is OccurrenceState.COMPLETED
+            if occurrence.state in _ENDED_STATES
             and occurrence.frozen_schedule.end_action is not None
             for entity_id in occurrence.frozen_schedule.target_entity_ids
             if (occurrence.id, entity_id) in successful_targets
@@ -484,7 +489,8 @@ async def async_execute_restores(
             continue
         sent = await journal.async_mark_sent(operation.id, wall_clock)
         try:
-            await hass.services.async_call(
+            await async_call_service(
+                hass,
                 "scene",
                 "apply",
                 service_data={

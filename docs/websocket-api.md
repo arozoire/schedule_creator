@@ -412,3 +412,14 @@ schedule in un'unica scrittura; non sostituisce nulla.
 
 La conversione dal file della WSC avviene nella card (`frontend/src/wsc-import.js`),
 che mostra l'anteprima prima di inviare il comando.
+
+## Fasce in corso, pulizia ed errori (0.3.13)
+
+- `get_state.failures`: ultimi 20 comandi `failed_final`
+  (`at`, `kind`, `phase`, `entity_id`, `schedule_id`, `schedule_name`,
+  `quick_timer`, `error_code`, `attempts`).
+- `operational.leases[].occurrence_id`: occorrenza che detiene il lease
+  (`null` per un Quick Timer).
+- Una modifica di configurazione che ferma o cambia una fascia in corso la porta
+  a `cancelled`; la nuova versione, se esiste, parte subito.
+- I record conclusi da più di 7 giorni vengono eliminati dal runtime Store.

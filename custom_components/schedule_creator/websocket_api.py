@@ -21,11 +21,11 @@ from .const import (
 )
 from .group_api import GROUP_COMMANDS
 from .import_api import IMPORT_COMMANDS
-from .models import LeaseState, OccurrenceState, QuickTimerState
+from .models import LeaseState, OccurrenceState, OperationState, QuickTimerState
 from .profile_api import PROFILE_COMMANDS
 from .quick_timer_api import QUICK_TIMER_COMMANDS
 from .schedule_api import SCHEDULE_COMMANDS
-from .storage import StorageNotLoadedError
+from .storage import RuntimeStoreData, StorageNotLoadedError
 
 if TYPE_CHECKING:
     from . import ScheduleCreatorConfigEntry
@@ -55,6 +55,41 @@ def async_register_commands(hass: HomeAssistant) -> None:
     for command in IMPORT_COMMANDS:
         websocket_api.async_register_command(hass, command)
     hass.data[_REGISTERED] = True
+
+
+_MAX_FAILURES = 20
+
+
+def _failures(runtime: RuntimeStoreData) -> list[dict[str, Any]]:
+    """Commands that failed for good, newest first, so the card can show them."""
+
+    schedules = {item.id: item.frozen_schedule for item in runtime.occurrences}
+    failed = sorted(
+        (
+            operation
+            for operation in runtime.pending_operations
+            if operation.state is OperationState.FAILED_FINAL
+        ),
+        key=lambda operation: operation.updated_at,
+        reverse=True,
+    )[:_MAX_FAILURES]
+    result: list[dict[str, Any]] = []
+    for operation in failed:
+        schedule = schedules.get(operation.occurrence_id or "")
+        result.append(
+            {
+                "at": operation.updated_at.isoformat(),
+                "kind": operation.kind.value,
+                "phase": operation.payload.get("phase"),
+                "entity_id": operation.entity_id,
+                "schedule_id": None if schedule is None else schedule.id,
+                "schedule_name": None if schedule is None else schedule.name,
+                "quick_timer": (operation.occurrence_id or "").startswith("quick:"),
+                "error_code": operation.error_code,
+                "attempts": operation.attempt_count,
+            }
+        )
+    return result
 
 
 # Attributes the cards need to describe a restored state; the rest stays private.
@@ -179,12 +214,14 @@ def websocket_get_state(
                     {
                         "entity_id": lease.entity_id,
                         "controller_type": lease.controller_type.value,
+                        "occurrence_id": lease.occurrence_id,
                         "state": lease.state.value,
                     }
                     for lease in runtime.leases
                     if lease.state in {LeaseState.ACTIVE, LeaseState.SUSPENDED}
                 ],
             },
+            "failures": _failures(runtime),
         }
         connection.send_result(msg["id"], result)
     except (StorageNotLoadedError, OSError):

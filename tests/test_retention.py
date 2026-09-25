@@ -12,7 +12,11 @@ from custom_components.schedule_creator.models import (
     IntegrationConfig,
     Occurrence,
     OccurrenceState,
+    OperationKind,
+    OperationState,
     PendingOperation,
+    QuickTimer,
+    QuickTimerState,
     Snapshot,
 )
 from custom_components.schedule_creator.planner import plan_occurrences
@@ -136,3 +140,81 @@ async def test_prune_is_idempotent_after_removal(hass):
     assert second.occurrences == ()
     assert second.revision == 1
     assert len(store.saves) == 2
+
+
+def _finished_runtime() -> RuntimeStoreData:
+    """A completed slot and a completed timer, each with a finished operation."""
+    bundle = _bundle()
+    occurrence = replace(
+        Occurrence.from_dict(bundle["occurrence"]),
+        state=OccurrenceState.COMPLETED,
+    )
+    snapshot = Snapshot.from_dict(bundle["snapshot"])
+    operation = replace(
+        PendingOperation.from_dict(bundle["pending_operation"]),
+        state=OperationState.SUCCEEDED,
+        next_retry_at=None,
+        error_code=None,
+    )
+    timer = replace(
+        QuickTimer.from_dict(bundle["quick_timer"]),
+        state=QuickTimerState.COMPLETED,
+        snapshot_id=None,
+    )
+    restore = replace(
+        operation,
+        id="eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+        sequence=2,
+        occurrence_id=timer.controller_id,
+        kind=OperationKind.RESTORE,
+    )
+    return RuntimeStoreData(
+        schema_version=1,
+        revision=0,
+        operation_counter=2,
+        occurrences=(occurrence,),
+        snapshots=(snapshot,),
+        leases=(),
+        pending_operations=(operation, restore),
+        quick_timers=(timer,),
+        notification_deduplication_keys=(f"{occurrence.id}:start:rule",),
+        updated_at=NOW,
+    )
+
+
+async def test_prune_removes_finished_controllers_with_everything_they_own(hass):
+    """Operations, snapshots, timers and notification keys go with the slot."""
+    runtime = _finished_runtime()
+    repository, _store = await _repository(hass, runtime)
+    prune_at = runtime.occurrences[0].end_utc + OCCURRENCE_RETENTION + timedelta(days=1)
+
+    result = await async_prune_terminal_occurrences(repository, prune_at)
+
+    assert result.occurrences == ()
+    assert result.snapshots == ()
+    assert result.pending_operations == ()
+    assert result.quick_timers == ()
+    assert result.notification_deduplication_keys == ()
+    assert result.revision == 1
+
+
+async def test_prune_keeps_controllers_with_unfinished_operations(hass):
+    """A retry still waiting protects its slot and its snapshot."""
+    runtime = _finished_runtime()
+    waiting = replace(
+        runtime.pending_operations[0],
+        state=OperationState.RETRY_WAIT,
+        next_retry_at=NOW,
+    )
+    runtime = replace(
+        runtime, pending_operations=(waiting, runtime.pending_operations[1])
+    )
+    repository, _store = await _repository(hass, runtime)
+    prune_at = runtime.occurrences[0].end_utc + OCCURRENCE_RETENTION + timedelta(days=1)
+
+    result = await async_prune_terminal_occurrences(repository, prune_at)
+
+    assert result.occurrences == runtime.occurrences
+    assert result.snapshots == runtime.snapshots
+    assert result.pending_operations == (waiting,)
+    assert result.quick_timers == ()
