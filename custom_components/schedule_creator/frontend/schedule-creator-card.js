@@ -640,7 +640,7 @@ function weeklySegments(schedules) {
 
 
 const STYLE = ":host {\n  overflow-anchor: none;\n  display: block;\n  font-family: var(--primary-font-family, Arial, sans-serif);\n  color: var(--primary-text-color, #202a35);\n  container-type: inline-size;\n  --sc-accent: var(--primary-color, #00897b);\n  --sc-muted: var(--secondary-text-color, #647180);\n  --sc-surface: var(--secondary-background-color, #f4f6f8);\n  --sc-border: var(--divider-color, #dce2e7);\n}\n* {\n  box-sizing: border-box;\n}\nha-card {\n  display: block;\n  overflow: hidden;\n  padding: 24px;\n  border-radius: var(--ha-card-border-radius, 20px);\n  background: var(--card-background-color, #fff);\n}\nbutton,\ninput,\nselect,\ntextarea {\n  font: inherit;\n  color: inherit;\n}\nbutton {\n  min-height: 40px;\n  padding: 9px 14px;\n  border: 1px solid var(--sc-border);\n  border-radius: 10px;\n  background: var(--card-background-color, #fff);\n  cursor: pointer;\n  line-height: 1.3;\n  transition:\n    background 0.15s,\n    border-color 0.15s;\n}\nbutton:hover {\n  background: var(--sc-surface);\n  border-color: var(--sc-accent);\n}\nbutton:disabled {\n  opacity: 0.5;\n  cursor: wait;\n}\nbutton:focus-visible,\ninput:focus-visible,\nselect:focus-visible,\ntextarea:focus-visible,\nsummary:focus-visible {\n  outline: 3px solid var(--sc-accent);\n  outline-offset: 3px;\n}\nbutton[data-command^=\"delete\"],\nbutton[data-command^=\"remove\"] {\n  color: var(--error-color, #b3261e);\n}\nbutton[data-command=\"newSchedule\"],\n.sc-actions button[type=\"submit\"] {\n  background: var(--sc-accent);\n  color: var(--text-primary-color, #fff);\n  border-color: var(--sc-accent);\n  font-weight: 600;\n}\n.card-header {\n  margin-bottom: 20px;\n}\n.hdr-row1 {\n  display: flex;\n  gap: 12px;\n  align-items: center;\n  margin-bottom: 20px;\n}\n.card-title {\n  font-size: 1.4rem;\n  font-weight: 700;\n  letter-spacing: -0.03em;\n}\n.sc-version {\n  margin-left: auto;\n  color: var(--sc-muted);\n  font-size: 0.72rem;\n  border: 1px solid var(--sc-border);\n  border-radius: 20px;\n  padding: 4px 8px;\n}\n.sc-eyebrow {\n  font-size: 0.7rem;\n  font-weight: 700;\n  letter-spacing: 0.1em;\n  text-transform: uppercase;\n  color: var(--sc-muted);\n  margin: 0 0 8px;\n}\n.hdr-row2 {\n  display: flex;\n  gap: 8px;\n  overflow-x: auto;\n  padding: 3px 2px 8px;\n}\n.profile-chip {\n  flex-shrink: 0;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  border-radius: 24px;\n  color: var(--sc-muted);\n}\n.profile-chip.viewed {\n  color: var(--primary-text-color, #202a35);\n  border-color: var(--pchip-color);\n  background: color-mix(\n    in srgb,\n    var(--pchip-color) 12%,\n    var(--card-background-color, #fff)\n  );\n  font-weight: 600;\n}\n.profile-chip.active-op::before {\n  content: \"\";\n  width: 7px;\n  height: 7px;\n  border-radius: 50%;\n  background: var(--success-color, #388e3c);\n}\n.profile-status-bar {\n  display: flex;\n  align-items: center;\n  flex-wrap: wrap;\n  gap: 8px;\n  font-size: 0.8rem;\n  color: var(--sc-muted);\n  margin: 0 0 18px;\n}\n.sc-badge {\n  display: inline-flex;\n  align-items: center;\n  padding: 5px 9px;\n  border-radius: 6px;\n  background: var(--sc-surface);\n  font-size: 0.73rem;\n  font-weight: 600;\n}\n.sc-badge.is-active {\n  color: var(--success-color, #287d39);\n  background: color-mix(\n    in srgb,\n    var(--success-color, #287d39) 10%,\n    var(--card-background-color, #fff)\n  );\n}\n.tab-bar {\n  display: flex;\n  overflow-x: auto;\n  gap: 5px;\n  border-bottom: 1px solid var(--sc-border);\n  margin-bottom: 20px;\n  padding-bottom: 8px;\n}\n.tab {\n  white-space: nowrap;\n  border-color: transparent;\n  color: var(--sc-muted);\n}\n.tab.active {\n  color: var(--sc-accent);\n  background: color-mix(\n    in srgb,\n    var(--sc-accent) 9%,\n    var(--card-background-color, #fff)\n  );\n  font-weight: 600;\n}\n.sc-toolbar,\n.sc-controls,\n.sc-actions,\n.sc-entry-actions {\n  display: flex;\n  gap: 8px;\n  flex-wrap: wrap;\n  align-items: center;\n}\n.sc-toolbar {\n  justify-content: space-between;\n  margin: 20px 0 14px;\n}\n.sc-toolbar h2 {\n  font-size: 1.05rem;\n  margin: 0;\n}\n.sc-toolbar p {\n  margin: 4px 0 0;\n  color: var(--sc-muted);\n  font-size: 0.8rem;\n}\n.sc-controls {\n  margin: 14px 0;\n}\n.sc-week {\n  display: grid;\n  grid-template-columns: repeat(7, minmax(0, 1fr));\n  gap: 7px;\n  margin: 14px 0 24px;\n}\n.sc-day {\n  min-width: 0;\n  min-height: 124px;\n  padding: 10px 7px;\n  border: 1px solid var(--sc-border);\n  border-radius: 12px;\n  background: var(--sc-surface);\n}\n.sc-day > strong {\n  display: block;\n  color: var(--sc-muted);\n  font-size: 0.72rem;\n  font-weight: 600;\n  margin: 0 2px 10px;\n}\n.sc-slot {\n  margin-top: 7px;\n  padding: 8px 7px;\n  border-radius: 6px;\n  background: var(--card-background-color, #fff);\n  border-left: 3px solid var(--pchip-color, var(--sc-accent));\n  font-size: 0.72rem;\n  overflow-wrap: anywhere;\n  line-height: 1.5;\n}\n.sc-slot time {\n  font-size: 0.66rem;\n  font-variant-numeric: tabular-nums;\n  color: var(--sc-muted);\n}\n.sc-slot.is-off {\n  opacity: 0.6;\n  border-left-style: dashed;\n}\n.sc-day-empty {\n  color: var(--sc-muted);\n  font-size: 0.72rem;\n}\n.sc-list {\n  list-style: none;\n  padding: 0;\n  margin: 4px 0 0;\n  display: grid;\n  gap: 4px;\n}\n.sc-entry {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  padding: 7px 8px 7px 12px;\n  border: 1px solid var(--sc-border);\n  border-left: 3px solid var(--block-color, var(--sc-accent));\n  border-radius: 8px;\n}\n.sc-entry-copy {\n  min-width: 0;\n  display: grid;\n  gap: 2px;\n}\n.sc-entry strong {\n  font-size: 0.84rem;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.sc-entry .sc-meta {\n  margin: 0;\n  font-size: 0.72rem;\n  line-height: 1.35;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.sc-meta {\n  font-size: 0.76rem;\n  color: var(--sc-muted);\n  margin: 6px 0 0;\n  overflow-wrap: anywhere;\n  line-height: 1.5;\n}\n.sc-entry-actions {\n  flex-shrink: 0;\n  flex-wrap: nowrap !important;\n  gap: 4px !important;\n}\n.sc-entry-actions button {\n  font-size: 0.72rem;\n  min-height: 30px;\n  padding: 4px 9px;\n  border-radius: 7px;\n}\n.sc-empty {\n  padding: 30px 18px;\n  border: 1px dashed var(--sc-border);\n  border-radius: 14px;\n  background: var(--sc-surface);\n  text-align: center;\n  color: var(--sc-muted);\n  font-size: 0.85rem;\n  line-height: 1.6;\n}\n.sc-empty strong {\n  display: block;\n  color: var(--primary-text-color, #202a35);\n  font-size: 1rem;\n  margin-bottom: 5px;\n}\ndetails {\n  border: 1px solid var(--sc-border);\n  border-radius: 12px;\n  padding: 12px 14px;\n  margin: 12px 0;\n}\nsummary {\n  cursor: pointer;\n  font-size: 0.82rem;\n  font-weight: 600;\n  min-height: 24px;\n  line-height: 24px;\n}\ndetails[open] > summary {\n  margin-bottom: 12px;\n}\n.sc-operational {\n  margin-top: 20px;\n  color: var(--sc-muted);\n  font-size: 0.8rem;\n}\n.sc-operational p {\n  line-height: 1.6;\n}\n.sc-editor {\n  padding: 22px;\n  margin: 20px 0;\n  border: 1px solid var(--sc-border);\n  border-radius: 16px;\n  display: grid;\n  gap: 16px;\n  background: var(--sc-surface);\n}\n.sc-editor h3 {\n  font-size: 1.15rem;\n  margin: 0;\n  letter-spacing: -0.02em;\n}\n.sc-editor p {\n  font-size: 0.8rem;\n  color: var(--sc-muted);\n  line-height: 1.6;\n  margin: 0;\n}\n.sc-editor label {\n  display: grid;\n  gap: 7px;\n  font-size: 0.8rem;\n  font-weight: 500;\n  min-width: 0;\n}\n.sc-editor input,\n.sc-editor select,\n.sc-editor textarea {\n  width: 100%;\n  max-width: 100%;\n  min-height: 44px;\n  padding: 10px 12px;\n  background: var(--card-background-color, #fff);\n  border: 1px solid var(--sc-border);\n  border-radius: 8px;\n  font-size: 0.9rem;\n}\n.sc-editor textarea {\n  font-family: monospace;\n  line-height: 1.5;\n  resize: vertical;\n}\n.sc-editor fieldset {\n  min-width: 0;\n  border: 1px solid var(--sc-border);\n  border-radius: 12px;\n  padding: 16px;\n  display: grid;\n  gap: 14px;\n  background: var(--card-background-color, #fff);\n  margin: 0;\n}\n.sc-editor legend {\n  font-size: 0.8rem;\n  font-weight: 700;\n  padding: 0 7px;\n}\n.sc-editor details {\n  margin: 0;\n  background: var(--card-background-color, #fff);\n}\n.sc-editor details > * + * {\n  margin-top: 12px;\n}\n.sc-check {\n  display: flex !important;\n  align-items: center;\n  gap: 9px !important;\n}\n.sc-editor input[type=\"checkbox\"] {\n  width: 18px !important;\n  min-height: 18px;\n  height: 18px;\n  accent-color: var(--sc-accent);\n  flex-shrink: 0;\n}\n.sc-entities {\n  max-height: 240px;\n  overflow: auto;\n  display: grid;\n  gap: 5px;\n  border: 1px solid var(--sc-border);\n  padding: 6px;\n  border-radius: 10px;\n  background: var(--card-background-color, #fff);\n}\n.sc-entities label {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  min-height: 48px;\n  padding: 8px 10px;\n  border-radius: 7px;\n  font-weight: 400;\n}\n.sc-entities label:hover {\n  background: var(--sc-surface);\n}\n.sc-entity-name {\n  display: block;\n  font-weight: 500;\n}\n.sc-entity-id {\n  display: block;\n  font-size: 0.7rem;\n  color: var(--sc-muted);\n  margin-top: 3px;\n  overflow-wrap: anywhere;\n}\n.sc-days {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 7px;\n}\n.sc-days label {\n  padding: 8px;\n  border: 1px solid var(--sc-border);\n  border-radius: 8px;\n}\n.sc-actions {\n  padding-top: 16px;\n  border-top: 1px solid var(--sc-border);\n}\n.sc-actions button {\n  min-width: 100px;\n}\n.status,\n.sc-error {\n  padding: 12px 14px;\n  border-radius: 10px;\n  font-size: 0.85rem;\n  line-height: 1.6;\n  margin: 12px 0;\n  background: var(--sc-surface);\n}\n.sc-error,\n.error {\n  color: var(--error-color, #b3261e);\n  background: color-mix(\n    in srgb,\n    var(--error-color, #b3261e) 8%,\n    var(--card-background-color, #fff)\n  );\n  overflow-wrap: anywhere;\n}\n[hidden],\n.sc-entities label[hidden] {\n  display: none !important;\n}\n@container (max-width:600px) {\n  ha-card {\n    padding: 16px;\n  }\n  .card-title {\n    font-size: 1.2rem;\n  }\n  .sc-week {\n    grid-template-columns: 1fr;\n    gap: 7px;\n  }\n  .sc-day {\n    display: grid;\n    grid-template-columns: 34px 1fr;\n    gap: 5px 9px;\n    min-height: 45px;\n    padding: 9px;\n  }\n  .sc-day > strong {\n    grid-row: 1/20;\n    margin: 5px 0;\n  }\n  .sc-slot {\n    margin: 0;\n    padding: 6px 9px;\n  }\n  .sc-slot time {\n    margin-right: 8px;\n  }\n  .sc-editor {\n    padding: 14px;\n  }\n  .sc-toolbar {\n    align-items: flex-start;\n  }\n  .sc-toolbar .sc-controls {\n    margin: 0;\n  }\n  .sc-days {\n    gap: 5px;\n  }\n  .sc-days label {\n    padding: 7px;\n  }\n  .sc-editor fieldset {\n    padding: 12px;\n  }\n}\n@media (prefers-reduced-motion: reduce) {\n  * {\n    transition: none !important;\n  }\n}\n.sc-slot time {\n  display: block;\n}\n.sc-editor {\n  scroll-margin-top: 16px;\n}\n.sc-error-details textarea {\n  width: 100%;\n  box-sizing: border-box;\n  background: var(--card-background-color, #fff);\n  color: var(--primary-text-color, #202a35);\n  border: 1px solid var(--sc-border);\n  border-radius: 8px;\n  padding: 10px;\n  font: 12px/1.5 monospace;\n  resize: vertical;\n}\n.sc-error-details p {\n  font-size: .8rem;\n  color: var(--sc-muted);\n}\n.sc-timeline {\n  overflow-x: auto;\n  padding: 8px 0 14px;\n  overscroll-behavior-x: contain;\n}\n.sc-timeline-head, .sc-timeline-grid {\n  display: grid;\n  grid-template-columns: 38px repeat(7,minmax(0,1fr));\n  gap: 4px;\n}\n.sc-timeline-head { margin-bottom: 10px; text-align: center; font-size: .74rem; color: var(--sc-muted); }\n.sc-time-axis, .sc-day-track { position: relative; height: 576px; }\n.sc-time-axis span { position:absolute; right:4px; transform:translateY(-50%); font-size:.65rem; font-variant-numeric:tabular-nums; color:var(--sc-muted); }\n.sc-day-track {\n  border-radius: 7px;\n  background: repeating-linear-gradient(to bottom, var(--sc-border) 0 1px, transparent 1px 24px), var(--sc-surface);\n}\n.sc-time-block {\n  position:absolute;\n  display:flex;\n  flex-direction:column;\n  align-items:flex-start;\n  justify-content:flex-start;\n  min-height:8px;\n  padding:3px 4px;\n  border:1px solid var(--card-background-color,#fff);\n  border-left:3px solid var(--block-color);\n  border-radius:5px;\n  background:color-mix(in srgb,var(--block-color) 34%,var(--card-background-color,#fff));\n  color:var(--primary-text-color,#202a35);\n  font-size:.68rem;\n  line-height:1.3;\n  text-align:left;\n  overflow:hidden;\n}\n.sc-time-block span { font-weight:600; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }\n.sc-time-block small { font-size:.6rem; white-space:nowrap; }\n.sc-time-block:hover { background:color-mix(in srgb,var(--block-color) 38%,var(--card-background-color,#fff)); }\n.sc-time-block.is-off { opacity:.55; border-style:dashed; }\n.sc-dialog {\n  width:min(680px,calc(100vw - 24px));\n  max-height:calc(100dvh - 32px);\n  padding:0 20px 20px;\n  border:1px solid var(--sc-border);\n  border-radius:18px;\n  background:var(--card-background-color,#fff);\n  color:var(--primary-text-color,#202a35);\n  box-shadow:0 20px 70px #0005;\n  overscroll-behavior:contain;\n}\n.sc-dialog::backdrop { background:#0008; }\n.sc-dialog-heading { position:sticky; top:0; z-index:2; display:flex; align-items:center; justify-content:space-between; padding:12px 0; background:var(--card-background-color,#fff); border-bottom:1px solid var(--sc-border); }\n.sc-dialog-heading button { min-width:40px; }\n.sc-dialog .sc-editor { margin:16px 0 0; padding:0; border:0; background:transparent; }\n.sc-dialog .sc-actions { position:sticky; bottom:-20px; padding:12px 0; background:var(--card-background-color,#fff); z-index:1; }\n@media (max-width:600px) {\n  .sc-dialog { width:calc(100vw - 12px); max-height:calc(100dvh - 12px); padding:0 14px 14px; }\n  .sc-dialog .sc-actions { bottom:-14px; }\n}\n@container (max-width:600px) {\n  .sc-slot time {\n    display: inline-block;\n  }\n}\n\n/* Desired-state action editor (weekly-schedule-card Quick Timer style) */\n.sc-field { display: grid; gap: 8px; min-width: 0; }\n.sc-field-label { font-size: .8rem; font-weight: 500; }\n.sc-current { display: flex; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--sc-border); }\n.sc-current strong { color: var(--primary-text-color, #202a35); font-weight: 600; }\n.sc-action-fields { display: grid; gap: 16px; }\n.sc-choices {\n  display: flex; flex-wrap: wrap; gap: 4px; padding: 4px;\n  border-radius: 12px; background: var(--sc-surface);\n}\n.sc-editor label.sc-choice {\n  position: relative; flex: 1 1 auto; display: flex; flex-direction: column;\n  align-items: center; justify-content: center; gap: 4px; min-width: 64px; min-height: 42px;\n  padding: 8px 10px; border: 1px solid transparent; border-radius: 9px;\n  font-size: .8rem; font-weight: 500; text-align: center; cursor: pointer; color: var(--sc-muted);\n}\n.sc-editor .sc-choice input {\n  position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; margin: 0;\n  opacity: 0; cursor: pointer;\n}\n.sc-choice:hover { color: var(--primary-text-color, #202a35); }\n.sc-choice.is-selected, .sc-choice:has(input:checked) {\n  color: var(--sc-accent); border-color: var(--sc-accent);\n  background: var(--card-background-color, #fff); font-weight: 600;\n  box-shadow: 0 1px 3px #0001;\n}\n.sc-choice:has(input:focus-visible) { outline: 3px solid var(--sc-accent); outline-offset: 2px; }\n.sc-mode-buttons { background: transparent; padding: 0; gap: 6px; }\n.sc-mode-buttons .sc-choice { min-height: 64px; border-color: var(--sc-border); background: var(--card-background-color, #fff); }\n.sc-choice ha-icon { --mdc-icon-size: 20px; }\n.sc-range-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }\n.sc-range-value { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; color: var(--sc-accent); }\n.sc-editor .sc-range-value input {\n  width: 84px; min-height: 40px; padding: 6px 10px; text-align: center;\n  font-size: 1.15rem; font-weight: 600; color: var(--sc-accent); background: var(--sc-surface); border-color: transparent;\n}\n.sc-editor input[type=\"range\"] {\n  -webkit-appearance: none; appearance: none; width: 100%; min-height: 24px; padding: 0;\n  border: 0; background: transparent; accent-color: var(--sc-accent);\n}\ninput[type=\"range\"]::-webkit-slider-runnable-track { height: 6px; border-radius: 6px; background: linear-gradient(to right, var(--sc-accent) var(--sc-fill, 0%), var(--sc-border) var(--sc-fill, 0%)); }\ninput[type=\"range\"]::-moz-range-track { height: 6px; border-radius: 6px; background: var(--sc-border); }\ninput[type=\"range\"]::-moz-range-progress { height: 6px; border-radius: 6px; background: var(--sc-accent); }\ninput[type=\"range\"]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -8px; border-radius: 50%; border: 4px solid var(--card-background-color, #fff); background: var(--sc-accent); box-shadow: 0 0 0 1px var(--sc-accent); }\ninput[type=\"range\"]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; border: 4px solid var(--card-background-color, #fff); background: var(--sc-accent); box-shadow: 0 0 0 1px var(--sc-accent); }\n.sc-range-labels { display: flex; justify-content: space-between; font-size: .7rem; color: var(--sc-muted); }\n.sc-more { padding: 10px 12px; }\n.sc-name-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }\n.sc-name-row button { min-height: 44px; }\n.sc-summary { padding: 12px 14px; border-radius: 10px; background: var(--card-background-color, #fff); border: 1px solid var(--sc-border); }\n.sc-summary p { margin-top: 6px !important; }\n.sc-notice { color: var(--success-color, #287d39); background: color-mix(in srgb, var(--success-color, #287d39) 9%, var(--card-background-color, #fff)); }\n.sc-warning { color: var(--warning-color, #8a5a00); background: color-mix(in srgb, var(--warning-color, #f0a500) 12%, var(--card-background-color, #fff)); }\n.sc-actions button.sc-danger { background: var(--error-color, #b3261e); border-color: var(--error-color, #b3261e); color: #fff; }\n.sc-overview-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; font-size: .82rem; }\n.sc-overview-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 8px 10px; border: 1px solid var(--sc-border); border-radius: 8px; }\n.sc-overview-row .sc-meta { margin: 0; flex-basis: 100%; padding-left: 18px; }\n.sc-overview-list li:not(.sc-overview-row) { padding: 8px 10px; border-radius: 8px; background: var(--sc-surface); }\n.sc-overview-list li .sc-meta { display: block; margin-top: 3px; }\n.sc-overview h4 { margin: 14px 0 8px; font-size: .82rem; }\n.sc-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pchip-color, var(--sc-accent)); flex-shrink: 0; }\n.sc-maintenance .sc-controls { margin: 10px 0 0; }\n\n/* Time bar with magnets and day shortcuts (weekly-schedule-card style) */\n.sc-timebar { position: relative; height: 48px; border-radius: 8px; background: var(--sc-surface); overflow: hidden; touch-action: none; user-select: none; }\n.sc-tb-bg { position: absolute; top: 6px; bottom: 6px; border-radius: 6px; background: var(--block-color); opacity: .4; pointer-events: auto; }\n.sc-tb-magnet { position: absolute; top: 0; bottom: 0; width: 2px; transform: translateX(-50%); background: color-mix(in srgb, var(--sc-accent) 45%, transparent); pointer-events: none; }\n.sc-tb-magnet.is-near { background: var(--sc-accent); box-shadow: 0 0 6px var(--sc-accent); }\n.sc-tb-edit { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: var(--sc-accent); color: var(--text-primary-color, #fff); font-size: .72rem; font-weight: 700; font-variant-numeric: tabular-nums; cursor: grab; touch-action: none; box-shadow: 0 2px 8px #0003; overflow: hidden; }\n.sc-tb-edit:active { cursor: grabbing; }\n.sc-tb-edit.is-static { cursor: default; opacity: .75; }\n.sc-tb-label { pointer-events: none; white-space: nowrap; padding: 0 22px; }\n.sc-tb-handle { position: absolute; top: 0; bottom: 0; width: 22px; display: flex; align-items: center; justify-content: center; cursor: ew-resize; }\n.sc-tb-handle::after { content: \"\"; width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 2px solid var(--sc-accent); box-shadow: 0 1px 4px #0004; }\n.sc-tb-handle[data-handle=\"start\"] { left: 0; }\n.sc-tb-handle[data-handle=\"end\"] { right: 0; }\n.sc-tb-ticks { display: flex; justify-content: space-between; font-size: .66rem; color: var(--sc-muted); margin-top: -8px; }\n.sc-time-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }\n.sc-snap, .sc-shortcuts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: .75rem; color: var(--sc-muted); }\n.sc-editor .sc-pill { min-height: 30px; padding: 4px 12px; border-radius: 16px; font-size: .76rem; color: var(--sc-muted); }\n.sc-editor .sc-pill.is-selected { color: var(--sc-accent); border-color: var(--sc-accent); background: color-mix(in srgb, var(--sc-accent) 12%, var(--card-background-color, #fff)); font-weight: 600; }\n.sc-days { gap: 6px !important; }\n.sc-editor .sc-days label.sc-day-chip { position: relative; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border-radius: 50%; border: 1.5px solid var(--sc-border); font-size: .74rem; font-weight: 600; color: var(--sc-muted); cursor: pointer; }\n.sc-editor .sc-day-chip input { position: absolute; inset: 0; width: 100% !important; height: 100% !important; margin: 0; opacity: 0; cursor: pointer; }\n.sc-day-chip:has(input:checked) { background: var(--sc-accent); border-color: var(--sc-accent) !important; color: var(--text-primary-color, #fff) !important; }\n.sc-day-chip:has(input:focus-visible) { outline: 3px solid var(--sc-accent); outline-offset: 2px; }\n\n/* Conditions */\n.sc-condition-group { display: grid; gap: 12px; }\n.sc-editor fieldset.sc-condition { background: var(--card-background-color, #fff); }\n\n/* Icon and colour pickers */\n.sc-icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); gap: 6px; max-height: 232px; overflow: auto; padding: 2px; }\n.sc-editor label.sc-icon-choice { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 64px; padding: 6px 4px; border: 1px solid var(--sc-border); border-radius: 10px; cursor: pointer; color: var(--sc-muted); text-align: center; }\n.sc-icon-choice small { font-size: .64rem; line-height: 1.2; }\n.sc-editor .sc-icon-choice input, .sc-editor .sc-swatch input[type=\"radio\"] { position: absolute; inset: 0; width: 100% !important; height: 100% !important; min-height: 0; margin: 0; opacity: 0; cursor: pointer; }\n.sc-icon-choice.is-selected, .sc-icon-choice:has(input:checked) { color: var(--sc-accent); border-color: var(--sc-accent); background: color-mix(in srgb, var(--sc-accent) 10%, var(--card-background-color, #fff)); }\n.sc-swatches { display: flex; flex-wrap: wrap; gap: 8px; }\n.sc-editor label.sc-swatch { position: relative; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: var(--swatch, var(--sc-surface)); border: 2px solid var(--card-background-color, #fff); box-shadow: 0 0 0 1px var(--sc-border); cursor: pointer; font-size: .66rem; color: var(--sc-muted); }\n.sc-swatch.is-selected, .sc-swatch:has(input[type=\"radio\"]:checked) { box-shadow: 0 0 0 3px var(--sc-accent); }\n.sc-editor .sc-swatch-custom input[type=\"color\"] { position: absolute; inset: 0; width: 100% !important; height: 100% !important; min-height: 0; padding: 0; opacity: 0; cursor: pointer; z-index: 1; }\n.sc-swatch-custom span { font-size: 1rem; }\n.tab ha-icon, .profile-chip ha-icon { --mdc-icon-size: 18px; margin-right: 4px; }\n.tab.active { border-bottom: 2px solid var(--tab-color, var(--sc-accent)); }\n.sc-tb-edit.is-narrow .sc-tb-label { visibility: hidden; }\n.sc-tb-edit.is-narrow .sc-tb-handle { width: 16px; }\n.sc-tb-edit.is-narrow .sc-tb-handle::after { width: 12px; height: 12px; }\n\n/* ---- Direction A \"Agenda viva\" (0.3.7) ---- */\n.sc-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }\n.sc-logo { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--sc-accent); background: color-mix(in srgb, var(--sc-accent) 12%, var(--card-background-color, #fff)); }\n.sc-logo svg { width: 22px; height: 22px; }\n.sc-head-copy { display: grid; gap: 2px; flex-grow: 1; min-width: 0; }\n.sc-sub { font-size: .8rem; color: var(--sc-muted); }\n.sc-head .sc-version { margin-left: 0; }\n.sc-head-actions { display: flex; gap: 8px; }\n.sc-segmented { display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: var(--sc-surface); overflow-x: auto; }\n.sc-segmented .profile-chip { flex: 1 0 auto; justify-content: center; min-height: 38px; border: 0; border-radius: 10px; background: transparent; color: var(--sc-muted); font-weight: 600; }\n.sc-segmented .profile-chip.viewed { background: var(--card-background-color, #fff); color: var(--primary-text-color, #202a35); box-shadow: 0 1px 3px #00000014; font-weight: 700; }\n.sc-now { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 4px 0 8px; }\n.sc-now-tile { display: grid; gap: 5px; text-align: left; padding: 14px 16px; border: 0; border-radius: 16px; min-height: 0; color: var(--primary-text-color, #202a35); }\n.sc-now-tile.is-running { background: color-mix(in srgb, var(--sc-accent) 12%, var(--card-background-color, #fff)); }\n.sc-now-tile.is-paused { background: color-mix(in srgb, var(--warning-color, #f0a500) 14%, var(--card-background-color, #fff)); }\n.sc-now-tile.is-timer { background: var(--sc-surface); }\n.sc-now-tile:hover { border: 0; filter: brightness(.98); }\n.sc-now-label { font-size: .72rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--sc-accent); }\n.sc-now-tile.is-paused .sc-now-label { color: color-mix(in srgb, var(--warning-color, #f0a500) 60%, #000); }\n.sc-now-tile strong { font-size: 1.2rem; letter-spacing: -0.02em; }\n.sc-now-detail { font-size: .78rem; color: var(--sc-muted); }\n.sc-now-empty { font-size: .82rem; color: var(--sc-muted); margin: 4px 0 8px; }\n.sc-toolbar { flex-wrap: wrap; gap: 8px 12px; }\n.sc-toolbar .tab-bar { border: 0; margin: 0; padding: 0; gap: 6px; }\n.sc-toolbar .tab { min-height: 32px; padding: 4px 12px; border-radius: 16px; background: var(--sc-surface); font-size: .8rem; }\n.sc-toolbar .tab.active { background: var(--primary-text-color, #202a35); color: var(--card-background-color, #fff); border-bottom: 0; }\n.sc-timeline-head strong.is-today { color: var(--sc-accent); font-weight: 800; }\n.sc-day-track.is-today { background: color-mix(in srgb, var(--sc-accent) 8%, var(--sc-surface)); box-shadow: inset 0 0 0 2px var(--sc-accent); }\n.sc-now-line { position: absolute; left: -3px; right: -3px; height: 2px; background: var(--error-color, #d6453d); z-index: 2; pointer-events: none; }\n.sc-time-block.is-running { box-shadow: 0 0 0 2px var(--card-background-color, #fff), 0 0 0 4px var(--success-color, #1f9d55); z-index: 1; }\n.sc-time-block.is-paused { border: 2px dashed color-mix(in srgb, var(--warning-color, #f0a500) 70%, #000); z-index: 1; }\n.sc-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .72rem; color: var(--sc-muted); margin: 6px 0 12px; }\n.sc-legend span { display: inline-flex; align-items: center; gap: 6px; }\n.sc-legend i { display: inline-block; width: 14px; height: 12px; border-radius: 4px; }\n.sc-legend .sc-legend-temp { width: 40px; background: linear-gradient(90deg, rgb(74,144,217), rgb(150,196,232), rgb(240,138,75)); }\n.sc-legend .sc-legend-running { box-shadow: 0 0 0 2px var(--success-color, #1f9d55); }\n.sc-legend .sc-legend-paused { border: 2px dashed var(--warning-color, #f0a500); box-sizing: border-box; }\n.sc-legend .sc-legend-now { height: 2px; background: var(--error-color, #d6453d); }\n.sc-editor h3 small { display: block; font-size: .75rem; font-weight: 600; color: var(--sc-muted); letter-spacing: 0; }\n.sc-section-label { font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--sc-muted); margin-bottom: -8px; }\n.sc-entity-pills { display: flex; flex-wrap: wrap; gap: 8px; }\n.sc-editor label.sc-entity-pill { position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 6px 14px; border-radius: 18px; background: var(--sc-surface); color: var(--sc-muted); font-weight: 600; cursor: pointer; }\n.sc-editor .sc-entity-pill input { position: absolute; inset: 0; width: 100% !important; height: 100% !important; min-height: 0; margin: 0; opacity: 0; cursor: pointer; }\n.sc-entity-pill::before { content: \"\"; width: 8px; height: 8px; border-radius: 50%; background: currentColor; opacity: .35; }\n.sc-entity-pill:has(input:checked) { color: var(--sc-accent); background: color-mix(in srgb, var(--sc-accent) 14%, var(--card-background-color, #fff)); }\n.sc-entity-pill:has(input:checked)::before { opacity: 1; }\n.sc-entity-pill:has(input:focus-visible) { outline: 3px solid var(--sc-accent); outline-offset: 2px; }\n.sc-stepper-row { display: flex; align-items: center; gap: 12px; }\n.sc-editor .sc-step { width: 48px; height: 48px; min-height: 48px; padding: 0; border-radius: 50%; font-size: 1.4rem; line-height: 1; flex-shrink: 0; }\n.sc-stepper-value { flex-grow: 1; display: flex; align-items: baseline; justify-content: center; gap: 4px; color: var(--sc-accent); font-weight: 800; }\n.sc-editor .sc-stepper-value input { width: 96px; min-height: 52px; padding: 4px; border: 0; background: transparent; text-align: center; font-size: 2.2rem; font-weight: 800; letter-spacing: -0.03em; color: inherit; -moz-appearance: textfield; }\n.sc-stepper-value input::-webkit-inner-spin-button, .sc-stepper-value input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }\n.sc-rows { display: grid; border: 1px solid var(--sc-border); border-radius: 14px; overflow: hidden; background: var(--card-background-color, #fff); }\n.sc-editor details.sc-row { margin: 0; border: 0; border-radius: 0; padding: 0; background: transparent; }\n.sc-row + .sc-row { border-top: 1px solid var(--sc-border) !important; }\n.sc-row > summary { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 14px; list-style: none; }\n.sc-row > summary::-webkit-details-marker { display: none; }\n.sc-row > summary span { flex-grow: 1; font-size: .85rem; font-weight: 700; }\n.sc-row > summary em { font-style: normal; font-size: .82rem; font-weight: 500; color: var(--sc-muted); max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.sc-row > summary::after { content: \"\\203A\"; font-size: 1.2rem; color: var(--sc-muted); transition: transform .15s; }\n.sc-row[open] > summary::after { transform: rotate(90deg); }\n.sc-row[open] > summary { margin: 0; }\n.sc-row-body { display: grid; gap: 14px; padding: 4px 14px 16px; }\n.sc-actions button.sc-save { flex-grow: 1; min-height: 50px; border-radius: 14px; font-size: 1rem; }\n@media (max-width: 600px) {\n  .sc-dialog { width: 100vw; max-width: 100vw; margin: auto 0 0; max-height: 92dvh; border-radius: 24px 24px 0 0; padding: 0 16px 16px; }\n  .sc-dialog-heading::before { content: \"\"; position: absolute; left: 50%; top: 6px; width: 40px; height: 5px; margin-left: -20px; border-radius: 3px; background: var(--sc-border); }\n  .sc-dialog-heading { padding-top: 18px; }\n  .sc-now { grid-template-columns: 1fr; }\n  .sc-head-actions { width: 100%; }\n  .sc-head-actions button { flex-grow: 1; }\n}\n.sc-dialog-brand { font-size: .75rem; font-weight: 700; color: var(--sc-muted); letter-spacing: .04em; text-transform: uppercase; }\n\n/* 0.3.10: lighter header, fluid week, clickable free space */\n.sc-head { gap: 10px; margin-bottom: 12px; }\n.sc-logo { width: 34px; height: 34px; border-radius: 10px; }\n.sc-logo svg { width: 18px; height: 18px; }\n.sc-head .card-title { font-size: 1.05rem; }\n.sc-sub { font-size: .74rem; }\n.sc-head .sc-version { padding: 2px 7px; font-size: .66rem; }\n.sc-head-actions { margin-left: auto; gap: 6px; }\n.sc-head-actions button, .sc-head-actions button[data-command=\"newSchedule\"] { min-height: 30px; padding: 4px 12px; border-radius: 15px; font-size: .78rem; font-weight: 600; }\n.sc-segmented { padding: 3px; border-radius: 12px; }\n.sc-segmented .profile-chip { min-height: 30px; padding: 4px 10px; font-size: .82rem; }\n.sc-day-track { cursor: copy; }\n.sc-time-block { cursor: pointer; }\nbutton.sc-empty { display: block; width: 100%; font: inherit; cursor: pointer; }\nbutton.sc-empty:hover { border-color: var(--sc-accent); }\n@container (max-width: 520px) {\n  .sc-time-block small { display: none; }\n  .sc-time-block { padding: 2px 3px; font-size: .6rem; }\n  .sc-timeline-head { font-size: .66rem; }\n  .sc-timeline-head strong.is-today { font-size: .66rem; }\n}\n@media (max-width: 600px) { .sc-head-actions { width: auto; } .sc-head-actions button { flex-grow: 0; } }\n@container (max-width: 520px) {\n  .sc-today-tag { display: none; }\n  .sc-now { gap: 6px; }\n  .sc-now-tile { padding: 10px 12px; gap: 3px; border-radius: 12px; }\n  .sc-now-tile strong { font-size: 1rem; }\n}\n";
-const CARD_VERSION = "0.3.10";
+const CARD_VERSION = "0.3.11";
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
@@ -757,8 +757,33 @@ class ScheduleCreatorCard extends HTMLElement {
   getCardSize() { return 8; }
   setConfig(config) { this.config = config; this.render(); }
   set hass(hass) { this._hass = hass; if (this.isConnected) this.adapter.connect(hass); if (hass?.connection !== this.adapter.connection || !this.edit) this.render(); }
-  connectedCallback() { if (this._hass) this.adapter.connect(this._hass); this.render(); }
-  disconnectedCallback() { this.adapter.disconnect(); clearInterval(this.clock); this.clock = null; }
+  connectedCallback() {
+    if (this._hass) this.adapter.connect(this._hass);
+    // Serpentine/ring cards ask the main card to open a schedule (see week-cards.js).
+    this.onExternalEdit ??= (event) => {
+      const id = event.detail?.schedule_id;
+      if (event.defaultPrevented || !this.adapter.state?.config?.schedules?.some((s) => s.id === id)) return;
+      event.preventDefault(); this.openEditor('editSchedule', id); this.scrollIntoView?.({block: 'start', behavior: 'smooth'});
+    };
+    if (!this.listening) { window.addEventListener('schedule-creator-edit', this.onExternalEdit); window.__scheduleCreatorEditors = (window.__scheduleCreatorEditors || 0) + 1; this.listening = true; }
+    this.render();
+  }
+  disconnectedCallback() {
+    this.adapter.disconnect(); clearInterval(this.clock); this.clock = null;
+    if (this.listening) { window.removeEventListener('schedule-creator-edit', this.onExternalEdit); window.__scheduleCreatorEditors -= 1; this.listening = false; }
+  }
+  // A week card on another view navigates here with ?sc_edit=<schedule id>.
+  openRequestedSchedule() {
+    const params = new URLSearchParams(window.location?.search || '');
+    const id = params.get('sc_edit');
+    this.checkedRequest = true;
+    if (!id) return false;
+    params.delete('sc_edit');
+    history.replaceState(history.state, '', `${window.location.pathname}${params.size ? `?${params}` : ''}${window.location.hash}`);
+    if (!this.adapter.state.config.schedules.some((s) => s.id === id)) return false;
+    this.openEditor('editSchedule', id);
+    return true;
+  }
   closeEditor() {
     this.edit=null; this.draft=null; this.localError=null; this.localErrorDetails=null;
     this.render();
@@ -800,6 +825,7 @@ class ScheduleCreatorCard extends HTMLElement {
   }
   render() {
     if (!this.config) return;
+    if (!this.checkedRequest && this.adapter.state && this.openRequestedSchedule()) return;
     const focused = this.shadowRoot.activeElement;
     const hadDetails = this.shadowRoot.querySelector('details');
     const openSections = new Set([...this.shadowRoot.querySelectorAll('details[open]')].map((node)=>node.dataset.section || node.querySelector('summary')?.textContent));
@@ -1644,3 +1670,283 @@ class ScheduleCreatorTimelineCard extends HTMLElement {
 if (!customElements.get('schedule-creator-timeline-card')) customElements.define('schedule-creator-timeline-card', ScheduleCreatorTimelineCard);
 window.customCards = window.customCards || [];
 if (!window.customCards.some((card) => card.type === 'schedule-creator-timeline-card')) window.customCards.push({type: 'schedule-creator-timeline-card', name: 'Schedule Creator · Timeline', description: 'Giornata per dispositivo con tutti i profili attivi'});
+// Whole-week views of every active profile: serpentine (mockup D) and ring (mockup E).
+// Read-only: tapping a block shows its details and hands editing to the main card.
+
+
+
+
+
+
+
+const wkEsc = uiEscape;
+const WK_STYLE = ":host { display: block; font-family: var(--primary-font-family, Arial, sans-serif); color: var(--primary-text-color, #202a35); --wk-accent: var(--primary-color, #00897b); --wk-muted: var(--secondary-text-color, #647180); --wk-surface: var(--secondary-background-color, #f3f4f2); --wk-track: color-mix(in srgb, var(--primary-text-color, #202a35) 6%, var(--card-background-color, #fff)); --wk-paused: var(--warning-color, #b7791f); --wk-running: var(--success-color, #1f9d55); --wk-now: var(--error-color, #d6453d); }\n* { box-sizing: border-box; }\nha-card { display: block; padding: 20px; border-radius: var(--ha-card-border-radius, 20px); background: var(--card-background-color, #fff); }\n.wk-body { display: grid; gap: 14px; }\n.wk-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }\n.wk-eyebrow { display: block; font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--wk-accent); }\n.wk-title { font-size: 1.35rem; letter-spacing: -0.02em; }\n.wk-clock { font-size: .78rem; color: var(--wk-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }\n.wk-chips { display: flex; flex-wrap: wrap; gap: 6px; }\n.wk-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 14px; background: var(--wk-surface); font-size: .76rem; font-weight: 600; }\n.wk-chip i { width: 14px; height: 6px; border-radius: 3px; }\n.wk-svg { display: block; width: 100%; height: auto; overflow: visible; }\n.wk-ring { max-width: 560px; margin: 0 auto; }\n.wk-track { fill: none; stroke: var(--wk-track); stroke-linecap: round; stroke-linejoin: round; }\n.wk-tick { stroke: var(--card-background-color, #fff); stroke-width: 1.5; opacity: .9; }\n.wk-hour { font-size: 10px; fill: var(--wk-muted); text-anchor: middle; font-variant-numeric: tabular-nums; }\n.wk-day { font-size: 11px; font-weight: 600; letter-spacing: .06em; fill: var(--wk-muted); }\n.wk-ring .wk-day { font-size: 13px; }\n.wk-day.is-today { font-weight: 800; fill: var(--wk-accent); }\n.wk-block { fill: none; stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }\n.wk-block.is-paused { stroke-opacity: .3; }\n.wk-block.is-selected { stroke-width: 11; }\n.wk-halo { fill: none; stroke: var(--wk-running); stroke-opacity: .35; stroke-width: 15; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }\n.wk-paused-line { fill: none; stroke: var(--wk-paused); stroke-width: 2.5; stroke-dasharray: 5 4; pointer-events: none; }\n.wk-hit { fill: none; stroke: transparent; stroke-width: 13; stroke-linecap: round; stroke-linejoin: round; cursor: pointer; outline: none; }\n.wk-hit:focus-visible { stroke: color-mix(in srgb, var(--wk-accent) 30%, transparent); }\n.wk-timer { fill: none; stroke: var(--wk-running); stroke-width: 5; stroke-dasharray: 2 3; stroke-linecap: round; pointer-events: none; }\n.wk-band { fill: var(--wk-track); }\n.wk-arc { cursor: pointer; outline: none; }\n.wk-arc.is-paused { fill-opacity: .3; stroke: var(--wk-paused); stroke-width: 1.8; stroke-dasharray: 4 3; }\n.wk-arc.is-running { stroke: var(--wk-running); stroke-width: 2.5; }\n.wk-arc.is-selected, .wk-arc:focus-visible { stroke: var(--primary-text-color, #202a35); stroke-width: 2.5; }\n.wk-arc-timer { fill: var(--wk-running); fill-opacity: .55; pointer-events: none; }\n.wk-now { stroke: var(--wk-now); stroke-width: 2; stroke-linecap: round; pointer-events: none; }\n.wk-now-dot { fill: var(--wk-now); }\n.wk-hub { fill: var(--wk-surface); }\n.wk-hub-eyebrow { font-size: 12px; font-weight: 800; letter-spacing: .08em; fill: var(--wk-accent); text-anchor: middle; }\n.wk-hub-title { font-size: 16px; font-weight: 800; fill: var(--primary-text-color, #202a35); text-anchor: middle; }\n.wk-hub-sub { font-size: 13px; fill: var(--wk-muted); text-anchor: middle; }\n.wk-hub-sub.is-running, .wk-hub-sub.is-timer { fill: var(--wk-running); font-weight: 700; }\n.wk-hub-sub.is-paused { fill: var(--wk-paused); font-weight: 700; }\n.wk-detail { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--wk-surface); }\n.wk-swatch { flex: none; width: 6px; align-self: stretch; border-radius: 3px; background: var(--block); }\n.wk-detail-copy { display: grid; gap: 2px; min-width: 0; flex: 1; }\n.wk-detail-copy strong { font-size: .9rem; }\n.wk-detail-copy span { font-size: .76rem; color: var(--wk-muted); }\n.wk-edit, .wk-close { flex: none; border: 0; border-radius: 10px; font: inherit; cursor: pointer; }\n.wk-edit { padding: 8px 12px; background: var(--wk-accent); color: var(--text-primary-color, #fff); font-size: .8rem; font-weight: 700; }\n.wk-close { width: 32px; height: 32px; background: transparent; color: var(--wk-muted); font-size: 1.2rem; }\n.wk-edit:focus-visible, .wk-close:focus-visible { outline: 3px solid var(--wk-accent); outline-offset: 2px; }\n.wk-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: .7rem; color: var(--wk-muted); }\n.wk-legend > span:first-child { margin-right: auto; }\n.wk-key { display: inline-flex; align-items: center; gap: 5px; }\n.wk-key i { display: inline-block; }\n.wk-key .is-paused { width: 14px; border-top: 2px dashed var(--wk-paused); }\n.wk-key .is-running { width: 12px; height: 6px; border-radius: 3px; background: var(--wk-running); opacity: .5; }\n.wk-key .is-now { width: 2px; height: 12px; background: var(--wk-now); }\n.wk-muted { margin: 0; font-size: .82rem; color: var(--wk-muted); }\n.wk-error { margin: 0; color: var(--error-color, #b3261e); }\n";
+const WK_DAYS = ['LUN', 'MAR', 'MER', 'GIO', 'VEN', 'SAB', 'DOM'];
+const WK_FULL = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+const WK_PALETTE = ['#3aa17e', '#9b7fd1', '#d9822b', '#326ab2', '#b34269', '#087f8c'];
+const WEEK = 10080;
+const WK_TURN = 120; // minutes drawn on each half U-turn: midnight sits at the apex
+const wkMinutes = (value) => { const [h, m] = String(value).split(':').map(Number); return h * 60 + (m || 0); };
+const wkTime = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+const wkNum = (n) => n.toFixed(1);
+
+// Blocks of one entity in week minutes (Monday 00:00 = 0). Overnight slots stay
+// in one piece across midnight; only the Sunday → Monday wrap is split.
+function weekBlocks(schedules, entityId) {
+  const blocks = [];
+  for (const schedule of schedules) {
+    if (!schedule.enabled || !schedule.target_entity_ids.includes(entityId)) continue;
+    for (const slot of schedule.time_slots || []) {
+      const s = wkMinutes(slot.start), e = wkMinutes(slot.end);
+      for (const day of slot.weekdays || []) {
+        const start = day * 1440 + s, end = day * 1440 + (e > s ? e : 1440 + e);
+        if (end <= WEEK) blocks.push({schedule, start, end});
+        else blocks.push({schedule, start, end: WEEK}, {schedule, start: 0, end: end - WEEK});
+      }
+    }
+  }
+  return blocks.sort((a, b) => a.start - b.start);
+}
+
+// Pieces of a block inside each day, for layouts with a gap at midnight.
+function splitByDay(block) {
+  const parts = [];
+  for (let at = block.start; at < block.end;) {
+    const next = Math.min(block.end, (Math.floor(at / 1440) + 1) * 1440);
+    parts.push({...block, start: at, end: next});
+    at = next;
+  }
+  return parts;
+}
+
+// Serpentine geometry in real pixels. Lane offsets are measured to the left of
+// the direction of travel, so lanes stay parallel through every U-turn.
+function serpentineLayout(width, lanes) {
+  const gap = 13, half = Math.max(1, lanes) * gap / 2 + 6, r = Math.max(half + 12, 30);
+  const arc = Math.PI * r / 2, label = 32;
+  const xl = label + Math.max(r + half, arc), xr = Math.max(xl + 120, width - xl);
+  const top = half + 22;
+  const point = (m, s) => {
+    const d = Math.min(6, Math.floor(m / 1440)), dm = m - d * 1440, dir = d % 2 ? -1 : 1, y = top + d * 2 * r;
+    if (dm >= WK_TURN && dm <= 1440 - WK_TURN) {
+      const f = (dm - WK_TURN) / (1440 - 2 * WK_TURN);
+      return [dir > 0 ? xl + f * (xr - xl) : xr - f * (xr - xl), y - dir * s];
+    }
+    const entry = dm < WK_TURN, f = entry ? dm / WK_TURN : (dm - 1440 + WK_TURN) / WK_TURN;
+    if (entry && d === 0) return [xl - (1 - f) * arc, y - s];
+    if (!entry && d === 6) return [xr + f * arc, y - s];
+    const k = entry ? d - 1 : d, cx = k % 2 ? xl : xr, cy = top + k * 2 * r + r;
+    const right = k % 2 === 0, R = right ? r + s : r - s;
+    const deg = right ? (entry ? 90 * f : -90 + 90 * f) : (entry ? -180 - 90 * f : -90 - 90 * f);
+    const a = deg * Math.PI / 180;
+    return [cx + R * Math.cos(a), cy + R * Math.sin(a)];
+  };
+  const path = (a, b, s) => {
+    const out = [];
+    for (let m = a; ; ) {
+      out.push(point(m, s));
+      if (m >= b) break;
+      const dm = m % 1440;
+      const next = dm >= WK_TURN && dm < 1440 - WK_TURN ? m - dm + 1440 - WK_TURN : Math.min(m + 4, dm < WK_TURN ? m - dm + WK_TURN : m - dm + 1440);
+      m = Math.min(b, next);
+    }
+    return `M${out.map(([x, y]) => `${wkNum(x)} ${wkNum(y)}`).join(' L')}`;
+  };
+  const lane = (i) => ((lanes - 1) / 2 - i) * gap;
+  return {width: xr + xl, height: top + 12 * r + half + 10, top, r, half, xl, xr, arc, point, path, lane};
+}
+
+// Ring geometry: seven sectors clockwise from the top, one ring per lane.
+function ringLayout(lanes) {
+  const size = 600, c = size / 2, outer = 262, pitch = Math.min(25, 150 / Math.max(1, lanes)), band = pitch - 5;
+  const span = 360 / 7, gapDeg = 1.6;
+  const angle = (m) => { const d = Math.min(6, Math.floor(m / 1440)); return -90 + d * span + gapDeg / 2 + (span - gapDeg) * (m - d * 1440) / 1440; };
+  const at = (deg, radius) => [c + radius * Math.cos(deg * Math.PI / 180), c + radius * Math.sin(deg * Math.PI / 180)];
+  const sector = (a0, a1, ro, ri) => {
+    const large = a1 - a0 > 180 ? 1 : 0, [x0, y0] = at(a0, ro), [x1, y1] = at(a1, ro), [x2, y2] = at(a1, ri), [x3, y3] = at(a0, ri);
+    return `M${wkNum(x0)} ${wkNum(y0)} A${ro} ${ro} 0 ${large} 1 ${wkNum(x1)} ${wkNum(y1)} L${wkNum(x2)} ${wkNum(y2)} A${ri} ${ri} 0 ${large} 0 ${wkNum(x3)} ${wkNum(y3)}Z`;
+  };
+  const radii = (i) => [outer - i * pitch, outer - i * pitch - band];
+  return {size, c, outer, inner: outer - Math.max(1, lanes) * pitch + 5, span, gapDeg, angle, at, sector, radii};
+}
+
+class ScheduleCreatorWeekCard extends HTMLElement {
+  constructor() {
+    super(); this.attachShadow({mode: 'open'});
+    this.adapter = new ScheduleCreatorStateAdapter(() => this.render());
+    this.selected = null;
+    this.shadowRoot.innerHTML = `<style>${WK_STYLE}</style><ha-card></ha-card>`;
+    const pick = (e) => {
+      const block = e.target.closest?.('[data-block]');
+      if (block) { this.selected = this.selected === block.dataset.block ? null : block.dataset.block; this.render(); this.shadowRoot.querySelector(`[data-block="${this.selected}"]`)?.focus?.({preventScroll: true}); return; }
+      if (e.target.closest?.('[data-close]')) { this.selected = null; this.render(); return; }
+      const edit = e.target.closest?.('[data-edit]');
+      if (edit) this.edit(edit.dataset.edit);
+    };
+    this.shadowRoot.addEventListener('click', pick);
+    this.shadowRoot.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.closest?.('[data-block]')) { e.preventDefault(); pick(e); } });
+  }
+  static getStubConfig() { return {}; }
+  getCardSize() { return 8; }
+  setConfig(config) { this.config = config || {}; this.render(); }
+  set hass(hass) { this._hass = hass; if (this.isConnected) this.adapter.connect(hass); this.render(); }
+  connectedCallback() {
+    if (this._hass) this.adapter.connect(this._hass);
+    this.clock ??= setInterval(() => this.render(), 60000);
+    if (!this.resize && window.ResizeObserver) { this.resize = new ResizeObserver(() => { const w = Math.round(this.clientWidth); if (w && w !== this.measured) { this.measured = w; this.render(); } }); this.resize.observe(this); }
+    this.render();
+  }
+  disconnectedCallback() { this.adapter.disconnect(); clearInterval(this.clock); this.clock = null; this.resize?.disconnect(); this.resize = null; }
+  // The main card on this view opens its editor; otherwise go to edit_path.
+  edit(id) {
+    const request = new CustomEvent('schedule-creator-edit', {detail: {schedule_id: id}, cancelable: true});
+    window.dispatchEvent(request);
+    if (request.defaultPrevented || !this.config.edit_path) return;
+    history.pushState(null, '', `${this.config.edit_path}?sc_edit=${encodeURIComponent(id)}`);
+    window.dispatchEvent(new CustomEvent('location-changed', {detail: {replace: false}}));
+  }
+  now() {
+    const zone = this._hass?.config?.time_zone || undefined;
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {timeZone: zone, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'}).formatToParts(new Date()).map((x) => [x.type, x.value]));
+    const weekday = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(p.weekday), minutes = Number(p.hour) * 60 + Number(p.minute);
+    return {weekday, minutes, week: weekday * 1440 + minutes, label: `${p.hour}:${p.minute}`, zone};
+  }
+  // Everything both layouts draw: lanes, blocks, live status and the selection.
+  model(state) {
+    const hass = this._hass, config = state.config || {}, now = this.now();
+    const active = (config.profiles || []).filter((p) => p.active), activeIds = new Set(active.map((p) => p.id));
+    const schedules = (config.schedules || []).filter((s) => activeIds.has(s.profile_id));
+    const timers = state.quick_timers || [], occurrences = state.operational?.occurrences || [];
+    const wanted = Array.isArray(this.config.entities) && this.config.entities.length ? this.config.entities : null;
+    const name = (id) => hass.states[id]?.attributes?.friendly_name || id;
+    let entities = [...new Set([...schedules.flatMap((s) => s.target_entity_ids), ...timers.map((t) => t.entity_id)])].filter((id) => !wanted || wanted.includes(id));
+    if (wanted) entities.sort((a, b) => wanted.indexOf(a) - wanted.indexOf(b)); else entities.sort((a, b) => name(a).localeCompare(name(b)));
+    entities = entities.slice(0, Math.max(1, Math.min(8, Number(this.config.max_lanes) || 6)));
+    const clock = (iso) => new Intl.DateTimeFormat('it-IT', {timeZone: now.zone, hour: '2-digit', minute: '2-digit'}).format(new Date(iso));
+    const lanes = entities.map((entityId, index) => {
+      const base = WK_PALETTE[index % WK_PALETTE.length];
+      const colorOf = (schedule) => { const d = schedule.start_action?.data || {}; if (schedule.start_action?.domain !== 'climate') return base; return d.state === 'off' ? '#9aa5ad' : d.temperature != null ? temperatureColor(d.temperature) : base; };
+      const running = occurrences.find((o) => o.state !== 'pending' && schedules.find((s) => s.id === o.schedule_id)?.target_entity_ids.includes(entityId));
+      const paused = running && (running.condition_branch === 'false' || running.state === 'suspended');
+      const timer = timers.find((t) => t.entity_id === entityId);
+      const blocks = weekBlocks(schedules, entityId).map((b, i) => {
+        const live = running?.schedule_id === b.schedule.id && ((b.start <= now.week && now.week < b.end) || (b.start <= now.week + WEEK && now.week + WEEK < b.end));
+        return {...b, key: `${index}-${i}`, color: colorOf(b.schedule), live: live ? (paused ? 'paused' : 'running') : ''};
+      });
+      let status = '';
+      if (timer) status = `Timer fino alle ${clock(timer.expires_at)}`;
+      else if (running) status = paused ? 'In pausa · condizione' : `${shortAction(schedules.find((s) => s.id === running.schedule_id)?.start_action)} fino alle ${clock(running.end_utc)}`;
+      const climate = entityId.startsWith('climate.');
+      return {entityId, name: name(entityId), color: base, climate, blocks, status, statusKind: timer ? 'timer' : running ? (paused ? 'paused' : 'running') : '',
+        timer: timer ? {start: now.week, end: Math.min(now.week + Math.max(1, (new Date(timer.expires_at) - Date.now()) / 60000), now.week + WEEK)} : null};
+    });
+    const pick = lanes.flatMap((l) => l.blocks.map((b) => ({lane: l, block: b}))).find((x) => x.block.key === this.selected);
+    if (!pick) this.selected = null;
+    const next = lanes.flatMap((l) => l.blocks.filter((b) => b.start > now.week).map((b) => ({lane: l, block: b}))).sort((a, b) => a.block.start - b.block.start)[0];
+    return {active, lanes, now, pick, next, profiles: config.profiles || []};
+  }
+  header(m, fallback) {
+    const chips = m.lanes.map((l) => `<span class="wk-chip"><i style="background:${l.climate ? 'linear-gradient(90deg,#4a90d9,#96c4e8,#f08a4b)' : l.color}"></i>${wkEsc(l.name)}</span>`).join('');
+    return `<div class="wk-head"><div><span class="wk-eyebrow">${m.active.length ? `Profili attivi · ${wkEsc(m.active.map((p) => p.name).join(', '))}` : 'Nessun profilo attivo'}</span><strong class="wk-title">${wkEsc(this.config.title || fallback)}</strong></div><span class="wk-clock">${WK_DAYS[m.now.weekday].toLowerCase()} ${m.now.label}</span></div>
+      ${chips ? `<div class="wk-chips">${chips}</div>` : ''}`;
+  }
+  detail(m) {
+    if (!m.pick) return '';
+    const {lane, block} = m.pick, s = block.schedule;
+    const from = Math.floor(block.start / 1440) % 7;
+    const when = `${WK_DAYS[from].charAt(0)}${WK_DAYS[from].slice(1).toLowerCase()} ${wkTime(block.start % 1440)}–${wkTime(block.end % 1440)}`;
+    const profile = m.profiles.find((p) => p.id === s.profile_id)?.name;
+    const live = block.live === 'running' ? ' · in corso' : block.live === 'paused' ? ' · in pausa' : '';
+    const canEdit = this._hass?.user?.is_admin === true && (window.__scheduleCreatorEditors > 0 || this.config.edit_path);
+    return `<div class="wk-detail" style="--block:${block.color}" role="status"><span class="wk-swatch"></span><div class="wk-detail-copy"><strong>${wkEsc(s.name)}</strong><span>${wkEsc([lane.name, when + live, describeAction(s.start_action), profile && `profilo ${profile}`].filter(Boolean).join(' · '))}</span></div>${canEdit ? `<button type="button" class="wk-edit" data-edit="${wkEsc(s.id)}">Modifica</button>` : ''}<button type="button" class="wk-close" data-close aria-label="Chiudi">×</button></div>`;
+  }
+  blockLabel(lane, block) {
+    const d = Math.floor(block.start / 1440) % 7;
+    return `${lane.name} · ${block.schedule.name} · ${WK_FULL[d]} ${wkTime(block.start % 1440)}–${wkTime(block.end % 1440)} · ${shortAction(block.schedule.start_action)}`;
+  }
+  render() {
+    if (!this.config) return;
+    const surface = this.shadowRoot.querySelector('ha-card');
+    const {state, error} = this.adapter;
+    if (!this._hass || (!state && !error)) { surface.innerHTML = '<div class="wk-body"><p class="wk-muted">Caricamento…</p></div>'; return; }
+    if (!state) { surface.innerHTML = `<div class="wk-body"><p class="wk-error">${wkEsc(messageFor(error))}</p></div>`; return; }
+    const m = this.model(state);
+    const body = m.lanes.length ? this.drawing(m) : '<p class="wk-muted">Nessuna entità programmata nei profili attivi.</p>';
+    surface.innerHTML = `<div class="wk-body">${this.header(m, this.defaultTitle)}${body}${this.detail(m)}${m.lanes.length ? `<div class="wk-legend"><span>${wkEsc(this.hint)}</span><span class="wk-key"><i class="is-paused"></i>in pausa</span><span class="wk-key"><i class="is-running"></i>in corso</span><span class="wk-key"><i class="is-now"></i>ora</span></div>` : ''}</div>`;
+  }
+}
+
+class ScheduleCreatorSerpentineCard extends ScheduleCreatorWeekCard {
+  get defaultTitle() { return 'La settimana'; }
+  get hint() { return 'Lun → · Mar ← · la mezzanotte è nella curva'; }
+  drawing(m) {
+    const width = Math.max(320, (this.measured || 728) - 40);
+    const L = serpentineLayout(width, m.lanes.length);
+    const track = L.path(0, WEEK, 0);
+    const ticks = [];
+    for (let d = 0; d < 7; d++) for (const h of [6, 12, 18]) {
+      const [x1, y1] = L.point(d * 1440 + h * 60, L.half), [x2, y2] = L.point(d * 1440 + h * 60, -L.half);
+      ticks.push(`<line class="wk-tick" x1="${wkNum(x1)}" y1="${wkNum(y1)}" x2="${wkNum(x2)}" y2="${wkNum(y2)}"/>`);
+    }
+    const hours = [6, 12, 18].map((h) => { const [x, y] = L.point(h * 60, L.half + 8); return `<text class="wk-hour" x="${wkNum(x)}" y="${wkNum(y)}">${String(h).padStart(2, '0')}</text>`; }).join('');
+    const labels = WK_DAYS.map((day, d) => `<text class="wk-day${d === m.now.weekday ? ' is-today' : ''}" x="${d % 2 ? L.width - 4 : 4}" y="${wkNum(L.top + d * 2 * L.r + 4)}" text-anchor="${d % 2 ? 'end' : 'start'}">${day}</text>`).join('');
+    const blocks = m.lanes.map((lane, i) => {
+      const s = L.lane(i);
+      const drawn = lane.blocks.map((b) => {
+        const d = L.path(b.start, b.end, s), sel = b.key === this.selected ? ' is-selected' : '';
+        const halo = b.live === 'running' ? `<path class="wk-halo" d="${d}"/>` : '';
+        const dash = b.live === 'paused' ? `<path class="wk-paused-line" d="${d}"/>` : '';
+        return `${halo}<path class="wk-block${b.live === 'paused' ? ' is-paused' : ''}${sel}" d="${d}" style="stroke:${b.color}"/>${dash}<path class="wk-hit" d="${d}" data-block="${b.key}" tabindex="0" role="button" aria-label="${wkEsc(this.blockLabel(lane, b))}"><title>${wkEsc(this.blockLabel(lane, b))}</title></path>`;
+      }).join('');
+      const timer = lane.timer ? `<path class="wk-timer" d="${L.path(lane.timer.start, Math.min(WEEK, lane.timer.end), s)}"/>` : '';
+      return drawn + timer;
+    }).join('');
+    const [ax, ay] = L.point(m.now.week, L.half + 2), [bx, by] = L.point(m.now.week, -L.half - 2);
+    const now = `<line class="wk-now" x1="${wkNum(ax)}" y1="${wkNum(ay)}" x2="${wkNum(bx)}" y2="${wkNum(by)}"/><circle class="wk-now-dot" cx="${wkNum(ax)}" cy="${wkNum(ay)}" r="3"/>`;
+    return `<svg class="wk-svg" viewBox="0 0 ${wkNum(L.width)} ${wkNum(L.height)}" role="group" aria-label="Settimana a serpentina"><path class="wk-track" d="${track}" style="stroke-width:${L.half * 2}"/>${ticks.join('')}${hours}${labels}${blocks}${now}</svg>`;
+  }
+}
+
+class ScheduleCreatorRingCard extends ScheduleCreatorWeekCard {
+  get defaultTitle() { return 'La settimana ad anello'; }
+  get hint() { return 'Ogni anello è un dispositivo · lo spazio tra i settori è la mezzanotte'; }
+  drawing(m) {
+    const L = ringLayout(m.lanes.length), n = m.lanes.length;
+    const bands = [], labels = [];
+    for (let d = 0; d < 7; d++) {
+      const a0 = -90 + d * L.span + L.gapDeg / 2, a1 = a0 + L.span - L.gapDeg;
+      for (let i = 0; i < n; i++) { const [ro, ri] = L.radii(i); bands.push(`<path class="wk-band" d="${L.sector(a0, a1, ro, ri)}"/>`); }
+      const [x, y] = L.at((a0 + a1) / 2, L.outer + 18);
+      labels.push(`<text class="wk-day${d === m.now.weekday ? ' is-today' : ''}" x="${wkNum(x)}" y="${wkNum(y + 4)}" text-anchor="middle">${WK_DAYS[d]}</text>`);
+    }
+    const blocks = m.lanes.map((lane, i) => {
+      const [ro, ri] = L.radii(i);
+      const drawn = lane.blocks.map((b) => splitByDay(b).map((part) => {
+        const d = L.sector(L.angle(part.start), L.angle(part.end === Math.ceil(part.end / 1440) * 1440 ? part.end - 0.001 : part.end), ro - 2, ri + 2);
+        const cls = `wk-arc${b.live ? ` is-${b.live}` : ''}${b.key === this.selected ? ' is-selected' : ''}`;
+        return `<path class="${cls}" d="${d}" style="fill:${b.color}" data-block="${b.key}" tabindex="0" role="button" aria-label="${wkEsc(this.blockLabel(lane, b))}"><title>${wkEsc(this.blockLabel(lane, b))}</title></path>`;
+      }).join('')).join('');
+      const timer = lane.timer ? splitByDay({start: lane.timer.start, end: Math.min(WEEK, lane.timer.end)}).map((p) => `<path class="wk-arc-timer" d="${L.sector(L.angle(p.start), L.angle(p.end % 1440 ? p.end : p.end - 0.001), ro - 2, ri + 2)}"/>`).join('') : '';
+      return drawn + timer;
+    }).join('');
+    const deg = L.angle(m.now.week), [x1, y1] = L.at(deg, L.inner - 4), [x2, y2] = L.at(deg, L.outer + 4), [dx, dy] = L.at(deg, L.outer + 8);
+    const now = `<line class="wk-now" x1="${wkNum(x1)}" y1="${wkNum(y1)}" x2="${wkNum(x2)}" y2="${wkNum(y2)}"/><circle class="wk-now-dot" cx="${wkNum(dx)}" cy="${wkNum(dy)}" r="3.5"/>`;
+    // Centre: what is happening now, or the next block when nothing runs.
+    const live = m.lanes.filter((l) => l.status).slice(0, 3);
+    const lines = live.length ? live.map((l) => [`${l.name}`, l.status, l.statusKind]) : m.next ? [['Nessuna attività in corso', '', ''], [`Prossima: ${m.next.lane.name}`, `${WK_DAYS[Math.floor(m.next.block.start / 1440)].toLowerCase()} ${wkTime(m.next.block.start % 1440)}`, '']] : [['Nessuna attività in corso', '', '']];
+    const hub = L.inner - 12, cut = (text, max) => text.length > max ? `${text.slice(0, max - 1)}…` : text, max = Math.floor(hub / 5);
+    let y = L.c - (lines.length * 36) / 2 + 4;
+    const text = lines.map(([title, sub, kind]) => { const out = `<text class="wk-hub-title" x="${L.c}" y="${wkNum(y)}">${wkEsc(cut(title, max))}</text>${sub ? `<text class="wk-hub-sub${kind ? ` is-${kind}` : ''}" x="${L.c}" y="${wkNum(y + 17)}">${wkEsc(cut(sub, max))}</text>` : ''}`; y += 36; return out; }).join('');
+    const center = `<circle class="wk-hub" cx="${L.c}" cy="${L.c}" r="${hub}"/><text class="wk-hub-eyebrow" x="${L.c}" y="${wkNum(L.c - (lines.length * 36) / 2 - 20)}">${WK_FULL[m.now.weekday].toUpperCase()} ${m.now.label}</text>${text}`;
+    return `<svg class="wk-svg wk-ring" viewBox="0 0 ${L.size} ${L.size}" role="group" aria-label="Settimana ad anello">${bands.join('')}${labels.join('')}${blocks}${center}${now}</svg>`;
+  }
+}
+
+for (const [tag, cls, name, description] of [
+  ['schedule-creator-serpentine-card', ScheduleCreatorSerpentineCard, 'Schedule Creator · Serpentina', 'La settimana di più dispositivi su un percorso a serpentina'],
+  ['schedule-creator-ring-card', ScheduleCreatorRingCard, 'Schedule Creator · Anello', 'La settimana ad anello: un settore per giorno, un anello per dispositivo'],
+]) {
+  if (!customElements.get(tag)) customElements.define(tag, cls);
+  window.customCards = window.customCards || [];
+  if (!window.customCards.some((card) => card.type === tag)) window.customCards.push({type: tag, name, description});
+}

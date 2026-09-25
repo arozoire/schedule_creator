@@ -58,6 +58,33 @@ della cache. Il primo passaggio alla 0.3.5 richiede ancora riavvio e refresh.
 
 ## Contratto tecnico
 
+### Card serpentina e anello 0.3.11
+
+Quarta e quinta card nello stesso file JS (mockup D ed E), sola lettura, tutti i
+profili attivi, un percorso/anello per dispositivo:
+
+```yaml
+type: custom:schedule-creator-serpentine-card   # oppure schedule-creator-ring-card
+title: La settimana                # facoltativo
+entities: [climate.camera, cover.camera]   # facoltativo: filtro e ordine
+max_lanes: 6                       # facoltativo, massimo 8
+edit_path: /lovelace/schedule      # facoltativo: vista con la card principale
+```
+
+- **Serpentina**: Lun → , Mar ← …; ogni giorno è un rettilineo 02–22 e le due
+  ore attorno alla mezzanotte stanno nella curva, così le fasce notturne la
+  seguono senza spezzarsi. Le corsie restano parallele anche in curva.
+- **Anello**: 7 settori in senso orario da lunedì in alto, un anello per
+  dispositivo; lo spazio tra i settori è la mezzanotte. Al centro cosa sta
+  succedendo ora (o la prossima fascia).
+- Stati: in corso (alone/bordo verde), in pausa per condizione (tratteggio
+  ambra), Quick Timer (verde), linea rossa dell'ora.
+- Toccando una fascia compare il dettaglio con **Modifica**: se nella stessa
+  vista c'è la card principale apre il suo editor (evento
+  `schedule-creator-edit`), altrimenti va a `edit_path?sc_edit=<id>` e la card
+  principale di quella vista apre lo schedule. Senza nessuna delle due il
+  pulsante non compare.
+
 ### Card timeline per entità 0.3.9
 
 Terza card nello stesso file JS (mockup direzione B):

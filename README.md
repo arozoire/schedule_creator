@@ -2,7 +2,7 @@
 
 Weekly schedules, conditions and quick timers for Home Assistant, run by a native
 integration instead of dashboard helpers. Schedules keep running when no dashboard
-is open, survive restarts and come with three Lovelace cards.
+is open, survive restarts and come with five Lovelace cards.
 
 Schedule Creator is the server-side successor of
 [weekly-schedule-card](https://github.com/arozoire/weekly-schedule-card). The two
@@ -46,6 +46,10 @@ can live side by side; nothing is imported from the old card automatically.
 | --- | --- |
 | ![Per-device timeline across active profiles](docs/images/timeline.png) | ![Quick Timer card for a climate entity](docs/images/quicktimer.png) |
 
+| Serpentine card | Ring card |
+| --- | --- |
+| ![The whole week as a serpentine, one lane per device](docs/images/serpentine.png) | ![The whole week as a ring, one ring per device](docs/images/ring.png) |
+
 ## Installation
 
 Requires Home Assistant 2026.9.2 or newer and [HACS](https://hacs.xyz).
@@ -68,7 +72,7 @@ keeps working.
 
 ## Cards
 
-All three cards ship in the same file and share the same backend data.
+All five cards ship in the same file and share the same backend data.
 
 ### Main card
 
@@ -90,6 +94,25 @@ entities: [climate.bedroom, cover.bedroom] # optional filter and order
 
 One 24 h row per device for the selected weekday, combining the schedules of
 **all active profiles**, with the current status next to each row. Read-only.
+
+### Serpentine and ring cards
+
+```yaml
+type: custom:schedule-creator-serpentine-card   # or custom:schedule-creator-ring-card
+title: The week                          # optional
+entities: [climate.bedroom, cover.bedroom] # optional filter and order
+max_lanes: 6                             # optional, up to 8
+edit_path: /lovelace/schedules           # optional: view that holds the main card
+```
+
+The whole week of **all active profiles** at a glance, one lane per device.
+The **serpentine** runs Monday left to right, Tuesday right to left and so on:
+midnight sits in the U-turn, so overnight slots follow the curve instead of
+being cut. The **ring** has seven day sectors clockwise from the top and one
+ring per device, with what is happening now in the centre.
+
+Tap a slot to see its details. **Edit** opens it in the main card on the same
+view, or goes to `edit_path` and opens it there.
 
 ### Quick Timer card
 

@@ -1,5 +1,26 @@
 # AI handoff — stato attuale e piano futuro
 
+## Card serpentina e anello — 0.3.11 (2026-09-25)
+
+`frontend/src/week-cards.js` + `week-cards.css`: classe base comune e due card
+(`custom:schedule-creator-serpentine-card`, `custom:schedule-creator-ring-card`).
+Geometria: `serpentineLayout(width, lanes)` (offset di corsia misurato a sinistra
+della direzione di marcia → corsie parallele nelle U; `WK_TURN`=120 min per
+mezza curva, mezzanotte all'apice) e `ringLayout(lanes)`. `weekBlocks` lavora in
+minuti di settimana (lun 00:00 = 0), spezza solo il giro dom→lun; l'anello usa
+`splitByDay`. Larghezza reale via ResizeObserver (niente testo minuscolo su
+telefono). Modifica: evento window `schedule-creator-edit` gestito dalla card
+principale (`window.__scheduleCreatorEditors` conta gli editor presenti) oppure
+`edit_path?sc_edit=<id>` letto da `openRequestedSchedule()`.
+Anteprima: `preview.html#shot=serpentine|ring`.
+
+**Da decidere col proprietario: import dalla weekly-schedule-card.** Il backup
+WSC (`schema: weekly-schedule-card/backup`, `version: 1`, vedi
+`src/maintenance-card.js` nel repo WSC) contiene profili/gruppi/link e la config
+completa di ogni schedule Scheduler (`weekdays`, `timeslots[].start/stop/actions`),
+più le condizioni nel link (`conditions`, `condCombinator`). Conversione fattibile
+lato backend come importazione separata (mai modificare il repo WSC).
+
 ## README inglese con schermate — 2026-09-24
 
 README riscritto in inglese con schermate in `docs/images/` generate da
