@@ -3,16 +3,31 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 from .models import IntegrationConfig, Occurrence, OccurrenceState, Schedule
-from .planner import plan_occurrences
+from .planner import SunResolver, plan_occurrences
 from .snapshots import _snapshot_id
 from .storage import RuntimeRepository, RuntimeStoreData
 
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+
 # Refreshed daily, so three days always leave at least two days of lookahead.
 PLANNING_HORIZON = timedelta(days=3)
+
+
+def sun_resolver(hass: HomeAssistant) -> SunResolver:
+    """Sunrise and sunset at the Home Assistant location, for sun-based slots."""
+
+    from homeassistant.helpers.sun import get_astral_event_date
+
+    def resolve(event: str, day: date) -> datetime | None:
+        return get_astral_event_date(hass, event, day)
+
+    return resolve
 
 
 def _utc(value: datetime, path: str) -> datetime:
@@ -172,6 +187,7 @@ async def async_replan_window(
     window_end_utc: datetime,
     timezone: ZoneInfo,
     now: datetime,
+    sun: SunResolver | None = None,
 ) -> RuntimeStoreData:
     """Replace only unstarted, unreferenced occurrences inside one window."""
 
@@ -180,7 +196,7 @@ async def async_replan_window(
     if window_end <= window_start:
         raise ValueError("window_end_utc must follow window_start_utc")
     replanned_at = _utc(now, "now")
-    projected = plan_occurrences(config, window_start, window_end, timezone)
+    projected = plan_occurrences(config, window_start, window_end, timezone, sun)
     projected_by_id = {occurrence.id: occurrence for occurrence in projected}
     if len(projected_by_id) != len(projected):
         raise ValueError("projected occurrences must have unique IDs")
@@ -296,6 +312,7 @@ async def async_reconcile_horizon(
     config: IntegrationConfig,
     timezone: ZoneInfo,
     now: datetime,
+    sun: SunResolver | None = None,
 ) -> RuntimeStoreData:
     """Reconcile the active instant and the fixed forward planning horizon."""
 
@@ -307,4 +324,5 @@ async def async_reconcile_horizon(
         horizon_start + PLANNING_HORIZON,
         timezone,
         horizon_start,
+        sun,
     )

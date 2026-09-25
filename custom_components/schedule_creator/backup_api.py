@@ -21,6 +21,7 @@ from homeassistant.util.hass_dict import HassKey
 from .const import DOMAIN, INTEGRATION_VERSION
 from .models import MODEL_SCHEMA_VERSION, IntegrationConfig
 from .mutation_api import MutationClientError, _loaded_runtime, async_mutate_config
+from .stats import async_clear_stats
 from .storage import ConfigRepository, RuntimeRepository, RuntimeStoreData
 
 _LOGGER = logging.getLogger(__name__)
@@ -216,6 +217,7 @@ async def async_reset(hass: HomeAssistant, expected_revision: int) -> int:
             updated = await config_repository.async_update(
                 expected_revision, lambda current: _empty_config(_require(current), now)
             )
+            await async_clear_stats(hass)
             return updated.revision
         finally:
             await hass.config_entries.async_setup(entry.entry_id)

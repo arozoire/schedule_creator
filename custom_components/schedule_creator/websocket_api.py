@@ -25,6 +25,7 @@ from .models import LeaseState, OccurrenceState, OperationState, QuickTimerState
 from .profile_api import PROFILE_COMMANDS
 from .quick_timer_api import QUICK_TIMER_COMMANDS
 from .schedule_api import SCHEDULE_COMMANDS
+from .stats import public_stats
 from .storage import RuntimeStoreData, StorageNotLoadedError
 
 if TYPE_CHECKING:
@@ -222,6 +223,7 @@ def websocket_get_state(
                 ],
             },
             "failures": _failures(runtime),
+            "stats": public_stats(runtime_data.stats.data),
         }
         connection.send_result(msg["id"], result)
     except (StorageNotLoadedError, OSError):

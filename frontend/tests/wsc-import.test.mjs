@@ -158,3 +158,22 @@ test('valves are edited like covers', () => {
     assert.equal(controllable({services: {valve: {open_valve: {}}}}, 'valve.garden'), true);
   } finally { dom.window.close(); }
 });
+
+test('Scheduler sunrise and sunset times become sun-based slots', () => {
+  const dom = new JSDOM('<body></body>', {runScripts: 'dangerously', virtualConsole: new VirtualConsole()});
+  dom.window.eval(bundle);
+  try {
+    const source = backup();
+    source.schedules[0].config.timeslots[0].start = 'sunset-00:30:00';
+    source.schedules[0].config.timeslots[0].stop = '23:00:00';
+    const out = plain(dom.window.convertWscBackup(dom.window.JSON.parse(JSON.stringify(source)), {sun: {sunrise: 400, sunset: 1150}}));
+    const blind = out.profiles[0].groups.flatMap((g) => g.schedules).find((s) => s.target_entity_ids[0] === 'cover.blind');
+    assert.deepEqual(blind.time_slots[0], {weekdays: [0, 1, 2, 3, 4], start: '18:40', end: '23:00', start_sun: 'sunset', start_offset_minutes: -30});
+    const {readSlots, boundaryLabel} = dom.window;
+    assert.equal(boundaryLabel(blind.time_slots[0], 'start'), 'Tramonto −30′');
+    assert.equal(boundaryLabel(blind.time_slots[0], 'end'), '23:00');
+    const elements = {slot_0_start: {value: '05:00'}, slot_0_end: {value: '09:00'}, slot_0_start_sun: {value: 'sunrise'}, slot_0_start_offset: {value: '20'}, slot_0_end_sun: {value: ''}};
+    const form = {elements, querySelectorAll: () => [{dataset: {slot: '0'}, querySelectorAll: () => [{value: '0'}]}]};
+    assert.equal(JSON.stringify(readSlots(form, {sunrise: 400, sunset: 1150})), '[{"weekdays":[0],"start":"07:00","end":"09:00","start_sun":"sunrise","start_offset_minutes":20}]'); // 06:40 sunrise + 20 min
+  } finally { dom.window.close(); }
+});

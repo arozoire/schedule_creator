@@ -21,10 +21,12 @@ can live side by side; schedules can be imported from the old card's backup
   rooms. Exclusive profiles switch each other off; shared ones run together.
 - **Weekly time slots** – drag a slot on a 24 h bar that shows the other
   schedules of the same devices and snaps to their edges. Weekday / weekend
-  shortcuts, several slots per schedule, overnight slots.
+  shortcuts, several slots per schedule, overnight slots, and start or end at
+  sunrise / sunset with an offset.
 - **Desired-state actions** – climate mode, temperature, fan and swing in one
   step; brightness, cover position and fan speed as percentage sliders; an
-  optional action at the end of the slot.
+  optional action at the end of the slot, or "previous state" to put the
+  device back as it was when the slot started.
 - **Conditions** – pick an entity first, then only the comparisons that fit it
   (numbers with units, on/off, options). Hysteresis plus *become true after* and
   *become false after* delays stop devices from flapping.
@@ -149,7 +151,7 @@ cancel button; when it ends the previous state is restored.
    and choose that file.
 3. Review the preview: every schedule is marked ready, to check, imported
    disabled or not imported, with the reason (e.g. conditions on attributes,
-   one-off schedules and sunrise/sunset times are not supported yet).
+   one-off schedules and date ranges are not supported yet).
 4. Import. Everything lands in a new profile that stays **inactive**.
 5. Turn the old schedules off in weekly-schedule-card (or Scheduler), then
    activate the imported profile. Nothing in weekly-schedule-card or Scheduler

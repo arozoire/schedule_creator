@@ -58,3 +58,21 @@ test('updates of unrelated entities do not re-render the cards', async () => {
     assert.equal(renders, 1);
   } finally { t.close(); }
 });
+
+test('the schedule editor shows activity counters and offers the previous state', async () => {
+  const t = card({occurrences: [], leases: []});
+  await tick();
+  try {
+    t.element.adapter.state.stats = {s: {activations: 3, muted: 1, last_activation: '2026-09-25T06:00:00+00:00', last_muted: null}};
+    t.element.render();
+    t.element.shadowRoot.querySelector('[data-command="editSchedule"][data-id="s"]').click();
+    const root = t.element.shadowRoot;
+    assert.match(root.querySelector('[data-section="row-stats"] summary').textContent, /3 attivazioni/);
+    assert.match(root.querySelector('.sc-stats').textContent, /Fasce bloccate dalla condizione1/);
+    assert.match(root.querySelector('.sc-stats').textContent, /Ultimo blocco per condizionemai/);
+    assert.ok(root.querySelector('[name="end_mode"][value="restore"]'));
+    const {readAction, describeAction} = t.dom.window;
+    assert.equal(JSON.stringify(readAction({elements: {end_mode: {value: 'restore'}}}, 'end', 'light')), '{"domain":"light","action":"restore_previous","data":{}}');
+    assert.equal(describeAction({domain: 'light', action: 'restore_previous', data: {}}), 'Stato precedente');
+  } finally { t.close(); }
+});

@@ -134,3 +134,64 @@ def test_rejects_invalid_utc_windows(config: IntegrationConfig) -> None:
         plan_occurrences(config, aware.replace(tzinfo=None), aware, ROME)
     with pytest.raises(ValueError, match="must follow"):
         plan_occurrences(config, aware, aware, ROME)
+
+
+def _with_slot(config: IntegrationConfig, **sun) -> IntegrationConfig:
+    schedule = config.schedules[0]
+    slot = replace(schedule.time_slots[0], **sun)
+    return replace(config, schedules=(replace(schedule, time_slots=(slot,)),))
+
+
+def _sun(event: str, day: date) -> datetime:
+    """Fixed test sun: rises 05:00 UTC, sets 17:00 UTC every day."""
+    return datetime.combine(day, time(5 if event == "sunrise" else 17), tzinfo=UTC)
+
+
+def test_sun_start_follows_sunset_with_offset(config: IntegrationConfig) -> None:
+    """Thirty minutes before sunset, until the fixed end time."""
+    sunny = _with_slot(config, start_sun="sunset", start_offset_minutes=-30)
+    start, end = _window("2026-09-14T00:00:00Z", "2026-09-15T00:00:00Z")
+
+    [occurrence] = plan_occurrences(sunny, start, end, ROME, _sun)
+
+    assert occurrence.start_utc == datetime(2026, 9, 14, 16, 30, tzinfo=UTC)
+    assert occurrence.local_end == "2026-09-14T23:00:00+02:00"
+
+
+def test_sunset_to_sunrise_ends_the_next_morning(config: IntegrationConfig) -> None:
+    """A slot whose sun end precedes its start ends on the following day."""
+    night = _with_slot(
+        config, start_sun="sunset", end_sun="sunrise", end_offset_minutes=15
+    )
+    start, end = _window("2026-09-14T00:00:00Z", "2026-09-15T00:00:00Z")
+
+    [occurrence] = plan_occurrences(night, start, end, ROME, _sun)
+
+    assert occurrence.start_utc == datetime(2026, 9, 14, 17, tzinfo=UTC)
+    assert occurrence.end_utc == datetime(2026, 9, 15, 5, 15, tzinfo=UTC)
+
+
+def test_missing_sun_event_skips_the_day(config: IntegrationConfig) -> None:
+    """Polar days without sunrise or sunset produce no occurrence."""
+    sunny = _with_slot(config, start_sun="sunrise")
+    start, end = _window("2026-09-14T00:00:00Z", "2026-09-17T00:00:00Z")
+
+    assert plan_occurrences(sunny, start, end, ROME, lambda _event, _day: None) == ()
+    assert plan_occurrences(sunny, start, end, ROME) == ()
+
+
+def test_sun_fields_round_trip_and_stay_optional() -> None:
+    """Fixed slots keep their old JSON; invalid sun events are rejected."""
+    fixed = TimeSlot(
+        id="12121212-1212-4212-8212-121212121212",
+        weekdays=(0,),
+        start=time(7),
+        end=time(8),
+    )
+    assert "start_sun" not in fixed.to_dict()
+    sunny = replace(fixed, start_sun="sunrise", start_offset_minutes=20)
+    assert TimeSlot.from_dict(sunny.to_dict()) == sunny
+    with pytest.raises(ValueError):
+        replace(fixed, start_sun="noon")
+    with pytest.raises(ValueError):
+        replace(fixed, end_offset_minutes=10)

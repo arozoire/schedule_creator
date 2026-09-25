@@ -33,7 +33,7 @@ test('group lists controllable entities and search really hides nonmatches',asyn
  assert.equal(t.root.querySelector('[name="entities"][value="sensor.temperature"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="automation.test"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="update.test"]'),null);
- assert.equal(t.root.querySelector('.sc-version').textContent,'v0.3.14');
+ assert.equal(t.root.querySelector('.sc-version').textContent,'v0.3.15');
  t.set('entity_search','lampada','input');
  const hidden=t.root.querySelector('[value="switch.outside"]').parentElement;
  assert.equal(hidden.hidden,true);
@@ -102,7 +102,7 @@ test('local action failure exposes phase and stack, keeps draft and permits retr
  const details=t.root.querySelector('.sc-error-details textarea').value;
  assert.match(details,/Fase: lettura azione iniziale/);
  assert.match(details,/Traccia:\nError: Method not implemented/);
- assert.match(details,/Schedule Creator: 0.3.14/);
+ assert.match(details,/Schedule Creator: 0.3.15/);
  assert.match(t.root.querySelector('.sc-error').textContent,/La bozza è conservata/);
  t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
  assert.equal(t.writes.length,1);
@@ -233,7 +233,7 @@ test('name and notification texts are suggested until the user edits them',async
 test('version mismatch explains reload or restart',async()=>{
  const t=setup();try {await tick();
  assert.match(t.root.querySelector('.sc-warning').textContent,/Riavvia Home Assistant/);
- t.card.adapter.state={...structuredClone(t.snapshot),integration_version:'0.3.14'};t.card.render();
+ t.card.adapter.state={...structuredClone(t.snapshot),integration_version:'0.3.15'};t.card.render();
  assert.equal(t.root.querySelector('.sc-warning'),null);
  t.card.adapter.state.integration_version='0.4.0';t.card.render();
  assert.match(t.root.querySelector('.sc-warning').textContent,/Ricarica la pagina/);

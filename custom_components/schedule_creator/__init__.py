@@ -28,9 +28,10 @@ from .const import DOMAIN, INTEGRATION_VERSION
 from .frontend_loader import async_register_frontend
 from .horizon import HorizonRefreshCoordinator
 from .journal import RecoveryInstruction, build_recovery_plan
-from .reconciliation import async_reconcile_horizon
+from .reconciliation import async_reconcile_horizon, sun_resolver
 from .retention import async_prune_terminal_occurrences
 from .snapshots import SnapshotCoordinator
+from .stats import StatsCoordinator
 from .status_notifications import StatusNotificationCoordinator
 from .storage import ScheduleCreatorStorage
 from .websocket_api import async_register_commands
@@ -51,6 +52,7 @@ class ScheduleCreatorRuntimeData:
     action_execution: ActionExecutionCoordinator
     completions: CompletionCoordinator
     status_notifications: StatusNotificationCoordinator
+    stats: StatsCoordinator
     loaded: bool = True
 
     async def async_shutdown(self) -> None:
@@ -63,6 +65,7 @@ class ScheduleCreatorRuntimeData:
         self.snapshots.shutdown()
         self.action_execution.shutdown()
         self.status_notifications.shutdown()
+        await self.stats.async_shutdown()
         await self.storage.async_shutdown()
 
 
@@ -104,7 +107,11 @@ async def async_setup_entry(
         if config is None:
             raise RuntimeError("configuration was not initialized")
         await async_reconcile_horizon(
-            storage.runtime, config, ZoneInfo(hass.config.time_zone), now
+            storage.runtime,
+            config,
+            ZoneInfo(hass.config.time_zone),
+            now,
+            sun_resolver(hass),
         )
         await async_advance_occurrence_states(storage.runtime, now)
         await async_advance_quick_timer_states(storage.runtime, now)
@@ -127,6 +134,8 @@ async def async_setup_entry(
             await conditions.async_refresh(now)
         await async_prune_terminal_occurrences(storage.runtime, now)
         recovery_plan = build_recovery_plan(storage.runtime.data, now)
+        stats = StatsCoordinator(hass, storage.runtime)
+        await stats.async_load()
         occurrence_boundaries = OccurrenceBoundaryCoordinator(
             hass, storage.runtime, conditions.async_refresh
         )
@@ -148,6 +157,7 @@ async def async_setup_entry(
             status_notifications=StatusNotificationCoordinator(
                 hass, storage.config, storage.runtime
             ),
+            stats=stats,
         )
         action_execution.start(now)
         snapshots.start()
@@ -155,6 +165,7 @@ async def async_setup_entry(
         occurrence_boundaries.start(now)
         horizon_refresh.start()
         entry.runtime_data.status_notifications.start()
+        stats.start()
         if not started:
             entry.async_on_unload(
                 async_at_started(hass, lambda _hass: _async_first_run(hass, entry))

@@ -8,6 +8,27 @@ export const DAY_SHORTCUTS = {all: [0, 1, 2, 3, 4, 5, 6], workdays: [0, 1, 2, 3,
 export const SNAP_OPTIONS = [5, 10, 15, 30];
 export const toMinutes = (value) => { const [h, m] = String(value || '0:0').split(':').map(Number); return h * 60 + (m || 0); };
 export const toTime = (minutes) => `${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+export const SUN_LABELS = {sunrise: 'Alba', sunset: 'Tramonto'};
+
+// Today's sunrise and sunset in minutes of the HA day, from sun.sun; null
+// without the sun integration. Used only to show sun-based slots.
+export function sunMinutes(hass) {
+  const a = hass?.states?.['sun.sun']?.attributes;
+  if (!a?.next_rising || !a?.next_setting) return null;
+  const at = (iso) => {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {timeZone: hass.config?.time_zone || undefined, hour: '2-digit', minute: '2-digit', hourCycle: 'h23'}).formatToParts(new Date(iso)).map((x) => [x.type, x.value]));
+    return Number(p.hour) * 60 + Number(p.minute);
+  };
+  return {sunrise: at(a.next_rising), sunset: at(a.next_setting)};
+}
+const signed = (m) => `${m < 0 ? '−' : '+'}${Math.abs(m)}′`;
+// "Tramonto −30′" for a sun boundary, the time otherwise.
+export function boundaryLabel(slot, side) {
+  const event = slot[`${side}_sun`];
+  if (!event) return String(slot[side] || '').slice(0, 5);
+  const offset = slot[`${side}_offset_minutes`] || 0;
+  return `${SUN_LABELS[event]}${offset ? ` ${signed(offset)}` : ''}`;
+}
 
 // Background blocks: other slots on at least one of the selected days.
 export function slotBlocks(others, weekdays) {
@@ -42,14 +63,34 @@ export function slotsForm(slots, {others = [], snap = 15} = {}) {
     const shortcuts = [['all', 'Tutti'], ['workdays', 'Feriali'], ['weekend', 'Weekend']].map(([id, label]) => `<button type="button" class="sc-pill${DAY_SHORTCUTS[id].join('') === key ? ' is-selected' : ''}" data-command="slotDays" data-id="${i}:${id}">${label}</button>`).join('');
     const days = DAY_LABELS.map((d, day) => `<label class="sc-day-chip"><input type="checkbox" name="slot_${i}_days" value="${day}" ${slot.weekdays.includes(day) ? 'checked' : ''}><span>${d}</span></label>`).join('');
     const siblings = slots.filter((_, j) => j !== i).map((s) => ({...s, name: 'Altra fascia di questo schedule', color: '#8a96a3'}));
-    return `<fieldset data-slot="${i}"><legend>Fascia ${i + 1}</legend>${timebar(i, slot, [...others, ...siblings], snap)}<div class="sc-time-row">${`<label>Inizio<input name="slot_${i}_start" type="time" value="${escS(slot.start)}"></label><label>Fine<input name="slot_${i}_end" type="time" value="${escS(slot.end)}"></label>`}</div><div class="sc-shortcuts">${shortcuts}</div><div class="sc-days">${days}</div>${slots.length > 1 ? `<button type="button" data-command="removeSlot" data-id="${i}">Rimuovi fascia</button>` : ''}</fieldset>`;
+    return `<fieldset data-slot="${i}"><legend>Fascia ${i + 1}</legend>${timebar(i, slot, [...others, ...siblings], snap)}<div class="sc-time-row">${boundaryField(i, 'start', 'Inizio', slot)}${boundaryField(i, 'end', 'Fine', slot)}</div><div class="sc-shortcuts">${shortcuts}</div><div class="sc-days">${days}</div>${slots.length > 1 ? `<button type="button" data-command="removeSlot" data-id="${i}">Rimuovi fascia</button>` : ''}</fieldset>`;
   }).join('') + '<button type="button" data-command="addSlot">＋ Fascia successiva</button>';
 }
 
-export function readSlots(form) {
+// A boundary is a fixed time or sunrise/sunset with an offset in minutes.
+function boundaryField(i, side, label, slot) {
+  const event = slot[`${side}_sun`] || '';
+  const kind = `<select name="slot_${i}_${side}_sun" aria-label="${label}: riferimento">${[['', 'Orario'], ['sunrise', SUN_LABELS.sunrise], ['sunset', SUN_LABELS.sunset]].map(([v, t]) => `<option value="${v}" ${v === event ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
+  const value = event
+    ? `<input name="slot_${i}_${side}_offset" type="number" min="-360" max="360" step="5" value="${escS(slot[`${side}_offset_minutes`] ?? 0)}" aria-label="${label}: minuti prima (−) o dopo (+)"><input type="hidden" name="slot_${i}_${side}" value="${escS(slot[side])}"><small>min · ≈ ${escS(String(slot[side] || '').slice(0, 5))} oggi</small>`
+    : `<input name="slot_${i}_${side}" type="time" value="${escS(slot[side])}">`;
+  return `<div class="sc-bound"><span class="sc-field-label">${label}</span><div class="sc-bound-row">${kind}${value}</div></div>`;
+}
+
+export function readSlots(form, sun = null) {
   return [...form.querySelectorAll('[data-slot]')].map((node) => {
     const i = node.dataset.slot;
-    return {weekdays: [...node.querySelectorAll('input[type=checkbox]:checked')].map((x) => Number(x.value)), start: form.elements[`slot_${i}_start`].value, end: form.elements[`slot_${i}_end`].value};
+    const slot = {weekdays: [...node.querySelectorAll('input[type=checkbox]:checked')].map((x) => Number(x.value)), start: form.elements[`slot_${i}_start`].value, end: form.elements[`slot_${i}_end`].value};
+    for (const side of ['start', 'end']) {
+      const event = form.elements[`slot_${i}_${side}_sun`]?.value;
+      if (!event) continue;
+      const offset = Math.max(-360, Math.min(360, Math.round(Number(form.elements[`slot_${i}_${side}_offset`]?.value) || 0)));
+      slot[`${side}_sun`] = event;
+      slot[`${side}_offset_minutes`] = offset;
+      // Approximate time for the week views; the integration uses the real sun.
+      if (sun?.[event] != null) slot[side] = toTime((sun[event] + offset + 1440) % 1440);
+    }
+    return slot;
   });
 }
 

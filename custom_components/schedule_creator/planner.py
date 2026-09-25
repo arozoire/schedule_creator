@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from collections.abc import Callable
+from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from .models import (
@@ -17,6 +18,10 @@ from .models import (
 
 _MAX_GAP_SEARCH = timedelta(hours=3)
 _GAP_STEP = timedelta(minutes=1)
+
+# (event, local date) -> UTC instant of sunrise/sunset, None when it does not
+# happen that day (polar day or night).
+type SunResolver = Callable[[str, date], datetime | None]
 
 
 def _utc_boundary(value: datetime, path: str) -> datetime:
@@ -52,14 +57,72 @@ def _resolve_boundary(
     raise ValueError("local boundary is outside the supported DST gap")
 
 
+def _boundary(
+    local_date: date,
+    fixed: time,
+    event: str | None,
+    offset: int | None,
+    timezone: ZoneInfo,
+    sun: SunResolver | None,
+    *,
+    use_latest: bool,
+) -> datetime | None:
+    if event is None:
+        return _resolve_boundary(
+            datetime.combine(local_date, fixed), timezone, use_latest=use_latest
+        )
+    instant = None if sun is None else sun(event, local_date)
+    if instant is None:
+        return None
+    # Whole minutes, like fixed times, so occurrence IDs stay readable.
+    moved = instant + timedelta(minutes=offset or 0)
+    return moved.replace(second=0, microsecond=0).astimezone(UTC)
+
+
 def _occurrence(
-    schedule: Schedule, slot: TimeSlot, local_date: date, timezone: ZoneInfo
-) -> Occurrence:
-    local_start_naive = datetime.combine(local_date, slot.start)
-    end_date = local_date if slot.end > slot.start else local_date + timedelta(days=1)
-    local_end_naive = datetime.combine(end_date, slot.end)
-    start_utc = _resolve_boundary(local_start_naive, timezone, use_latest=False)
-    end_utc = _resolve_boundary(local_end_naive, timezone, use_latest=True)
+    schedule: Schedule,
+    slot: TimeSlot,
+    local_date: date,
+    timezone: ZoneInfo,
+    sun: SunResolver | None = None,
+) -> Occurrence | None:
+    start_utc = _boundary(
+        local_date,
+        slot.start,
+        slot.start_sun,
+        slot.start_offset_minutes,
+        timezone,
+        sun,
+        use_latest=False,
+    )
+    if start_utc is None:
+        return None
+    if slot.start_sun is None and slot.end_sun is None:
+        end_date = (
+            local_date if slot.end > slot.start else local_date + timedelta(days=1)
+        )
+        end_utc = _resolve_boundary(
+            datetime.combine(end_date, slot.end), timezone, use_latest=True
+        )
+    else:
+        # A sun-based slot ends on the same day, or the next one when the end
+        # comes first (for example from sunset to sunrise).
+        end_utc = None
+        for end_date in (local_date, local_date + timedelta(days=1)):
+            candidate = _boundary(
+                end_date,
+                slot.end,
+                slot.end_sun,
+                slot.end_offset_minutes,
+                timezone,
+                sun,
+                use_latest=True,
+            )
+            if candidate is not None and candidate > start_utc:
+                end_utc = candidate
+                break
+        if end_utc is None:
+            return None
     if end_utc <= start_utc:
         raise ValueError("resolved occurrence end must follow start")
     local_start = start_utc.astimezone(timezone).isoformat()
@@ -95,6 +158,7 @@ def plan_occurrences(
     window_start_utc: datetime,
     window_end_utc: datetime,
     timezone: ZoneInfo,
+    sun: SunResolver | None = None,
 ) -> tuple[Occurrence, ...]:
     """Project occurrences which overlap a half-open UTC planning window.
 
@@ -120,8 +184,12 @@ def plan_occurrences(
             for slot in schedule.time_slots:
                 if not _included(schedule, slot, local_date):
                     continue
-                occurrence = _occurrence(schedule, slot, local_date, timezone)
-                if occurrence.end_utc > start and occurrence.start_utc < end:
+                occurrence = _occurrence(schedule, slot, local_date, timezone, sun)
+                if (
+                    occurrence is not None
+                    and occurrence.end_utc > start
+                    and occurrence.start_utc < end
+                ):
                     projected.append(occurrence)
         local_date += timedelta(days=1)
 

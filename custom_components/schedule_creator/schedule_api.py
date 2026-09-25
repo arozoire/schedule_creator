@@ -60,7 +60,19 @@ def _record(value: object, allowed: set[str], path: str) -> dict[str, Any]:
 
 
 def _time_slot(value: object) -> dict[str, Any]:
-    item = _record(value, {"weekdays", "start", "end"}, "time slot")
+    item = _record(
+        value,
+        {
+            "weekdays",
+            "start",
+            "end",
+            "start_sun",
+            "start_offset_minutes",
+            "end_sun",
+            "end_offset_minutes",
+        },
+        "time slot",
+    )
     return {"schema_version": 1, "id": str(uuid4()), **item}
 
 

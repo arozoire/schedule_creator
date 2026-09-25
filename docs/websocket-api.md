@@ -423,3 +423,13 @@ che mostra l'anteprima prima di inviare il comando.
 - Una modifica di configurazione che ferma o cambia una fascia in corso la porta
   a `cancelled`; la nuova versione, se esiste, parte subito.
 - I record conclusi da più di 7 giorni vengono eliminati dal runtime Store.
+
+## Alba/tramonto, stato precedente e statistiche (0.3.15)
+
+- Fasce: `start_sun`/`end_sun` (`sunrise`, `sunset`) con
+  `start_offset_minutes`/`end_offset_minutes` (−360…360). Facoltativi; con il
+  sole `start`/`end` sono solo indicativi.
+- Azione finale `{"domain": <dominio>, "action": "restore_previous", "data": {}}`:
+  ripristina lo stato registrato all'inizio della fascia.
+- `get_state.stats`: `{schedule_id: {"activations", "muted", "last_activation",
+  "last_muted"}}`.

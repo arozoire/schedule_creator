@@ -21,6 +21,8 @@ TARGET_SELECTOR_KEYS = frozenset(
 )
 # Pseudo-action: data is a desired entity state reproduced through scene.apply.
 APPLY_STATE_ACTION = "apply_state"
+# End action only: put back the state captured when the slot started.
+RESTORE_PREVIOUS_ACTION = "restore_previous"
 
 _OBJECT_ID_PATTERN = r"(?!_)[\da-z_]+(?<!_)"
 _DOMAIN_PATTERN = r"(?!.+__)" + _OBJECT_ID_PATTERN
@@ -500,14 +502,45 @@ class Group(VersionedModel):
         )
 
 
+SUN_EVENTS = frozenset({"sunrise", "sunset"})
+MAX_SUN_OFFSET_MINUTES = 360
+_SUN_FIELDS = frozenset(
+    {"start_sun", "start_offset_minutes", "end_sun", "end_offset_minutes"}
+)
+
+
+def _sun_boundary(
+    event: object, offset: object, path: str
+) -> tuple[str | None, int | None]:
+    if event is None:
+        if offset is not None:
+            _fail(f"{path}_offset_minutes", "requires a sun event")
+        return None, None
+    if event not in SUN_EVENTS:
+        _fail(f"{path}_sun", "must be sunrise or sunset")
+    minutes = 0 if offset is None else _integer(offset, f"{path}_offset_minutes")
+    if abs(minutes) > MAX_SUN_OFFSET_MINUTES:
+        _fail(f"{path}_offset_minutes", "must be within six hours")
+    return str(event), minutes
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TimeSlot(VersionedModel):
-    """A weekly half-open local-time interval."""
+    """A weekly half-open local-time interval.
+
+    A boundary may follow sunrise or sunset with an offset in minutes (added in
+    0.3.15, omitted from JSON when unset); ``start``/``end`` then only hold an
+    approximate time for display.
+    """
 
     id: str
     weekdays: tuple[int, ...]
     start: time
     end: time
+    start_sun: str | None = None
+    start_offset_minutes: int | None = None
+    end_sun: str | None = None
+    end_offset_minutes: int | None = None
 
     def __post_init__(self) -> None:
         VersionedModel.__post_init__(self)
@@ -525,12 +558,31 @@ class TimeSlot(VersionedModel):
         object.__setattr__(self, "weekdays", weekdays)
         object.__setattr__(self, "start", _time(self.start, "time_slot.start"))
         object.__setattr__(self, "end", _time(self.end, "time_slot.end"))
+        start_sun, start_offset = _sun_boundary(
+            self.start_sun, self.start_offset_minutes, "time_slot.start"
+        )
+        end_sun, end_offset = _sun_boundary(
+            self.end_sun, self.end_offset_minutes, "time_slot.end"
+        )
+        object.__setattr__(self, "start_sun", start_sun)
+        object.__setattr__(self, "start_offset_minutes", start_offset)
+        object.__setattr__(self, "end_sun", end_sun)
+        object.__setattr__(self, "end_offset_minutes", end_offset)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Encode the slot; fixed-time slots keep the 0.3.14 shape."""
+
+        payload = VersionedModel.to_dict(self)
+        for key in _SUN_FIELDS:
+            if payload[key] is None:
+                payload.pop(key)
+        return payload
 
     @classmethod
     def from_dict(cls, data: object) -> Self:
         """Decode and validate a time slot."""
 
-        item = _strict_record(data, cls, "time_slot")
+        item = _strict_record(data, cls, "time_slot", optional=_SUN_FIELDS)
         return cls(
             schema_version=_integer(item["schema_version"], "time_slot.schema_version"),
             id=_uuid(item["id"], "time_slot.id"),
@@ -542,6 +594,10 @@ class TimeSlot(VersionedModel):
             ),
             start=_time(item["start"], "time_slot.start"),
             end=_time(item["end"], "time_slot.end"),
+            start_sun=item.get("start_sun"),
+            start_offset_minutes=item.get("start_offset_minutes"),
+            end_sun=item.get("end_sun"),
+            end_offset_minutes=item.get("end_offset_minutes"),
         )
 
 
@@ -911,6 +967,8 @@ class Schedule(VersionedModel):
                 "schedule.start_action.domain",
                 "must match every target entity domain",
             )
+        if self.start_action.action == RESTORE_PREVIOUS_ACTION:
+            _fail("schedule.start_action", "restore_previous is only an end action")
         if self.end_action is not None and self.end_action.domain not in target_domains:
             _fail("schedule.end_action.domain", "must match target entity domain")
         created_at = _utc_datetime(self.created_at, "schedule.created_at")
@@ -1509,6 +1567,8 @@ class QuickTimer(VersionedModel):
             _fail("quick_timer.action", "must be a target action")
         if self.action.domain != self.entity_id.split(".", 1)[0]:
             _fail("quick_timer.action.domain", "must match entity_id")
+        if self.action.action == RESTORE_PREVIOUS_ACTION:
+            _fail("quick_timer.action", "restore_previous is only an end action")
         snapshot_id = (
             None
             if self.snapshot_id is None

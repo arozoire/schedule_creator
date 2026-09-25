@@ -15,7 +15,7 @@ from homeassistant.core import HomeAssistant
 from .boundaries import async_advance_occurrence_states
 from .const import DOMAIN
 from .models import IntegrationConfig, ModelValidationError
-from .reconciliation import async_reconcile_horizon
+from .reconciliation import async_reconcile_horizon, sun_resolver
 from .storage import RevisionConflictError, StorageNotLoadedError
 
 if TYPE_CHECKING:
@@ -88,6 +88,7 @@ async def async_mutate_config(
                     updated,
                     ZoneInfo(hass.config.time_zone),
                     now,
+                    sun_resolver(hass),
                 )
                 await async_advance_occurrence_states(
                     runtime.storage.runtime, now
