@@ -11,7 +11,8 @@ from .planner import plan_occurrences
 from .snapshots import _snapshot_id
 from .storage import RuntimeRepository, RuntimeStoreData
 
-PLANNING_HORIZON = timedelta(days=14)
+# Refreshed daily, so three days always leave at least two days of lookahead.
+PLANNING_HORIZON = timedelta(days=3)
 
 
 def _utc(value: datetime, path: str) -> datetime:

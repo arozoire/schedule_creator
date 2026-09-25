@@ -5,7 +5,7 @@ from copy import deepcopy
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from custom_components.schedule_creator.condition_runtime import (
     ConditionCoordinator,
@@ -137,3 +137,19 @@ async def test_coordinator_tracks_entities_and_duration_deadline(hass) -> None:
 
     assert cancel_states.called
     assert cancel_deadline.called
+
+
+async def test_sensor_update_without_branch_change_skips_downstream(hass) -> None:
+    """Leases, snapshots and actions are not recomputed for an idle sensor tick."""
+    repository, _store = await _repository(hass)
+    hass.states.async_set("sensor.outdoor_lux", "50")
+    downstream = AsyncMock()
+    coordinator = ConditionCoordinator(hass, repository, downstream)
+    await coordinator.async_refresh(NOW)
+    downstream.reset_mock()
+    revision = repository.data.revision
+
+    await coordinator._async_refresh_if_changed(NOW + timedelta(seconds=1))
+
+    downstream.assert_not_awaited()
+    assert repository.data.revision == revision

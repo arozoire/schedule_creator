@@ -81,17 +81,24 @@ async def async_reconcile_condition_branches(
         frozenset(node.node_id for node in evaluation.nodes): evaluation
         for evaluation in previous.values()
     }
+    # Every occurrence of one condition sees the same states at the same instant,
+    # so each distinct condition is evaluated once per refresh.
+    shared: dict[frozenset[str], ConditionEvaluation] = {}
     for occurrence in repository.data.occurrences:
         condition = occurrence.frozen_schedule.condition
         if condition is None or occurrence.state not in _EVALUATED_STATES:
             continue
-        evaluation = evaluate_condition(
-            condition,
-            _state_values(hass, condition),
-            now,
-            previous.get(occurrence.id)
-            or by_nodes.get(frozenset(_node_ids(condition))),
-        )
+        signature = frozenset(_node_ids(condition))
+        prior = previous.get(occurrence.id)
+        evaluation = shared.get(signature) if prior is None else None
+        if evaluation is None:
+            evaluation = evaluate_condition(
+                condition,
+                _state_values(hass, condition),
+                now,
+                prior or by_nodes.get(signature),
+            )
+            shared.setdefault(signature, evaluation)
         evaluations[occurrence.id] = evaluation
         branches[occurrence.id] = (
             ConditionBranch.TRUE if evaluation.result else ConditionBranch.FALSE
@@ -168,6 +175,22 @@ class ConditionCoordinator:
         self.reschedule(now)
         return result
 
+    async def _async_refresh_if_changed(self, now: datetime) -> None:
+        """A sensor update that flips no branch cannot change any controller."""
+
+        before = self._runtime.data.revision
+        result, evaluations = await async_reconcile_condition_branches(
+            self._hass, self._runtime, now, self._evaluations
+        )
+        self._evaluations = evaluations
+        if result.revision == before:
+            self.reschedule(now)
+            return
+        await async_reconcile_entity_leases(self._runtime, now)
+        if self._on_leases_reconciled is not None:
+            await self._on_leases_reconciled(now)
+        self.reschedule(now)
+
     def start(self, now: datetime) -> None:
         """Activate state and duration tracking after initial reconciliation."""
 
@@ -232,7 +255,7 @@ class ConditionCoordinator:
             if not self._active:
                 return
             try:
-                await self.async_refresh(now.astimezone(UTC))
+                await self._async_refresh_if_changed(now.astimezone(UTC))
             except Exception:
                 _LOGGER.exception("Unable to reconcile schedule conditions")
                 self.reschedule(now.astimezone(UTC))

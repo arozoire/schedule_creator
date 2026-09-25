@@ -1,4 +1,4 @@
-import { ScheduleCreatorStateAdapter } from './state-adapter.js';
+import { ScheduleCreatorStateAdapter, watchedEntities, hassChanged } from './state-adapter.js';
 import { weeklySegments } from './timeline.js';
 import { clean, messageFor, parseJson, diagnosticFor } from './editor.js';
 import { controllable, targetEntities, notificationForm, readNotification } from './forms.js';
@@ -7,7 +7,7 @@ import { actionForm, readAction, describeAction, describeState, pretty } from '.
 import { isWscBackup, convertWscBackup, wscImportPayload } from './wsc-import.js';
 
 const STYLE = '__SC_CSS__';
-const CARD_VERSION = '0.3.13';
+const CARD_VERSION = '0.3.14';
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
@@ -130,7 +130,11 @@ class ScheduleCreatorCard extends HTMLElement {
   static getConfigElement() { return document.createElement('schedule-creator-card-editor'); }
   getCardSize() { return 8; }
   setConfig(config) { this.config = config; this.render(); }
-  set hass(hass) { this._hass = hass; if (this.isConnected) this.adapter.connect(hass); if (hass?.connection !== this.adapter.connection || !this.edit) this.render(); }
+  set hass(hass) {
+    const previous = this._hass; this._hass = hass;
+    if (this.isConnected) this.adapter.connect(hass);
+    if (hass?.connection !== this.adapter.connection || (!this.edit && hassChanged(previous, hass, watchedEntities(this.adapter.state)))) this.render();
+  }
   connectedCallback() {
     if (this._hass) this.adapter.connect(this._hass);
     // Serpentine/ring cards ask the main card to open a schedule (see week-cards.js).

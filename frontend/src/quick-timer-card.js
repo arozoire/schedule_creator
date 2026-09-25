@@ -1,6 +1,6 @@
 // Standalone Quick Timer card, like weekly-schedule-card's quick-timer-card.
 // Same backend and bundle as the main card: timers live in Schedule Creator.
-import { ScheduleCreatorStateAdapter } from './state-adapter.js';
+import { ScheduleCreatorStateAdapter, hassChanged } from './state-adapter.js';
 import { uiEscape, targetEntities } from './forms.js';
 import { messageFor } from './editor.js';
 import { actionForm, readAction, describeAction, describeState } from './action-editor.js';
@@ -38,7 +38,13 @@ export class ScheduleCreatorQuickTimerCard extends HTMLElement {
     this.minutes ??= Number(this.config.default_minutes) >= 1 ? Number(this.config.default_minutes) : this.presets.includes(30) ? 30 : this.presets[0];
     this.render();
   }
-  set hass(hass) { this._hass = hass; if (this.isConnected) this.adapter.connect(hass); if (!this.shadowRoot.activeElement) this.render(); }
+  set hass(hass) {
+    const previous = this._hass; this._hass = hass;
+    if (this.isConnected) this.adapter.connect(hass);
+    // Only the chosen device and running timers matter here.
+    const state = this.adapter.state, ids = state ? new Set([this.entity, ...(state.quick_timers || []).map((t) => t.entity_id)].filter(Boolean)) : null;
+    if (!this.shadowRoot.activeElement && hassChanged(previous, hass, ids)) this.render();
+  }
   connectedCallback() { if (this._hass) this.adapter.connect(this._hass); this.render(); this.clock ??= setInterval(() => this.tick(), 1000); }
   disconnectedCallback() { this.adapter.disconnect(); clearInterval(this.clock); this.clock = null; }
   get entity() { return this.config?.entity || this.draft.qt_entity || null; }
