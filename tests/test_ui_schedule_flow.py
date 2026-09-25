@@ -28,14 +28,16 @@ async def test_switch_schedule_from_websocket_runs_at_both_boundaries(
             "switch.ui_test", "on" if call.service == "turn_on" else "off"
         )
 
-    hass.services.async_register("switch", "turn_on", switch_service)
-    hass.services.async_register("switch", "turn_off", switch_service)
     hass.states.async_set("switch.ui_test", "off")
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
     await hass.config_entries.flow.async_configure(result["flow_id"], {})
     await hass.async_block_till_done()
+    # After setup: the entry loads the real switch component for its own
+    # switches, which would otherwise replace these test services.
+    hass.services.async_register("switch", "turn_on", switch_service)
+    hass.services.async_register("switch", "turn_off", switch_service)
     client = await hass_ws_client(hass)
 
     async def request(payload):

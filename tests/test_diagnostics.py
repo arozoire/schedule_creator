@@ -4,6 +4,7 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 
 from custom_components.schedule_creator.const import DOMAIN
+from custom_components.schedule_creator.control import SERVICES
 from custom_components.schedule_creator.diagnostics import (
     async_get_config_entry_diagnostics,
 )
@@ -28,11 +29,10 @@ async def test_diagnostics_are_read_only(hass: HomeAssistant) -> None:
         },
         "runtime": {
             "loaded": True,
-            "registered_services": 0,
+            "registered_services": len(SERVICES),
             "owned_entities": 0,
         },
     }
-    assert DOMAIN not in hass.services.async_services()
     assert not any(
         state.entity_id.startswith(f"{DOMAIN}.") for state in hass.states.async_all()
     )

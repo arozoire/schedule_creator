@@ -5,6 +5,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.schedule_creator.const import CONFIG_ENTRY_TITLE, DOMAIN
+from custom_components.schedule_creator.control import SERVICES
 
 
 async def test_user_flow_creates_and_loads_entry(hass: HomeAssistant) -> None:
@@ -26,7 +27,8 @@ async def test_user_flow_creates_and_loads_entry(hass: HomeAssistant) -> None:
     entry = hass.config_entries.async_entries(DOMAIN)[0]
     assert entry.unique_id == DOMAIN
     assert entry.runtime_data.loaded is True
-    assert DOMAIN not in hass.services.async_services()
+    # The automation services exist while the entry is loaded.
+    assert set(SERVICES) <= set(hass.services.async_services().get(DOMAIN, {}))
 
 
 async def test_second_entry_is_rejected(hass: HomeAssistant) -> None:

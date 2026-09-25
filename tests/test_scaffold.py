@@ -30,9 +30,9 @@ class ScaffoldTest(unittest.TestCase):
             self.assertTrue(payload["config"]["step"]["user"]["title"])
             self.assertTrue(payload["config"]["abort"]["already_configured"])
 
-    def test_scaffold_defines_no_entity_platform(self) -> None:
-        """Phase 1 must not add schedule/helper entities to the state machine."""
+    def test_scaffold_defines_only_control_platforms(self) -> None:
+        """Only profile/schedule switches and the next-slot sensor are entities."""
 
-        forbidden = {"switch.py", "sensor.py", "button.py", "select.py"}
+        forbidden = {"button.py", "select.py", "number.py", "binary_sensor.py"}
         names = {path.name for path in COMPONENT.iterdir()}
         self.assertTrue(forbidden.isdisjoint(names))
