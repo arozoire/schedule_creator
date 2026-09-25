@@ -149,7 +149,8 @@ def _successor(
         and item.start_utc <= instant < item.end_utc
     ]
     same_slot = [item for item in candidates if item.slot_id == running.slot_id]
-    return (same_slot or candidates or [None])[0]
+    chosen = same_slot or candidates
+    return chosen[0] if chosen else None
 
 
 def _unique_id(candidate: str, taken: set[str], revision: int) -> str:
