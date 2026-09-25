@@ -235,7 +235,7 @@ test('version mismatch explains reload or restart',async()=>{
  assert.match(t.root.querySelector('.sc-warning').textContent,/Riavvia Home Assistant/);
  t.card.adapter.state={...structuredClone(t.snapshot),integration_version:'0.4.1'};t.card.render();
  assert.equal(t.root.querySelector('.sc-warning'),null);
- t.card.adapter.state.integration_version='0.4.0';t.card.render();
+ t.card.adapter.state.integration_version='9.9.0';t.card.render();
  assert.match(t.root.querySelector('.sc-warning').textContent,/Ricarica la pagina/);
  }finally{t.close();}
 });
