@@ -1,5 +1,33 @@
 # AI handoff — stato attuale e piano futuro
 
+## Correzioni dall'audit (B1–B6) — 0.3.13 (2026-09-25)
+
+Piano approvato dal proprietario: prima tutti i bug (B), poi le ottimizzazioni
+(O2 pipeline condizioni, O1 render card, O3 orizzonte, O4 recovery_plan), poi F2
+alba/tramonto, F3 opzione "ripristina stato precedente a fine fascia", F4
+statistiche per schedule (in fondo all'editor, sotto tendina), F7 traduzioni
+EN/FR/DE/ES. In sospeso: F1 servizi/entità per automazioni, F5, F6, F8, F9.
+
+- **B1** `retention.py`: controller conclusi (occorrenze e Quick Timer) più vecchi
+  di 7 giorni e senza lease/operazioni aperte vengono rimossi con operazioni,
+  snapshot e chiavi di deduplica notifiche.
+- **B2/B3** `reconciliation.async_replan_window`: la fascia in corso all'inizio
+  della finestra viene confrontata con il suo successore pianificato (stesso
+  schedule, copre l'istante). Nessun successore → `CANCELLED` (azione finale come
+  un completamento). Comportamento cambiato (`_behaviour`: entità, azioni,
+  condizione) o orari cambiati → vecchia `CANCELLED`, nuova aggiunta (ID con
+  suffisso `#r<revisione>` se collide), snapshot copiati, ramo condizione
+  ereditato. Nome/notifiche cambiati → nulla. `condition_runtime` condivide la
+  memoria tra occorrenze con gli stessi nodi.
+- **B4** `actions.async_call_service`: timeout 20 s su ogni chiamata (azioni,
+  ripristini, notifiche) → retry. La prima esecuzione all'avvio aspetta
+  `async_at_started` se HA non è ancora in esecuzione.
+- **B5** `get_state.failures` (ultimi 20 `failed_final`) → avviso nella card per
+  le ultime 24 h ed elenco in "Attività" (`failureText`).
+- **B6** notifica di fine solo se l'avvio è riuscito; `operational.leases[].occurrence_id`
+  → card: "in corso" solo per chi detiene il lease (`liveOccurrence`,
+  `slotWaiting`), altrimenti "in attesa".
+
 ## Import dalla weekly-schedule-card — 0.3.12 (2026-09-25)
 
 Backend `import_api.py`: `schedule_creator/import/merge` aggiunge un albero

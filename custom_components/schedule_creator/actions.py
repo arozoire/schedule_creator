@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import replace
@@ -35,6 +36,18 @@ _LOGGER = logging.getLogger(__name__)
 ACTION_RETRY_INTERVAL = timedelta(seconds=30)
 MAX_ACTION_ATTEMPTS = 3
 UNKNOWN_SENT_OUTCOME = "sent_outcome_unknown"
+# A device that never answers must not hold the lifecycle lock forever: the
+# call is treated as failed and retried like any other service error.
+SERVICE_CALL_TIMEOUT = 20.0
+
+
+async def async_call_service(
+    hass: HomeAssistant, domain: str, service: str, **kwargs: Any
+) -> None:
+    """Call a Home Assistant service, raising TimeoutError when it hangs."""
+
+    async with asyncio.timeout(SERVICE_CALL_TIMEOUT):
+        await hass.services.async_call(domain, service, **kwargs)
 
 
 def _utc(value: datetime) -> datetime:
@@ -276,7 +289,11 @@ def _sendable_target_action(
     return any(
         occurrence.id == operation.occurrence_id
         and (
-            (phase == "schedule_end" and occurrence.state is OccurrenceState.COMPLETED)
+            (
+                phase == "schedule_end"
+                and occurrence.state
+                in {OccurrenceState.COMPLETED, OccurrenceState.CANCELLED}
+            )
             or (
                 phase == "condition_fallback"
                 and occurrence.state
@@ -372,7 +389,8 @@ async def async_execute_target_actions(
 
         sent = await journal.async_mark_sent(operation.id, wall_clock)
         try:
-            await hass.services.async_call(
+            await async_call_service(
+                hass,
                 domain,
                 action,
                 service_data=data,

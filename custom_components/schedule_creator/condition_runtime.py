@@ -44,6 +44,13 @@ def condition_entity_ids(condition: ConditionNode) -> frozenset[str]:
     return frozenset(entity_ids)
 
 
+def _node_ids(condition: ConditionNode) -> tuple[str, ...]:
+    return (
+        condition.id,
+        *(item for child in condition.children for item in _node_ids(child)),
+    )
+
+
 def _state_values(
     hass: HomeAssistant, condition: ConditionNode
 ) -> dict[str, str | None]:
@@ -68,6 +75,12 @@ async def async_reconcile_condition_branches(
 
     evaluations: dict[str, ConditionEvaluation] = {}
     branches: dict[str, ConditionBranch] = {}
+    # Occurrences of one condition share its history: a slot replaced after an
+    # edit keeps the running durations instead of starting again from zero.
+    by_nodes = {
+        frozenset(node.node_id for node in evaluation.nodes): evaluation
+        for evaluation in previous.values()
+    }
     for occurrence in repository.data.occurrences:
         condition = occurrence.frozen_schedule.condition
         if condition is None or occurrence.state not in _EVALUATED_STATES:
@@ -76,7 +89,8 @@ async def async_reconcile_condition_branches(
             condition,
             _state_values(hass, condition),
             now,
-            previous.get(occurrence.id),
+            previous.get(occurrence.id)
+            or by_nodes.get(frozenset(_node_ids(condition))),
         )
         evaluations[occurrence.id] = evaluation
         branches[occurrence.id] = (

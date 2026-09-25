@@ -6,7 +6,8 @@ from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import CoreState, HomeAssistant
+from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 from homeassistant.util.hass_dict import HassKey
@@ -119,7 +120,11 @@ async def async_setup_entry(
         conditions = ConditionCoordinator(
             hass, storage.runtime, snapshots.async_refresh
         )
-        await conditions.async_refresh(now)
+        # Commands wait until HA has started: devices of other integrations may
+        # not exist yet, and slow services must not delay the startup.
+        started = hass.state is CoreState.running
+        if started:
+            await conditions.async_refresh(now)
         await async_prune_terminal_occurrences(storage.runtime, now)
         recovery_plan = build_recovery_plan(storage.runtime.data, now)
         occurrence_boundaries = OccurrenceBoundaryCoordinator(
@@ -150,7 +155,25 @@ async def async_setup_entry(
         occurrence_boundaries.start(now)
         horizon_refresh.start()
         entry.runtime_data.status_notifications.start()
+        if not started:
+            entry.async_on_unload(
+                async_at_started(hass, lambda _hass: _async_first_run(hass, entry))
+            )
     return True
+
+
+async def _async_first_run(
+    hass: HomeAssistant, entry: ScheduleCreatorConfigEntry
+) -> None:
+    """Run the first reconciliation that may send commands once HA is running."""
+
+    async with lifecycle_lock(hass):
+        runtime = getattr(entry, "runtime_data", None)
+        if runtime is None or not runtime.loaded:
+            return
+        now = datetime.now(UTC)
+        await runtime.conditions.async_refresh(now)
+        runtime.occurrence_boundaries.reschedule(now)
 
 
 async def async_unload_entry(
