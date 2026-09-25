@@ -9,5 +9,67 @@
     "abort": {
       "already_configured": "Schedule Creator ya está configurado."
     }
+  },
+  "services": {
+    "set_profile": {
+      "name": "Establecer perfil",
+      "description": "Activa o desactiva un perfil de Schedule Creator. Activar un perfil exclusivo desactiva los demás exclusivos.",
+      "fields": {
+        "profile": {
+          "name": "Perfil",
+          "description": "Nombre o ID del perfil."
+        },
+        "active": {
+          "name": "Activo",
+          "description": "Encendido para activar, apagado para desactivar."
+        }
+      }
+    },
+    "set_schedule": {
+      "name": "Establecer programación",
+      "description": "Activa o desactiva una programación.",
+      "fields": {
+        "schedule": {
+          "name": "Programación",
+          "description": "Nombre o ID de la programación."
+        },
+        "enabled": {
+          "name": "Activada",
+          "description": "Encendido para activar, apagado para desactivar."
+        }
+      }
+    },
+    "start_timer": {
+      "name": "Iniciar Quick Timer",
+      "description": "Controla un dispositivo durante un tiempo; al final vuelve a su estado anterior.",
+      "fields": {
+        "entity_id": {
+          "name": "Entidad",
+          "description": "Dispositivo a controlar."
+        },
+        "duration": {
+          "name": "Duración",
+          "description": "Cuánto dura el temporizador (hasta 7 días)."
+        },
+        "action": {
+          "name": "Acción",
+          "description": "Servicio del dominio del dispositivo, p. ej. turn_on, o apply_state para un estado deseado."
+        },
+        "data": {
+          "name": "Datos",
+          "description": "Datos del servicio, p. ej. {\"state\": \"cool\", \"temperature\": 23} con apply_state."
+        }
+      }
+    },
+    "cancel_timer": {
+      "name": "Cancelar Quick Timer",
+      "description": "Detiene el Quick Timer en curso de un dispositivo y restaura su estado anterior.",
+      "fields": {
+        "entity_id": {
+          "name": "Entidad",
+          "description": "Dispositivo cuyo temporizador se cancela."
+        }
+      }
+    }
   }
 }

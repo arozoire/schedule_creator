@@ -18,7 +18,7 @@ from homeassistant.components.websocket_api.decorators import (
 from homeassistant.core import HomeAssistant
 
 from .models import IntegrationConfig, Profile, ProfileType
-from .mutation_api import MutationClientError, async_mutate_config
+from .mutation_api import ConfigMutation, MutationClientError, async_mutate_config
 
 _REVISION = vol.All(int, vol.Range(min=0))
 _PROFILE_ID = vol.All(str, vol.Length(min=1))
@@ -230,30 +230,18 @@ async def websocket_delete_profile(
     )
 
 
-@require_admin
-@websocket_command(
-    {
-        vol.Required("type"): "schedule_creator/profile/set_active",
-        vol.Required("expected_revision"): _REVISION,
-        vol.Required("profile_id"): _PROFILE_ID,
-        vol.Required("active"): bool,
-    }
-)
-@async_response
-async def websocket_set_profile_active(
-    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
-) -> None:
-    """Activate a profile, enforcing exclusivity among exclusive profiles."""
+def profile_activation(profile_id: str, wanted: bool) -> ConfigMutation:
+    """Activate or deactivate a profile; exclusive profiles switch each other off."""
 
     def mutation(config: IntegrationConfig, now: datetime) -> IntegrationConfig:
-        selected = _profile(config, msg["profile_id"])
+        selected = _profile(config, profile_id)
         profiles: list[Profile] = []
         for profile in config.profiles:
             active = profile.active
             if profile.id == selected.id:
-                active = msg["active"]
+                active = wanted
             elif (
-                msg["active"]
+                wanted
                 and selected.profile_type is ProfileType.EXCLUSIVE
                 and profile.profile_type is ProfileType.EXCLUSIVE
             ):
@@ -279,6 +267,26 @@ async def websocket_set_profile_active(
             ),
             updated_at=max(config.updated_at, now),
         )
+
+    return mutation
+
+
+@require_admin
+@websocket_command(
+    {
+        vol.Required("type"): "schedule_creator/profile/set_active",
+        vol.Required("expected_revision"): _REVISION,
+        vol.Required("profile_id"): _PROFILE_ID,
+        vol.Required("active"): bool,
+    }
+)
+@async_response
+async def websocket_set_profile_active(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Activate a profile, enforcing exclusivity among exclusive profiles."""
+
+    mutation = profile_activation(msg["profile_id"], msg["active"])
 
     await _mutate(
         hass,

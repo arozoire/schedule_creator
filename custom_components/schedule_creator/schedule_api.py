@@ -41,6 +41,32 @@ def _schedule(config: IntegrationConfig, schedule_id: str) -> Schedule:
         raise MutationClientError("not_found", "Schedule was not found.") from err
 
 
+def schedule_enabling(schedule_id: str, enabled: bool) -> ConfigMutation:
+    """Enable or disable one schedule without touching anything else."""
+
+    def mutation(config: IntegrationConfig, now: datetime) -> IntegrationConfig:
+        schedule = _schedule(config, schedule_id)
+        if schedule.enabled is enabled:
+            raise ValueError("schedule already has the requested state")
+        updated = replace(
+            schedule,
+            enabled=enabled,
+            revision=schedule.revision + 1,
+            updated_at=max(schedule.updated_at, now),
+        )
+        return replace(
+            config,
+            revision=config.revision + 1,
+            schedules=tuple(
+                updated if item.id == schedule_id else item
+                for item in config.schedules
+            ),
+            updated_at=max(config.updated_at, now),
+        )
+
+    return mutation
+
+
 def _owned_group(config: IntegrationConfig, profile_id: str, group_id: str) -> None:
     if not any(profile.id == profile_id for profile in config.profiles):
         raise MutationClientError("not_found", "Profile was not found.")

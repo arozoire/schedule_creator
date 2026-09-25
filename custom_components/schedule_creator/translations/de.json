@@ -9,5 +9,67 @@
     "abort": {
       "already_configured": "Schedule Creator ist bereits eingerichtet."
     }
+  },
+  "services": {
+    "set_profile": {
+      "name": "Profil setzen",
+      "description": "Aktiviert oder deaktiviert ein Profil von Schedule Creator. Das Aktivieren eines exklusiven Profils deaktiviert die anderen exklusiven.",
+      "fields": {
+        "profile": {
+          "name": "Profil",
+          "description": "Name oder ID des Profils."
+        },
+        "active": {
+          "name": "Aktiv",
+          "description": "An zum Aktivieren, aus zum Deaktivieren."
+        }
+      }
+    },
+    "set_schedule": {
+      "name": "Zeitplan setzen",
+      "description": "Aktiviert oder deaktiviert einen Zeitplan.",
+      "fields": {
+        "schedule": {
+          "name": "Zeitplan",
+          "description": "Name oder ID des Zeitplans."
+        },
+        "enabled": {
+          "name": "Aktiviert",
+          "description": "An zum Aktivieren, aus zum Deaktivieren."
+        }
+      }
+    },
+    "start_timer": {
+      "name": "Quick Timer starten",
+      "description": "Steuert ein Gerät für eine Weile; danach wird der vorherige Zustand wiederhergestellt.",
+      "fields": {
+        "entity_id": {
+          "name": "Entität",
+          "description": "Zu steuerndes Gerät."
+        },
+        "duration": {
+          "name": "Dauer",
+          "description": "Wie lange der Timer läuft (bis zu 7 Tage)."
+        },
+        "action": {
+          "name": "Aktion",
+          "description": "Dienst der Gerätedomäne, z. B. turn_on, oder apply_state für einen Sollzustand."
+        },
+        "data": {
+          "name": "Daten",
+          "description": "Dienstdaten, z. B. {\"state\": \"cool\", \"temperature\": 23} mit apply_state."
+        }
+      }
+    },
+    "cancel_timer": {
+      "name": "Quick Timer abbrechen",
+      "description": "Beendet den laufenden Quick Timer eines Geräts und stellt den vorherigen Zustand wieder her.",
+      "fields": {
+        "entity_id": {
+          "name": "Entität",
+          "description": "Gerät, dessen Timer abgebrochen wird."
+        }
+      }
+    }
   }
 }

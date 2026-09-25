@@ -43,6 +43,86 @@ def _action(value: object) -> TargetAction:
     return TargetAction.from_dict({"schema_version": 1, "id": str(uuid4()), **value})
 
 
+async def async_commit_runtime(
+    hass: HomeAssistant,
+    mutation: RuntimeApiMutation,
+    expected_revision: int | None = None,
+) -> RuntimeStoreData:
+    """Commit one runtime change (Quick Timers) and reconcile controllers."""
+
+    from . import lifecycle_lock
+
+    async with lifecycle_lock(hass):
+        loaded = _loaded_runtime(hass)
+        if loaded is None:
+            raise MutationClientError("not_loaded", "Schedule Creator is not loaded.")
+        now = datetime.now(UTC)
+        revision = (
+            loaded.storage.runtime.data.revision
+            if expected_revision is None
+            else expected_revision
+        )
+        await loaded.storage.runtime.async_update_expected(
+            revision, lambda current: mutation(current, now)
+        )
+        await loaded.conditions.async_refresh(now)
+        loaded.occurrence_boundaries.reschedule(now)
+        return loaded.storage.runtime.data
+
+
+def quick_timer_creation(
+    timer_id: str, entity_id: str, duration_seconds: float, action: object
+) -> RuntimeApiMutation:
+    """Start a Quick Timer that restores the previous state when it ends."""
+
+    def mutation(current: RuntimeStoreData, now: datetime) -> RuntimeStoreData:
+        if isinstance(duration_seconds, bool) or not 1 <= duration_seconds <= 604800:
+            raise ValueError("invalid duration")
+        timer = QuickTimer(
+            id=timer_id,
+            controller_id=f"quick:{timer_id}",
+            entity_id=entity_id,
+            action=_action(action),
+            snapshot_id=None,
+            starts_at=now,
+            expires_at=now + timedelta(seconds=duration_seconds),
+            state=QuickTimerState.ACTIVE,
+            created_at=now,
+        )
+        return replace(
+            current,
+            revision=current.revision + 1,
+            quick_timers=(*current.quick_timers, timer),
+            updated_at=max(current.updated_at, now),
+        )
+
+    return mutation
+
+
+def quick_timer_cancellation(timer_id: str) -> RuntimeApiMutation:
+    """Cancel an active Quick Timer; its restore follows as usual."""
+
+    def mutation(current: RuntimeStoreData, now: datetime) -> RuntimeStoreData:
+        timer = _timer(current, timer_id)
+        if timer.state is not QuickTimerState.ACTIVE:
+            raise MutationClientError(
+                "invalid_state", "Only an active Quick Timer can be cancelled."
+            )
+        return replace(
+            current,
+            revision=current.revision + 1,
+            quick_timers=tuple(
+                replace(item, state=QuickTimerState.CANCELLED)
+                if item.id == timer.id
+                else item
+                for item in current.quick_timers
+            ),
+            updated_at=max(current.updated_at, now),
+        )
+
+    return mutation
+
+
 async def _mutate(
     hass: HomeAssistant,
     connection: ActiveConnection,
@@ -50,23 +130,8 @@ async def _mutate(
     mutation: RuntimeApiMutation,
     response: RuntimeApiResponse,
 ) -> None:
-    from . import lifecycle_lock
-
     try:
-        async with lifecycle_lock(hass):
-            loaded = _loaded_runtime(hass)
-            if loaded is None:
-                connection.send_error(
-                    msg["id"], "not_loaded", "Schedule Creator is not loaded."
-                )
-                return
-            now = datetime.now(UTC)
-            await loaded.storage.runtime.async_update_expected(
-                msg["expected_revision"], lambda current: mutation(current, now)
-            )
-            await loaded.conditions.async_refresh(now)
-            loaded.occurrence_boundaries.reschedule(now)
-            updated = loaded.storage.runtime.data
+        updated = await async_commit_runtime(hass, mutation, msg["expected_revision"])
         connection.send_result(msg["id"], response(updated))
     except RevisionConflictError as err:
         connection.send_error(
@@ -110,27 +175,9 @@ async def websocket_create_quick_timer(
 
     timer_id = str(uuid4())
 
-    def mutation(current: RuntimeStoreData, now: datetime) -> RuntimeStoreData:
-        duration = msg["duration_seconds"]
-        if isinstance(duration, bool):
-            raise ValueError("invalid duration")
-        timer = QuickTimer(
-            id=timer_id,
-            controller_id=f"quick:{timer_id}",
-            entity_id=msg["entity_id"],
-            action=_action(msg["action"]),
-            snapshot_id=None,
-            starts_at=now,
-            expires_at=now + timedelta(seconds=duration),
-            state=QuickTimerState.ACTIVE,
-            created_at=now,
-        )
-        return replace(
-            current,
-            revision=current.revision + 1,
-            quick_timers=(*current.quick_timers, timer),
-            updated_at=max(current.updated_at, now),
-        )
+    mutation = quick_timer_creation(
+        timer_id, msg["entity_id"], msg["duration_seconds"], msg["action"]
+    )
 
     await _mutate(
         hass,
@@ -158,23 +205,7 @@ async def websocket_cancel_quick_timer(
 ) -> None:
     """Cancel an active Quick Timer and reconcile its safe restore."""
 
-    def mutation(current: RuntimeStoreData, now: datetime) -> RuntimeStoreData:
-        timer = _timer(current, msg["quick_timer_id"])
-        if timer.state is not QuickTimerState.ACTIVE:
-            raise MutationClientError(
-                "invalid_state", "Only an active Quick Timer can be cancelled."
-            )
-        return replace(
-            current,
-            revision=current.revision + 1,
-            quick_timers=tuple(
-                replace(item, state=QuickTimerState.CANCELLED)
-                if item.id == timer.id
-                else item
-                for item in current.quick_timers
-            ),
-            updated_at=max(current.updated_at, now),
-        )
+    mutation = quick_timer_cancellation(msg["quick_timer_id"])
 
     await _mutate(
         hass,

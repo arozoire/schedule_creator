@@ -9,5 +9,67 @@
     "abort": {
       "already_configured": "Schedule Creator est déjà configuré."
     }
+  },
+  "services": {
+    "set_profile": {
+      "name": "Définir le profil",
+      "description": "Active ou désactive un profil de Schedule Creator. Activer un profil exclusif désactive les autres profils exclusifs.",
+      "fields": {
+        "profile": {
+          "name": "Profil",
+          "description": "Nom ou ID du profil."
+        },
+        "active": {
+          "name": "Actif",
+          "description": "Activé pour activer, désactivé pour désactiver."
+        }
+      }
+    },
+    "set_schedule": {
+      "name": "Définir le planning",
+      "description": "Active ou désactive un planning.",
+      "fields": {
+        "schedule": {
+          "name": "Planning",
+          "description": "Nom ou ID du planning."
+        },
+        "enabled": {
+          "name": "Activé",
+          "description": "Activé pour activer, désactivé pour désactiver."
+        }
+      }
+    },
+    "start_timer": {
+      "name": "Démarrer un Quick Timer",
+      "description": "Commande un appareil pendant un certain temps ; son état précédent est restauré à la fin.",
+      "fields": {
+        "entity_id": {
+          "name": "Entité",
+          "description": "Appareil à commander."
+        },
+        "duration": {
+          "name": "Durée",
+          "description": "Durée du minuteur (jusqu’à 7 jours)."
+        },
+        "action": {
+          "name": "Action",
+          "description": "Service du domaine de l’appareil, par ex. turn_on, ou apply_state pour un état souhaité."
+        },
+        "data": {
+          "name": "Données",
+          "description": "Données du service, par ex. {\"state\": \"cool\", \"temperature\": 23} avec apply_state."
+        }
+      }
+    },
+    "cancel_timer": {
+      "name": "Annuler le Quick Timer",
+      "description": "Arrête le Quick Timer en cours d’un appareil et restaure son état précédent.",
+      "fields": {
+        "entity_id": {
+          "name": "Entité",
+          "description": "Appareil dont le minuteur est annulé."
+        }
+      }
+    }
   }
 }

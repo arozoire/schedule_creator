@@ -1,0 +1,51 @@
+set_profile:
+  fields:
+    profile:
+      required: true
+      example: "Vacanza"
+      selector:
+        text:
+    active:
+      default: true
+      selector:
+        boolean:
+
+set_schedule:
+  fields:
+    schedule:
+      required: true
+      example: "Tenda camera · Apri"
+      selector:
+        text:
+    enabled:
+      default: true
+      selector:
+        boolean:
+
+start_timer:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+    duration:
+      required: true
+      example: "00:30:00"
+      selector:
+        duration:
+    action:
+      default: "turn_on"
+      example: "apply_state"
+      selector:
+        text:
+    data:
+      example: '{"state": "cool", "temperature": 23}'
+      selector:
+        object:
+
+cancel_timer:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:

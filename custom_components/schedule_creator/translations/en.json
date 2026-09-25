@@ -9,5 +9,67 @@
     "abort": {
       "already_configured": "Schedule Creator is already configured."
     }
+  },
+  "services": {
+    "set_profile": {
+      "name": "Set profile",
+      "description": "Activate or deactivate a Schedule Creator profile. Activating an exclusive profile deactivates the other exclusive ones.",
+      "fields": {
+        "profile": {
+          "name": "Profile",
+          "description": "Profile name or ID."
+        },
+        "active": {
+          "name": "Active",
+          "description": "On to activate, off to deactivate."
+        }
+      }
+    },
+    "set_schedule": {
+      "name": "Set schedule",
+      "description": "Enable or disable a schedule.",
+      "fields": {
+        "schedule": {
+          "name": "Schedule",
+          "description": "Schedule name or ID."
+        },
+        "enabled": {
+          "name": "Enabled",
+          "description": "On to enable, off to disable."
+        }
+      }
+    },
+    "start_timer": {
+      "name": "Start Quick Timer",
+      "description": "Command a device for a while; its previous state is restored at the end.",
+      "fields": {
+        "entity_id": {
+          "name": "Entity",
+          "description": "Device to command."
+        },
+        "duration": {
+          "name": "Duration",
+          "description": "How long the timer lasts (up to 7 days)."
+        },
+        "action": {
+          "name": "Action",
+          "description": "Service of the device domain, e.g. turn_on, or apply_state for a desired state."
+        },
+        "data": {
+          "name": "Data",
+          "description": "Service data, e.g. {\"state\": \"cool\", \"temperature\": 23} with apply_state."
+        }
+      }
+    },
+    "cancel_timer": {
+      "name": "Cancel Quick Timer",
+      "description": "Stop the running Quick Timer of a device and restore its previous state.",
+      "fields": {
+        "entity_id": {
+          "name": "Entity",
+          "description": "Device whose timer is cancelled."
+        }
+      }
+    }
   }
 }
