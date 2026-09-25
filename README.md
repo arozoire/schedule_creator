@@ -37,7 +37,10 @@ can live side by side; schedules can be imported from the old card's backup
 - **Quick timers** – "cool to 23° for 30 minutes": the previous state is
   restored when the timer ends.
 - **Safe by design** – every command goes through a durable journal with
-  retries; nothing is replayed blindly after a restart.
+  retries and a timeout; nothing is replayed blindly after a restart, and
+  failed commands are shown in the card.
+- **Statistics** – activations and slots blocked by the condition, at the
+  bottom of each schedule.
 - **Backup, restore and RESET** from the card.
 - **Automation friendly** – switches for profiles and schedules, a next-slot
   sensor and services to switch profiles or start timers from automations.
@@ -188,16 +191,11 @@ data:
 
 ## Moving from weekly-schedule-card
 
-1. In weekly-schedule-card open **Groups → Maintenance → Save configuration**.
-2. In Schedule Creator open **Maintenance → Import from Weekly Schedule Card**
-   and choose that file.
-3. Review the preview: every schedule is marked ready, to check, imported
-   disabled or not imported, with the reason (e.g. conditions on attributes,
-   one-off schedules and date ranges are not supported yet).
-4. Import. Everything lands in a new profile that stays **inactive**.
-5. Turn the old schedules off in weekly-schedule-card (or Scheduler), then
-   activate the imported profile. Nothing in weekly-schedule-card or Scheduler
-   is changed by the import.
+weekly-schedule-card is no longer developed. Save its configuration, import it
+here as an inactive profile, check it, stop the old card and activate the new
+profile. Step by step:
+[English guide](docs/migrating-from-weekly-schedule-card.md) ·
+[guida in italiano](docs/migrazione-da-weekly-schedule-card.md).
 
 ## Updating
 
@@ -207,6 +205,8 @@ running integration and tells you whether a page reload or a restart is still
 needed. No cache clearing or `?v=` parameters are required.
 
 ## Documentation
+
+- [Changelog](CHANGELOG.md)
 
 - [Card and installation details](docs/frontend.md) (Italian)
 - Translations: `frontend/src/i18n-strings.js` (Italian text is the key)
