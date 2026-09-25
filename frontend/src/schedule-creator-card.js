@@ -8,7 +8,7 @@ import { isWscBackup, convertWscBackup, wscImportPayload } from './wsc-import.js
 import { t, setLanguage, locale } from './i18n.js';
 
 const STYLE = '__SC_CSS__';
-const CARD_VERSION = '0.4.1';
+const CARD_VERSION = '0.4.2';
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
@@ -118,9 +118,9 @@ class ScheduleCreatorCard extends HTMLElement {
       // Replacing the form here removes the clicked button before submission.
       // Only selectors and checkboxes can change which controls are displayed.
       if (!e.target.matches('select,input[type="checkbox"],input[type="radio"]')) return;
-      const newDomain = (this.edit?.[0] === 'timer' ? this.draft.entity_id : this.draft.selectedEntities[0])?.split('.')[0];
+      const newDomain = this.draft.selectedEntities[0]?.split('.')[0];
       if (newDomain && previousDomain && newDomain !== previousDomain) {
-        for (const key of Object.keys(this.draft)) if (/^(start|end|timer)_/.test(key) && !key.includes('notification')) delete this.draft[key];
+        for (const key of Object.keys(this.draft)) if (/^(start|end)_/.test(key) && !key.includes('notification')) delete this.draft[key];
         this.actionReset = true;
         this.localError = t('Tipo di dispositivo cambiato: scegli nuovamente le azioni.');
       }
@@ -268,7 +268,7 @@ class ScheduleCreatorCard extends HTMLElement {
     const surface=this.shadowRoot.querySelector('ha-card');
     surface.style.setProperty('--pchip-color',tint(profile?.color));
     const running = occurrences.length;
-    const header = `<div class="sc-head"><span class="sc-logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"></rect><path d="M8 2v4M16 2v4M3 10h18M8 15h3"></path></svg></span><div class="sc-head-copy"><span class="card-title">${esc(this.config.title || 'Schedule Creator')}</span><span class="sc-sub">${now.weekday >= 0 ? t(FULL_DAYS[now.weekday]) : ''} · ${now.label}${state ? ` · ${running ? (running === 1 ? t('1 fascia in corso') : t('{count} fasce in corso', {count: running})) : t('nessuna fascia in corso')}` : ''}</span></div><span class="sc-version">v${CARD_VERSION}</span>${state && editable ? `<div class="sc-head-actions">${button('newTimer','Quick Timer')}${group ? button('newSchedule',`＋ ${t('Schedule')}`) : ''}</div>` : ''}</div>`;
+    const header = `<div class="sc-head"><span class="sc-logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"></rect><path d="M8 2v4M16 2v4M3 10h18M8 15h3"></path></svg></span><div class="sc-head-copy"><span class="card-title">${esc(this.config.title || 'Schedule Creator')}</span><span class="sc-sub">${now.weekday >= 0 ? t(FULL_DAYS[now.weekday]) : ''} · ${now.label}${state ? ` · ${running ? (running === 1 ? t('1 fascia in corso') : t('{count} fasce in corso', {count: running})) : t('nessuna fascia in corso')}` : ''}</span></div><span class="sc-version">v${CARD_VERSION}</span>${state && editable ? `<div class="sc-head-actions">${group ? button('newSchedule',`＋ ${t('Schedule')}`) : ''}</div>` : ''}</div>`;
     surface.innerHTML = `<div class="card-header">${header}${profiles.length ? `<div class="sc-segmented" role="group" aria-label="${t('Profili')}">${chips}</div>` : ''}</div>${status}${this.edit ? '' : errorMarkup}${view}`;
     if(this.edit && editable) {
       const wasOpen=this.dialog.open;
@@ -361,10 +361,7 @@ class ScheduleCreatorCard extends HTMLElement {
     const ids = [...new Set([...targetEntities(this._hass, allowed), ...selected.filter((id) => allowed.includes(id))])].sort();
     return `<div class="sc-entity-pills">${ids.map((id) => `<label class="sc-entity-pill" title="${esc(id)}"><input type="checkbox" name="entities" value="${esc(id)}" ${selected.includes(id) ? 'checked' : ''}><span>${esc(states[id]?.attributes?.friendly_name || id)}</span></label>`).join('')}</div>`;
   }
-  entityRadios(ids, selected) {
-    const states = this._hass?.states || {};
-    return `<label>${t('Ricerca entità')}<input type="search" name="entity_search" placeholder="${t('Nome, dominio o ID')}"></label><div class="sc-entities" role="radiogroup" aria-label="${t('Entità')}">${[...ids].sort().map((id) => `<label data-entity-label="${esc(`${id} ${states[id]?.attributes?.friendly_name || ''}`.toLowerCase())}"><input type="radio" name="entity_id" value="${esc(id)}" ${id === selected ? 'checked' : ''}><span><span class="sc-entity-name">${esc(states[id]?.attributes?.friendly_name || id)}</span><span class="sc-entity-id">${esc(id)}</span></span></label>`).join('')}</div>`;
-  }
+
   // Drag the slot (move) or a handle (resize) with snap and magnets, like weekly-schedule-card.
   startDrag(event) {
     const bar = event.target.closest('.sc-tb-edit[data-slot-bar]');
@@ -570,7 +567,7 @@ class ScheduleCreatorCard extends HTMLElement {
         ${row('row-end',t('Alla fine'),endSummary,actionForm('end',t('Azione finale'),this._hass,ids,this.actionReset?null:item?.end_action,true,d))}
         ${row('row-conditions',t('Condizioni'),conditionSummary,`${conditionForm(condition,this._hass)}<datalist id="sc-condition-entities">${Object.keys(this._hass.states||{}).sort().map((id)=>`<option value="${esc(id)}">${esc(this._hass.states[id].attributes?.friendly_name||id)}</option>`).join('')}</datalist><p>${t('Se falsa: azione finale se presente, altrimenti ripristino deciso dal motore. La fine fascia senza azione finale non invia comandi.')}</p>`)}
         ${row('row-notifications',t('Notifiche'),notificationSummary,`${notificationForm('start_notification',t('Notifica iniziale'),item?.start_notification,this._hass,d)}${notificationForm('end_notification',t('Notifica finale'),item?.end_notification,this._hass,d)}${this.notificationExtras(config,item)}`)}
-        ${row('row-options',t('Altre opzioni'),item?.enabled === false ? t('Disabilitato') : t('Abilitato'),`<label class="sc-check"><input name="enabled" type="checkbox" ${item?.enabled !== false ? 'checked' : ''}>${t('Schedule abilitato')}</label><p>${t('Orari nel fuso {zone}. Se la fine precede l’inizio, la fascia termina il giorno successivo.', {zone: esc(this._hass.config?.time_zone || 'Home Assistant')})}</p>${select('override_policy',t('Comandi manuali'), [['cooperative',t('Cooperativa')],['manual_override',t('Priorità al comando manuale')]],item?.override_policy || 'cooperative')}${field('inclusion_dates',t('Date incluse (AAAA-MM-GG, separate da virgola)'),(item?.inclusion_dates || []).join(', '))}${field('exclusion_dates',t('Date escluse (AAAA-MM-GG, separate da virgola)'),(item?.exclusion_dates || []).join(', '))}`)}
+        ${row('row-options',t('Altre opzioni'),item?.enabled === false ? t('Disabilitato') : t('Abilitato'),`<label class="sc-check"><input name="enabled" type="checkbox" ${item?.enabled !== false ? 'checked' : ''}>${t('Schedule abilitato')}</label><p>${t('Orari nel fuso {zone}. Se la fine precede l’inizio, la fascia termina il giorno successivo.', {zone: esc(this._hass.config?.time_zone || 'Home Assistant')})}</p>${field('inclusion_dates',t('Date incluse (AAAA-MM-GG, separate da virgola)'),(item?.inclusion_dates || []).join(', '))}${field('exclusion_dates',t('Date escluse (AAAA-MM-GG, separate da virgola)'),(item?.exclusion_dates || []).join(', '))}`)}
         ${id ? row('row-stats',t('Statistiche'),this.statsSummary(id),this.statsBody(id)) : ''}
         </div>
         <details><summary>${t('Pro · configurazione JSON')}</summary><label class="sc-check"><input type="checkbox" name="pro_config_enabled">${t('Usa JSON per condizioni, fasce e notifiche')}</label>${area('pro_config',t('Configurazione avanzata'),json({time_slots:slots,condition:condition||null,start_notification:item?.start_notification||null,end_notification:item?.end_notification||null}),8)}</details>`;
@@ -585,14 +582,8 @@ class ScheduleCreatorCard extends HTMLElement {
       const timers = this.adapter.state.quick_timers?.length ?? 0;
       content = `<p>${t('RESET cancella <strong>tutti</strong> i dati di Schedule Creator: {profiles} profili, {groups} gruppi, {schedules} schedule, {timers} timer attivi, fasce in corso e storico operazioni. L’integrazione resta installata e vuota.', {profiles: config.profiles.length, groups: config.groups.length, schedules: config.schedules.length, timers})}</p><p>${t('I dispositivi restano nello stato in cui si trovano: nessun comando di spegnimento o ripristino viene inviato. Dispositivi, entità, automazioni e la vecchia weekly-schedule-card non vengono toccati.')}</p><p>${t('Prima di procedere puoi salvare un backup.')}</p><div class="sc-controls">${button('exportBackup',t('Salva backup'))}</div>${field('confirm',t('Scrivi RESET per confermare'),'')}`;
     }
-    if (kind === 'timer') {
-      const ids = targetEntities(this._hass);
-      const selected = d.entity_id || ids[0];
-      this.actionDomain = selected?.split('.')[0];
-      content = `${this.entityRadios(ids,selected)}${field('duration_seconds',t('Durata in secondi (1–604800)'),300,'number')}${actionForm('timer',t('Azione timer'),this._hass,selected?[selected]:[],null,false,d)}`;
-    }
     const subtitle = kind === 'schedule' ? config.groups.find((g) => g.id === this.ownerGroup)?.name : kind === 'group' ? profile?.name : '';
-    return `<form data-editor="${esc(kind)}" class="sc-editor"><h3 id="sc-editor-title">${subtitle ? `<small>${esc(subtitle)}</small>` : ''}${({profile:id?t('Modifica profilo'):t('Nuovo profilo'),group:id?t('Modifica gruppo'):t('Nuovo gruppo'),schedule:id?t('Modifica schedule'):t('Nuovo schedule'),timer:'Quick Timer',restore:t('Ripristina backup'),import:t('Importa da Weekly Schedule Card'),reset:t('RESET completo')})[kind]}</h3>${content}<div class="sc-actions"><button type="submit" class="sc-save ${kind === 'reset' ? 'sc-danger' : ''}">${({restore:t('Ripristina'),import:t('Importa'),reset:t('Cancella tutto'),schedule:t('Salva schedule')})[kind] || t('Salva')}</button>${button('close',t('Annulla'))}</div></form>`;
+    return `<form data-editor="${esc(kind)}" class="sc-editor"><h3 id="sc-editor-title">${subtitle ? `<small>${esc(subtitle)}</small>` : ''}${({profile:id?t('Modifica profilo'):t('Nuovo profilo'),group:id?t('Modifica gruppo'):t('Nuovo gruppo'),schedule:id?t('Modifica schedule'):t('Nuovo schedule'),restore:t('Ripristina backup'),import:t('Importa da Weekly Schedule Card'),reset:t('RESET completo')})[kind]}</h3>${content}<div class="sc-actions"><button type="submit" class="sc-save ${kind === 'reset' ? 'sc-danger' : ''}">${({restore:t('Ripristina'),import:t('Importa'),reset:t('Cancella tutto'),schedule:t('Salva schedule')})[kind] || t('Salva')}</button>${button('close',t('Annulla'))}${id && ['profile','group','schedule'].includes(kind) ? `<button type="button" class="sc-delete" data-command="deleteCurrent" data-id="${esc(id)}">${t('Elimina')}</button>` : ''}</div></form>`;
   }
   async click(event) {
     const track = event.target.closest?.('.sc-day-track');
@@ -650,6 +641,12 @@ class ScheduleCreatorCard extends HTMLElement {
       return;
     }
     if (command === 'close') { this.closeEditor(); return; }
+    if (command === 'deleteCurrent') {
+      const [kind] = this.edit || [];
+      if (!['profile','group','schedule'].includes(kind) || !confirm(t('Eliminare questo elemento?'))) return;
+      if (await this.adapter.mutate(`${kind}/delete`, {[`${kind}_id`]: id})) this.closeEditor();
+      return;
+    }
     if (command === 'stepValue') {
       const [name, direction] = id.split(':');
       const node = [...this.shadowRoot.querySelectorAll('input')].find((x) => x.getAttribute('name') === name);
@@ -700,7 +697,7 @@ class ScheduleCreatorCard extends HTMLElement {
     event.preventDefault(); if (this.adapter.busy) return;
     this.localError = null; this.localErrorDetails = null;
     const [kind,id] = this.edit;
-    const type = ({timer:'quick_timer/create',restore:'backup/import',import:'import/merge',reset:'reset'})[kind] || `${kind}/${id ? 'update' : 'create'}`;
+    const type = ({restore:'backup/import',import:'import/merge',reset:'reset'})[kind] || `${kind}/${id ? 'update' : 'create'}`;
     let phase = t('lettura del modulo');
     try {
       this.capture();
@@ -708,7 +705,7 @@ class ScheduleCreatorCard extends HTMLElement {
       const config = this.adapter.state.config;
       let payload;
       phase = t('validazione del nome');
-      if (!['timer','restore','import','reset'].includes(kind) && !data.name?.trim()) throw new Error(t('Inserisci un nome prima di salvare.'));
+      if (!['restore','import','reset'].includes(kind) && !data.name?.trim()) throw new Error(t('Inserisci un nome prima di salvare.'));
       if (kind === 'restore') {
         if (!this.restoreData) throw new Error(t('Scegli prima un file di backup.'));
         payload = {backup: this.restoreData};
@@ -741,7 +738,7 @@ class ScheduleCreatorCard extends HTMLElement {
         phase = t('lettura condizioni e notifiche');
         payload = {name:data.name.trim(),enabled:form.elements.enabled.checked,target_entity_ids:this.draft.selectedEntities,
           time_slots:slots,start_action:startAction,end_action:endAction,
-          condition:readCondition(form),override_policy:data.override_policy,inclusion_dates:dates(data.inclusion_dates),exclusion_dates:dates(data.exclusion_dates),
+          condition:readCondition(form),inclusion_dates:dates(data.inclusion_dates),exclusion_dates:dates(data.exclusion_dates),
           start_notification:readNotification(form,'start_notification'),end_notification:readNotification(form,'end_notification')};
         if (form.elements.pro_config_enabled.checked) {
           const pro = parseJson(data.pro_config,t('Configurazione Pro'));
@@ -754,7 +751,6 @@ class ScheduleCreatorCard extends HTMLElement {
         const validateCondition = (node) => {if (!node) return;if (['and','or'].includes(node.operator)) {if(node.children.length<2) throw new Error(t('Servono due regole per E/O.'));node.children.forEach(validateCondition);} else {if (!node.entity_id || !this._hass.states[node.entity_id]) throw new Error(t('Seleziona un’entità valida nella condizione.'));if (node.operator === 'numeric_range' ? node.lower === null || node.upper === null : node.operator !== 'available' && (node.value === null || node.value === '')) throw new Error(t('Completa il valore della condizione.'));}};
         validateCondition(payload.condition);
       }
-      if (kind === 'timer') { const domain = data.entity_id.split('.')[0]; payload = {entity_id:data.entity_id,duration_seconds:Number(data.duration_seconds),action:readAction(form,'timer',domain)}; if (payload.duration_seconds<1 || payload.duration_seconds>604800) throw new Error(t('La durata deve essere tra 1 e 604800 secondi.')); }
       if (!payload) throw new Error(t('Editor non disponibile.'));
       phase = t('confronto con la configurazione esistente');
       if (this.adapter.conflicted && !confirm(t('I dati sono cambiati su un altro client. Hai confrontato la bozza con i nuovi dati prima di salvare?'))) return;
@@ -771,7 +767,7 @@ class ScheduleCreatorCard extends HTMLElement {
       if (!id && kind === 'group') payload.profile_id = this.ownerProfile;
       if (!id && kind === 'schedule') { payload.profile_id = this.ownerProfile; payload.group_id = this.ownerGroup; }
       phase = t('salvataggio e aggiornamento della vista');
-      const ok = await this.adapter.mutate(type,payload,{ runtime: kind === 'timer', expectedRevision: kind === 'timer' || this.adapter.conflicted ? undefined : this.editRevision });
+      const ok = await this.adapter.mutate(type,payload,{ expectedRevision: this.adapter.conflicted ? undefined : this.editRevision });
       if (ok && kind === 'import') {
         const names = this.importData.converted.profiles.map((p) => p.name);
         this.selectedProfile = this.adapter.state?.config?.profiles?.find((p) => p.name === names[0])?.id || null; this.selectedGroup = null;

@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
+from homeassistant.const import EntityCategory
 from homeassistant.core import Event, HomeAssistant, callback
 
 from .const import EVENT_CONFIG_UPDATED, EVENT_RUNTIME_UPDATED
@@ -32,6 +33,7 @@ class NextSlotSensor(SensorEntity):
     _attr_has_entity_name = True
     _attr_should_poll = False
     _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:calendar-arrow-right"
 
     def __init__(self, entry: ScheduleCreatorConfigEntry) -> None:

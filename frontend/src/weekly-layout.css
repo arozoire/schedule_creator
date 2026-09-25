@@ -943,3 +943,16 @@ button.sc-empty:hover { border-color: var(--sc-accent); }
   color: var(--sc-muted);
   font-size: 0.75rem;
 }
+.sc-actions .sc-delete {
+  margin-left: auto;
+  color: var(--error-color, #b3261e);
+  border-color: color-mix(in srgb, var(--error-color, #b3261e) 40%, var(--sc-border));
+}
+.sc-range-ends span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.sc-range-ends ha-icon {
+  --mdc-icon-size: 16px;
+}

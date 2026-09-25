@@ -108,10 +108,19 @@ function choices(name, label, values, selected, {primary = false, icons = false}
   return `<div class="sc-field"><span class="sc-field-label" id="${name}-label">${escA(label)}</span><div class="sc-choices${primary ? ' sc-mode-buttons' : ''}" role="radiogroup" aria-labelledby="${name}-label">${values.map((v) => `<label class="sc-choice${String(v) === String(selected) ? ' is-selected' : ''}"><input type="radio" name="${name}" value="${escA(v)}" ${String(v) === String(selected) ? 'checked' : ''}>${icons ? `<ha-icon icon="mdi:${modeIcons[v] || 'tune'}" aria-hidden="true"></ha-icon>` : ''}<span>${escA(pretty(v))}</span></label>`).join('')}</div></div>`;
 }
 
-export function rangeField(name, label, value, min, max, step = 1, unit = '') {
+// What each end of a 0–100 slider means, with an icon: [icon, label] pairs.
+export const RANGE_ENDS = {
+  cover: [['window-shutter', 'Tutta chiusa'], ['window-shutter-open', 'Tutta aperta']],
+  valve: [['valve-closed', 'Tutta chiusa'], ['valve-open', 'Tutta aperta']],
+  brightness: [['lightbulb-outline', 'Minima'], ['lightbulb-on', 'Massima']],
+  kelvin: [['weather-sunset', 'Luce calda'], ['snowflake', 'Luce fredda']],
+  fan: [['fan-off', 'Spenta'], ['fan', 'Massima']],
+};
+
+export function rangeField(name, label, value, min, max, step = 1, unit = '', ends = null) {
   const v = Math.min(max, Math.max(min, Number(value ?? min)));
   const fill = max > min ? (v - min) / (max - min) * 100 : 0;
-  return `<div class="sc-field sc-range"><div class="sc-range-head"><span class="sc-field-label" id="${name}-label">${escA(label)}</span><span class="sc-range-value"><input type="number" data-mirror="${name}" aria-labelledby="${name}-label" min="${min}" max="${max}" step="${step}" value="${v}">${escA(unit)}</span></div><input type="range" name="${name}" aria-labelledby="${name}-label" min="${min}" max="${max}" step="${step}" value="${v}" style="--sc-fill:${fill}%"><div class="sc-range-labels" aria-hidden="true"><span>${min}</span><span>${max}</span></div></div>`;
+  return `<div class="sc-field sc-range"><div class="sc-range-head"><span class="sc-field-label" id="${name}-label">${escA(label)}</span><span class="sc-range-value"><input type="number" data-mirror="${name}" aria-labelledby="${name}-label" min="${min}" max="${max}" step="${step}" value="${v}">${escA(unit)}</span></div><input type="range" name="${name}" aria-labelledby="${name}-label" min="${min}" max="${max}" step="${step}" value="${v}" style="--sc-fill:${fill}%">${ends ? `<div class="sc-range-labels sc-range-ends">${ends.map(([icon, text], i) => `<span><ha-icon icon="mdi:${icon}" aria-hidden="true"></ha-icon>${i ? max : min}${escA(unit)} · ${escA(t(text))}</span>`).join('')}</div>` : `<div class="sc-range-labels" aria-hidden="true"><span>${min}</span><span>${max}</span></div>`}</div>`;
 }
 
 // Big value with − / + like the weekly-schedule-card editor (climate temperature).
@@ -156,18 +165,18 @@ export function actionForm(prefix, label, hass, ids, value, optional, draft = {}
     more.push(choices(name('swing_horizontal_mode'), t('Swing orizzontale'), caps.swing_horizontal_modes, get('swing_horizontal_mode')));
   }
   if (domain === 'light' && mode === 'on') {
-    if (caps.dimmable) fields.push(rangeField(name('brightness_pct'), t('Luminosità'), get('brightness_pct') ?? 100, 1, 100, 1, '%'));
+    if (caps.dimmable) fields.push(rangeField(name('brightness_pct'), t('Luminosità'), get('brightness_pct') ?? 100, 1, 100, 1, '%', RANGE_ENDS.brightness));
     const colors = [['', t('Non cambiare colore')], ...(caps.rgb ? [['rgb', t('Colore')]] : []), ...(caps.kelvin ? [['kelvin', t('Temperatura colore')]] : [])];
     const colorMode = get('color_mode') || '';
     if (colors.length > 1) fields.push(`<label>${t('Colore')}<select name="${name('color_mode')}">${colors.map(([v, text]) => `<option value="${v}" ${v === colorMode ? 'selected' : ''}>${text}</option>`).join('')}</select></label>`);
     if (colorMode === 'rgb') fields.push(`<label>${t('Colore')}<input name="${name('color')}" type="color" value="${escA(draft[name('color')] ?? (base.rgb_color ? '#' + base.rgb_color.map((v) => v.toString(16).padStart(2, '0')).join('') : '#ffffff'))}"></label>`);
-    if (colorMode === 'kelvin') fields.push(rangeField(name('color_temp_kelvin'), t('Temperatura colore'), get('color_temp_kelvin') ?? 3000, caps.minK, caps.maxK, 50, 'K'));
+    if (colorMode === 'kelvin') fields.push(rangeField(name('color_temp_kelvin'), t('Temperatura colore'), get('color_temp_kelvin') ?? 3000, caps.minK, caps.maxK, 50, 'K', RANGE_ENDS.kelvin));
   }
   if (domain === 'fan' && mode === 'on') {
-    if (caps.speed) fields.push(rangeField(name('percentage'), t('Velocità'), get('percentage') ?? 50, 0, 100, 1, '%'));
+    if (caps.speed) fields.push(rangeField(name('percentage'), t('Velocità'), get('percentage') ?? 50, 0, 100, 1, '%', RANGE_ENDS.fan));
     fields.push(choices(name('preset_mode'), 'Preset', caps.preset_modes, get('preset_mode')));
   }
-  if (POSITION_ACTIONS[domain] && mode === 'position') fields.push(rangeField(name('position'), t('Posizione'), get('position') ?? 50, 0, 100, 1, '%'));
+  if (POSITION_ACTIONS[domain] && mode === 'position') fields.push(rangeField(name('position'), t('Posizione'), get('position') ?? 50, 0, 100, 1, '%', RANGE_ENDS[domain]));
   const extra = more.filter(Boolean);
   const current = caps.states.length === 1 ? `<p class="sc-current">${t('Stato attuale')} <strong>${escA(describeState(caps.states[0], domain))}</strong></p>` : '';
   const json = draft[name('json')] ?? JSON.stringify(value ? {domain: value.domain, action: value.action, data: value.data} : {domain, action: domain === 'climate' ? APPLY_STATE : POSITION_ACTIONS[domain]?.open || 'turn_on', data: domain === 'climate' ? {state: mode} : {}}, null, 2);

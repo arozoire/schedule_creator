@@ -4,6 +4,7 @@ from datetime import timedelta
 
 import pytest
 from homeassistant import config_entries
+from homeassistant.const import EntityCategory
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 
@@ -163,3 +164,13 @@ async def test_quick_timer_services(hass, hass_ws_client):
         await hass.services.async_call(
             DOMAIN, "cancel_timer", {"entity_id": "switch.control_test"}, blocking=True
         )
+
+
+async def test_entities_stay_out_of_automatic_dashboards(hass, hass_ws_client):
+    """Switches are configuration and the sensor is diagnostic."""
+    await _populate(hass, hass_ws_client)
+    registry = er.async_get(hass)
+    switch = registry.async_get("switch.schedule_creator_profile_home")
+    sensor = registry.async_get("sensor.schedule_creator_next_slot")
+    assert switch.entity_category is EntityCategory.CONFIG
+    assert sensor.entity_category is EntityCategory.DIAGNOSTIC
