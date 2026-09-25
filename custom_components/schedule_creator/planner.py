@@ -97,6 +97,7 @@ def _occurrence(
     )
     if start_utc is None:
         return None
+    end_utc: datetime | None
     if slot.start_sun is None and slot.end_sun is None:
         end_date = (
             local_date if slot.end > slot.start else local_date + timedelta(days=1)
@@ -121,8 +122,8 @@ def _occurrence(
             if candidate is not None and candidate > start_utc:
                 end_utc = candidate
                 break
-        if end_utc is None:
-            return None
+    if end_utc is None:
+        return None
     if end_utc <= start_utc:
         raise ValueError("resolved occurrence end must follow start")
     local_start = start_utc.astimezone(timezone).isoformat()

@@ -47,10 +47,11 @@ def empty_stats() -> dict[str, Any]:
 
 def _entry(data: dict[str, Any], schedule_id: str) -> dict[str, Any]:
     schedules: dict[str, Any] = data["schedules"]
-    return schedules.setdefault(
+    entry: dict[str, Any] = schedules.setdefault(
         schedule_id,
         {"activations": 0, "muted": 0, "last_activation": None, "last_muted": None},
     )
+    return entry
 
 
 def update_stats(
