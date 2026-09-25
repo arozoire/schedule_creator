@@ -10,6 +10,7 @@ const commands = {
   climate: {set_hvac_mode:'Modalità',set_temperature:'Temperatura e modalità',set_fan_mode:'Velocità ventola',set_preset_mode:'Preset'},
   fan: {turn_on:'Accendi',turn_off:'Spegni',set_percentage:'Velocità (%)',set_preset_mode:'Preset'},
   cover: {open_cover:'Apri',close_cover:'Chiudi',stop_cover:'Ferma',set_cover_position:'Posizione (%)'},
+  valve: {open_valve:'Apri',close_valve:'Chiudi',stop_valve:'Ferma',set_valve_position:'Posizione (%)'},
 };
 export function controllable(hass, id) {
   const domain = id.split('.')[0];

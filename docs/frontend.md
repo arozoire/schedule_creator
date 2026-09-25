@@ -58,6 +58,30 @@ della cache. Il primo passaggio alla 0.3.5 richiede ancora riavvio e refresh.
 
 ## Contratto tecnico
 
+### Import dalla weekly-schedule-card 0.3.12
+
+**Manutenzione → Importa da Weekly Schedule Card** (anche scegliendo il file in
+*Ripristina backup*). Serve il file di **Gruppi → Manutenzione → Salva
+configurazione** della WSC (`schema: weekly-schedule-card/backup`, `version: 1`).
+
+- Ogni profilo WSC diventa un nuovo profilo **disattivato** (se il nome esiste
+  già si aggiunge «(WSC)»), con gruppi, colori e nomi delle entità.
+- Azioni: il clima diventa uno stato desiderato (modalità, temperatura,
+  ventola, swing); tende e valvole mantengono apri/chiudi/posizione; l'azione
+  "alla fine" della WSC diventa l'azione finale.
+- Condizioni WSC (con isteresi, E/O) e condizioni di Scheduler diventano
+  condizioni di Schedule Creator. Quelle su un attributo non sono supportate:
+  lo schedule viene importato **disattivato** con una nota.
+- Non importati: schedule una tantum, orari alba/tramonto. "Giorni lavorativi"
+  diventa lun–ven; i periodi con data di inizio/fine vengono ignorati (nota).
+- L'anteprima mostra per ogni schedule: pronto, da controllare, disattivato o
+  non importato, con il motivo.
+- La WSC e Scheduler non vengono toccati: **spegnere i loro schedule prima di
+  attivare il profilo importato**, altrimenti i comandi arrivano due volte.
+
+Le valvole (`valve.*`) ora sono gestite nell'editor come le tende
+(apri, chiudi, ferma, posizione).
+
 ### Card serpentina e anello 0.3.11
 
 Quarta e quinta card nello stesso file JS (mockup D ed E), sola lettura, tutti i

@@ -1,5 +1,22 @@
 # AI handoff — stato attuale e piano futuro
 
+## Import dalla weekly-schedule-card — 0.3.12 (2026-09-25)
+
+Backend `import_api.py`: `schedule_creator/import/merge` aggiunge un albero
+profili → gruppi → schedule (bozze come `schedule/create`, via
+`schedule_api._nested_changes`) in un commit, profili disattivati, storico in
+`migration_metadata.imports`. Test: `tests/test_import_api.py` (solo CI).
+Frontend `wsc-import.js` (nomi interni con prefisso `wsc`: il bundle è un unico
+scope): `convertWscBackup(backup, {existingProfileNames, entityName})` →
+`{profiles, rows}`; `wscImportPayload`. Decodifica il marker `logbook.log`
+"WSC conditional v1" (azioni reali in JSON), `link.stopAction/stopValue` →
+azione finale, `link.conditions` + `condCombinator`, condizioni native Scheduler,
+notifiche `notifyService/notifyTrigger`, `overrideEnabled` → `manual_override`.
+Card: kind `import` (`importContent`), `readBackupFile` riconosce entrambi i
+formati. Verificato sul backup reale del proprietario (9/9 schedule convertiti,
+2 valvole disattivate come nella WSC). Aggiunto supporto `valve` all'editor
+(`POSITION_ACTIONS` in action-editor.js).
+
 ## Card serpentina e anello — 0.3.11 (2026-09-25)
 
 `frontend/src/week-cards.js` + `week-cards.css`: classe base comune e due card
@@ -13,13 +30,6 @@ telefono). Modifica: evento window `schedule-creator-edit` gestito dalla card
 principale (`window.__scheduleCreatorEditors` conta gli editor presenti) oppure
 `edit_path?sc_edit=<id>` letto da `openRequestedSchedule()`.
 Anteprima: `preview.html#shot=serpentine|ring`.
-
-**Da decidere col proprietario: import dalla weekly-schedule-card.** Il backup
-WSC (`schema: weekly-schedule-card/backup`, `version: 1`, vedi
-`src/maintenance-card.js` nel repo WSC) contiene profili/gruppi/link e la config
-completa di ogni schedule Scheduler (`weekdays`, `timeslots[].start/stop/actions`),
-più le condizioni nel link (`conditions`, `condCombinator`). Conversione fattibile
-lato backend come importazione separata (mai modificare il repo WSC).
 
 ## README inglese con schermate — 2026-09-24
 

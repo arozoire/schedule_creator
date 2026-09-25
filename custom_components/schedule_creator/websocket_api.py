@@ -20,6 +20,7 @@ from .const import (
     INTEGRATION_VERSION,
 )
 from .group_api import GROUP_COMMANDS
+from .import_api import IMPORT_COMMANDS
 from .models import LeaseState, OccurrenceState, QuickTimerState
 from .profile_api import PROFILE_COMMANDS
 from .quick_timer_api import QUICK_TIMER_COMMANDS
@@ -50,6 +51,8 @@ def async_register_commands(hass: HomeAssistant) -> None:
     for command in QUICK_TIMER_COMMANDS:
         websocket_api.async_register_command(hass, command)
     for command in BACKUP_COMMANDS:
+        websocket_api.async_register_command(hass, command)
+    for command in IMPORT_COMMANDS:
         websocket_api.async_register_command(hass, command)
     hass.data[_REGISTERED] = True
 

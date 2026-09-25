@@ -4,9 +4,10 @@ import { clean, messageFor, parseJson, diagnosticFor } from './editor.js';
 import { controllable, targetEntities, notificationForm, readNotification } from './forms.js';
 import { blankCondition, conditionForm, readCondition, slotsForm, readSlots, magnetSnap, toMinutes, toTime, DAY_SHORTCUTS, iconPicker, colorPicker } from './schedule-editor.js';
 import { actionForm, readAction, describeAction, describeState, pretty } from './action-editor.js';
+import { isWscBackup, convertWscBackup, wscImportPayload } from './wsc-import.js';
 
 const STYLE = '__SC_CSS__';
-const CARD_VERSION = '0.3.11';
+const CARD_VERSION = '0.3.12';
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
@@ -245,7 +246,7 @@ class ScheduleCreatorCard extends HTMLElement {
       ${schedules.length ? `<section class="sc-timeline" data-scroll="timeline" aria-label="Programmazione settimanale">${slots}</section>${legend}<details data-section="schedules" class="sc-schedules"><summary>Gestisci schedule (${schedules.length})</summary><ul class="sc-list">${schedules.map((schedule) => `<li class="sc-entry" style="--block-color:${colorFor(schedule)}"><div class="sc-entry-copy"><strong>${esc(schedule.name)}</strong><span class="sc-meta">${esc(schedule.target_entity_ids.map((id)=>this._hass.states[id]?.attributes?.friendly_name || id).join(', '))} · ${schedule.enabled ? '' : 'disabilitato · '}${schedule.time_slots?.length ?? 0} ${schedule.time_slots?.length === 1 ? 'fascia' : 'fasce'}</span></div>${editable ? `<div class="sc-entry-actions">${button('editSchedule','Modifica',schedule.id)}${button('deleteSchedule','Elimina',schedule.id)}</div>` : ''}</li>`).join('')}</ul></details>` : `<${editable ? `button type="button" data-command="${!profile ? 'newProfile' : !group ? 'newGroup' : 'newSchedule'}"` : 'div'} class="sc-empty"><strong>${!profile ? 'Inizia dal tuo primo profilo' : !group ? 'Aggiungi un gruppo di dispositivi' : 'La settimana è ancora libera'}</strong>${!profile ? 'Organizza la casa per abitudini, ambienti o stagioni.' : !group ? 'Riunisci i dispositivi che vuoi programmare.' : 'Tocca qui o su un orario del calendario per creare uno schedule.'}</${editable ? 'button' : 'div'}>`}
       ${editable ? `<details class="sc-management" data-section="management" ${!profile || !group ? 'open' : ''}><summary>Gestisci profili e gruppi</summary><div class="sc-controls">${button('newProfile','＋ Profilo')}${profile ? `${button('editProfile','Modifica profilo',profile.id)}${button('toggleProfile',profile.active ? 'Disattiva profilo' : 'Attiva profilo',profile.id)}${button('deleteProfile','Elimina profilo',profile.id)}${button('newGroup','＋ Gruppo')}` : ''}${group ? `${button('editGroup','Modifica gruppo',group.id)}${button('deleteGroup','Elimina gruppo',group.id)}` : ''}</div></details>` : '<p class="sc-meta">Vista in sola lettura: serve un amministratore per modificare.</p>'}
       ${profiles.length ? this.overview(config, profiles) : ''}
-      ${editable ? `<details class="sc-maintenance" data-section="maintenance"><summary>Manutenzione · backup e RESET</summary><p class="sc-meta">Il backup salva profili, gruppi e schedule in un file JSON. Il ripristino li sostituisce e lascia i profili disattivati. RESET cancella tutti i dati di Schedule Creator.</p><div class="sc-controls">${button('exportBackup','Salva backup')}${button('newRestore','Ripristina backup')}${button('newReset','RESET…')}</div></details>` : ''}
+      ${editable ? `<details class="sc-maintenance" data-section="maintenance"><summary>Manutenzione · backup, import e RESET</summary><p class="sc-meta">Il backup salva profili, gruppi e schedule in un file JSON. Il ripristino li sostituisce e lascia i profili disattivati. L’import dalla weekly-schedule-card li aggiunge in un nuovo profilo disattivato. RESET cancella tutti i dati di Schedule Creator.</p><div class="sc-controls">${button('exportBackup','Salva backup')}${button('newRestore','Ripristina backup')}${button('newImport','Importa da Weekly Schedule Card')}${button('newReset','RESET…')}</div></details>` : ''}
       <details class="sc-operational" data-section="operational"><summary>Attività · ${state.operational?.occurrences?.length ?? 0} fasce in corso · ${state.quick_timers?.length ?? 0} timer</summary>${(state.operational?.occurrences || []).map((x) => `<p>${esc(config.schedules?.find((s) => s.id === x.schedule_id)?.name || x.schedule_id)}: ${esc(x.state)}, condizione ${esc(x.condition_branch)}, termine ${esc(x.end_utc)}</p>`).join('') || '<p>Nessuna fascia attiva.</p>'}${(state.operational?.leases || []).map((x) => `<p>${esc(x.entity_id)}: ${esc(x.state)} (${esc(x.controller_type)})</p>`).join('')}${(state.quick_timers || []).map((x) => `<p>Timer ${esc(this._hass.states[x.entity_id]?.attributes?.friendly_name || x.entity_id)}: <span data-expiry="${esc(x.expires_at)}"></span> ${editable ? button('cancelTimer','Annulla timer',x.id) : ''}</p>`).join('')}</details>` : '';
     const errorMarkup = `${info ? `<p class="sc-error" role="alert">${esc(typeof info === 'string' ? info : messageFor(info))}</p>` : ''}${errorDetails ? `<details class="sc-error-details" data-section="error-details"><summary>Dettagli errore</summary><p>Seleziona e copia questo testo per segnalare il problema.</p><textarea readonly aria-label="Dettagli errore da copiare" rows="10">${esc(errorDetails)}</textarea></details>` : ''}`;
     const surface=this.shadowRoot.querySelector('ha-card');
@@ -438,6 +439,29 @@ class ScheduleCreatorCard extends HTMLElement {
       fill(`${phase}_notification_message`, suggested[`${phase}_notification_message`]);
     }
   }
+  // Preview of a weekly-schedule-card import: what becomes of each schedule.
+  importContent(config) {
+    const data = this.importData, hass = this._hass;
+    const intro = '<p>Gli schedule della weekly-schedule-card vengono <strong>aggiunti</strong> in un nuovo profilo, <strong>disattivato</strong>: nulla viene eseguito finché non lo attivi. La weekly-schedule-card e Scheduler non vengono modificati.</p>';
+    const input = '<label>Backup della weekly-schedule-card (.json)<input type="file" accept="application/json,.json" data-role="backup-file"></label>';
+    if (!data) return `${intro}<p class="sc-meta">Nella weekly-schedule-card: Gruppi → Manutenzione → Salva configurazione.</p>${input}`;
+    const {converted, backup} = data;
+    const again = (config.migration_metadata?.imports || []).find((x) => x.source === 'weekly-schedule-card' && x.source_created_at && x.source_created_at === backup.createdAt);
+    const leaves = (node) => !node ? [] : node.children?.length ? node.children.flatMap(leaves) : [node.entity_id];
+    const entities = [...new Set(converted.profiles.flatMap((p) => p.groups.flatMap((g) => [...g.entity_ids, ...g.schedules.flatMap((s) => leaves(s.condition))])))];
+    const missing = entities.filter((id) => !hass.states[id]);
+    const mark = {ok: ['✓', 'Pronto'], note: ['!', 'Da controllare'], off: ['⏸', 'Importato disattivato'], skip: ['✕', 'Non importato']};
+    const symbol = {numeric_greater: '>', numeric_less: '<', numeric_greater_or_equal: '≥', numeric_less_or_equal: '≤', state_equals: '=', state_not_equals: '≠'};
+    const condText = (node) => !node ? '' : ['and', 'or'].includes(node.operator) ? node.children.map(condText).join(node.operator === 'and' ? ' e ' : ' o ') : `${hass.states[node.entity_id]?.attributes?.friendly_name || node.entity_id} ${symbol[node.operator] || node.operator} ${node.value}${node.hysteresis ? ` (isteresi ${node.hysteresis})` : ''}`;
+    const rows = converted.rows.map((r) => `<li class="sc-import-row is-${r.status}"><span class="sc-import-mark" title="${esc(mark[r.status][1])}" aria-label="${esc(mark[r.status][1])}">${mark[r.status][0]}</span><div><strong>${esc(r.name || r.source)}</strong>${r.slots ? `<span class="sc-meta">${esc(r.slots.map((x) => `${daysLabel(x.weekdays)} ${x.start}–${x.end}`).join(' · '))} · ${esc(describeAction(r.start))}${r.end ? ` → alla fine ${esc(describeAction(r.end))}` : ''}${r.condition ? ` · se ${esc(condText(r.condition))}` : ''}</span>` : ''}${r.notes.length ? `<ul class="sc-import-notes">${r.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}</div></li>`).join('');
+    const count = (status) => converted.rows.filter((r) => r.status === status).length;
+    const profiles = converted.profiles.map((p) => `<p>Profilo <strong>«${esc(p.name)}»</strong> · ${p.profile_type === 'exclusive' ? 'esclusivo' : 'condiviso'} · ${p.groups.length} gruppi (${esc(p.groups.map((g) => g.name).join(', '))})${p.wasActive ? ' · era attivo nella weekly-schedule-card' : ''}</p>`).join('');
+    return `${intro}${input}<div class="sc-summary"><strong>${esc(data.file)}</strong><p>Salvato il ${esc(String(backup.createdAt || '').replace('T', ' ').slice(0, 16) || 'data sconosciuta')} · ${count('ok') + count('note')} pronti · ${count('off')} disattivati · ${count('skip')} non importati</p>${profiles}
+      ${again ? `<p class="sc-error">Questo backup è già stato importato il ${esc(String(again.imported_at).replace('T', ' ').slice(0, 16))}: importandolo di nuovo gli schedule saranno duplicati.</p>` : ''}
+      ${missing.length ? `<p class="sc-error">Entità non presenti in questo Home Assistant: ${esc(missing.join(', '))}</p>` : ''}
+      <p class="sc-import-warning">Prima di attivare il profilo importato spegni gli stessi schedule nella weekly-schedule-card (o in Scheduler): altrimenti i dispositivi ricevono i comandi due volte.</p></div>
+      <ul class="sc-import">${rows}</ul>`;
+  }
   async exportBackup() {
     this.localError = null; this.notice = null;
     try {
@@ -454,11 +478,19 @@ class ScheduleCreatorCard extends HTMLElement {
     this.render();
   }
   async readBackupFile(input) {
-    this.localError = null; this.restoreData = null;
+    this.localError = null; this.restoreData = null; this.importData = null;
     try {
       const backup = JSON.parse(await input.files[0].text());
-      if (backup?.format !== 'schedule_creator.backup' || !backup.config) throw new Error('Il file non è un backup di Schedule Creator.');
-      this.restoreData = backup;
+      if (isWscBackup(backup)) {
+        // A weekly-schedule-card backup is imported next to existing data, never restored over it.
+        const config = this.adapter.state.config;
+        const converted = convertWscBackup(backup, {existingProfileNames: config.profiles.map((p) => p.name), entityName: (id) => this._hass.states[id]?.attributes?.friendly_name || id});
+        this.importData = {backup, converted, file: input.files[0].name};
+        if (this.edit) this.edit = ['import', null];
+      } else if (backup?.format === 'schedule_creator.backup' && backup.config) {
+        this.restoreData = backup;
+        if (this.edit) this.edit = ['restore', null];
+      } else throw new Error('Il file non è un backup di Schedule Creator né della weekly-schedule-card.');
     } catch (error) {
       this.localError = error instanceof SyntaxError ? 'Il file non contiene JSON valido.' : error.message;
     }
@@ -514,6 +546,7 @@ class ScheduleCreatorCard extends HTMLElement {
       const missing = b ? [...new Set([...(b.groups || []).flatMap((g) => g.entity_ids || []), ...(b.schedules || []).flatMap((x) => x.target_entity_ids || [])])].filter((id) => !this._hass.states[id]) : [];
       content = `<p>Il ripristino <strong>sostituisce</strong> tutti i profili, gruppi e schedule attuali con quelli del file. I profili ripristinati restano <strong>disattivati</strong>: attivali quando vuoi che eseguano i comandi. Timer e fasce in corso non fanno parte del backup.</p><label>File di backup (.json)<input type="file" accept="application/json,.json" data-role="backup-file"></label>${b ? `<div class="sc-summary"><strong>Contenuto del file</strong><p>${(b.profiles || []).length} profili · ${(b.groups || []).length} gruppi · ${(b.schedules || []).length} schedule</p><p>Salvato il ${esc(String(this.restoreData.exported_at || '').replace('T', ' ').slice(0, 16) || 'data sconosciuta')} con la versione ${esc(this.restoreData.integration_version || 'sconosciuta')}.</p>${missing.length ? `<p class="sc-error">Entità non presenti in questo Home Assistant: ${esc(missing.join(', '))}. Gli schedule collegati non potranno comandarle.</p>` : ''}</div>` : '<p>Scegli un file creato con “Salva backup”.</p>'}`;
     }
+    if (kind === 'import') content = this.importContent(config);
     if (kind === 'reset') {
       const timers = this.adapter.state.quick_timers?.length ?? 0;
       content = `<p>RESET cancella <strong>tutti</strong> i dati di Schedule Creator: ${config.profiles.length} profili, ${config.groups.length} gruppi, ${config.schedules.length} schedule, ${timers} timer attivi, fasce in corso e storico operazioni. L’integrazione resta installata e vuota.</p><p>I dispositivi restano nello stato in cui si trovano: nessun comando di spegnimento o ripristino viene inviato. Dispositivi, entità, automazioni e la vecchia weekly-schedule-card non vengono toccati.</p><p>Prima di procedere puoi salvare un backup.</p><div class="sc-controls">${button('exportBackup','Salva backup')}</div>${field('confirm','Scrivi RESET per confermare','')}`;
@@ -525,7 +558,7 @@ class ScheduleCreatorCard extends HTMLElement {
       content = `${this.entityRadios(ids,selected)}${field('duration_seconds','Durata in secondi (1–604800)',300,'number')}${actionForm('timer','Azione timer',this._hass,selected?[selected]:[],null,false,d)}`;
     }
     const subtitle = kind === 'schedule' ? config.groups.find((g) => g.id === this.ownerGroup)?.name : kind === 'group' ? profile?.name : '';
-    return `<form data-editor="${esc(kind)}" class="sc-editor"><h3 id="sc-editor-title">${subtitle ? `<small>${esc(subtitle)}</small>` : ''}${({profile:id?'Modifica profilo':'Nuovo profilo',group:id?'Modifica gruppo':'Nuovo gruppo',schedule:id?'Modifica schedule':'Nuovo schedule',timer:'Quick Timer',restore:'Ripristina backup',reset:'RESET completo'})[kind]}</h3>${content}<div class="sc-actions"><button type="submit" class="sc-save ${kind === 'reset' ? 'sc-danger' : ''}">${({restore:'Ripristina',reset:'Cancella tutto',schedule:'Salva schedule'})[kind] || 'Salva'}</button>${button('close','Annulla')}</div></form>`;
+    return `<form data-editor="${esc(kind)}" class="sc-editor"><h3 id="sc-editor-title">${subtitle ? `<small>${esc(subtitle)}</small>` : ''}${({profile:id?'Modifica profilo':'Nuovo profilo',group:id?'Modifica gruppo':'Nuovo gruppo',schedule:id?'Modifica schedule':'Nuovo schedule',timer:'Quick Timer',restore:'Ripristina backup',import:'Importa da Weekly Schedule Card',reset:'RESET completo'})[kind]}</h3>${content}<div class="sc-actions"><button type="submit" class="sc-save ${kind === 'reset' ? 'sc-danger' : ''}">${({restore:'Ripristina',import:'Importa',reset:'Cancella tutto',schedule:'Salva schedule'})[kind] || 'Salva'}</button>${button('close','Annulla')}</div></form>`;
   }
   async click(event) {
     const track = event.target.closest?.('.sc-day-track');
@@ -610,7 +643,7 @@ class ScheduleCreatorCard extends HTMLElement {
       const group = config.groups.find((g)=>g.id===this.selectedGroup)||config.groups.find((g)=>g.profile_id===profile?.id);
       this.edit = [kind,id||null];
       this.editRecord = id ? structuredClone(config[`${kind}s`].find((x)=>x.id===id)) : null;
-      this.auto = {}; this.restoreData = null; this.notice = null;
+      this.auto = {}; this.restoreData = null; this.importData = null; this.notice = null;
       this.ownerGroup = this.editRecord?.group_id || group?.id;
       this.ownerProfile = this.editRecord?.profile_id || profile?.id;
       this.editRevision = this.adapter.state.revision;
@@ -633,7 +666,7 @@ class ScheduleCreatorCard extends HTMLElement {
     event.preventDefault(); if (this.adapter.busy) return;
     this.localError = null; this.localErrorDetails = null;
     const [kind,id] = this.edit;
-    const type = ({timer:'quick_timer/create',restore:'backup/import',reset:'reset'})[kind] || `${kind}/${id ? 'update' : 'create'}`;
+    const type = ({timer:'quick_timer/create',restore:'backup/import',import:'import/merge',reset:'reset'})[kind] || `${kind}/${id ? 'update' : 'create'}`;
     let phase = 'lettura del modulo';
     try {
       this.capture();
@@ -641,10 +674,15 @@ class ScheduleCreatorCard extends HTMLElement {
       const config = this.adapter.state.config;
       let payload;
       phase = 'validazione del nome';
-      if (!['timer','restore','reset'].includes(kind) && !data.name?.trim()) throw new Error('Inserisci un nome prima di salvare.');
+      if (!['timer','restore','import','reset'].includes(kind) && !data.name?.trim()) throw new Error('Inserisci un nome prima di salvare.');
       if (kind === 'restore') {
         if (!this.restoreData) throw new Error('Scegli prima un file di backup.');
         payload = {backup: this.restoreData};
+      }
+      if (kind === 'import') {
+        const count = this.importData?.converted.profiles.reduce((n, p) => n + p.groups.reduce((m, g) => m + g.schedules.length, 0), 0);
+        if (!count) throw new Error('Scegli prima un backup della weekly-schedule-card con almeno uno schedule importabile.');
+        payload = wscImportPayload(this.importData.converted, this.importData.backup);
       }
       if (kind === 'reset') {
         if (data.confirm?.trim() !== 'RESET') throw new Error('Scrivi RESET in maiuscolo per confermare la cancellazione.');
@@ -700,6 +738,11 @@ class ScheduleCreatorCard extends HTMLElement {
       if (!id && kind === 'schedule') { payload.profile_id = this.ownerProfile; payload.group_id = this.ownerGroup; }
       phase = 'salvataggio e aggiornamento della vista';
       const ok = await this.adapter.mutate(type,payload,{ runtime: kind === 'timer', expectedRevision: kind === 'timer' || this.adapter.conflicted ? undefined : this.editRevision });
+      if (ok && kind === 'import') {
+        const names = this.importData.converted.profiles.map((p) => p.name);
+        this.selectedProfile = this.adapter.state?.config?.profiles?.find((p) => p.name === names[0])?.id || null; this.selectedGroup = null;
+        this.notice = `Importato in ${names.map((n) => `«${n}»`).join(', ')}. Il profilo è disattivato: spegni gli schedule nella weekly-schedule-card prima di attivarlo.`;
+      }
       if (ok && ['restore','reset'].includes(kind)) {
         this.selectedProfile = null; this.selectedGroup = null;
         this.notice = kind === 'reset' ? 'RESET completato: Schedule Creator è vuoto.' : 'Backup ripristinato. I profili sono disattivati: attivali per eseguire gli schedule.';

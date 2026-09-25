@@ -11,6 +11,11 @@ export const modeLabels = {off:'Spento',on:'Acceso',auto:'Auto',heat_cool:'Caldo
 const modeIcons = {off:'power',on:'power',auto:'autorenew',heat_cool:'sun-snowflake',cool:'snowflake',heat:'fire',dry:'water-percent',fan_only:'fan',open:'arrow-up',close:'arrow-down',stop:'stop',position:'tune-vertical',none:'minus-circle-outline'};
 export const pretty = (value) => modeLabels[value] || String(value).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 const round = (value, step) => Math.round(value / step) * step;
+// Covers and valves share open/close/stop/position commands and feature bits.
+export const POSITION_ACTIONS = {
+  cover: {open: 'open_cover', close: 'close_cover', stop: 'stop_cover', position: 'set_cover_position'},
+  valve: {open: 'open_valve', close: 'close_valve', stop: 'stop_valve', position: 'set_valve_position'},
+};
 
 function capabilities(hass, ids) {
   const domain = ids[0]?.split('.')[0];
@@ -28,7 +33,7 @@ function capabilities(hass, ids) {
     caps.swing_modes = intersect(states, 'swing_modes');
     caps.swing_horizontal_modes = intersect(states, 'swing_horizontal_modes');
     caps.unit = caps.attrs.temperature_unit || hass.config?.unit_system?.temperature || '°C';
-  } else if (domain === 'cover') {
+  } else if (POSITION_ACTIONS[domain]) {
     caps.modes = [['open', 1], ['close', 2], ['position', 4], ['stop', 8]].filter(([, bit]) => every(states, (s) => features(s) & bit)).map(([mode]) => mode);
     if (!caps.modes.length) caps.modes = ['open', 'close'];
   } else {
@@ -64,8 +69,8 @@ export function actionToUi(domain, action, caps) {
     }
     return null;
   }
-  if (domain === 'cover') {
-    const mode = {open_cover: 'open', close_cover: 'close', stop_cover: 'stop', set_cover_position: 'position'}[action.action];
+  if (POSITION_ACTIONS[domain]) {
+    const mode = Object.keys(POSITION_ACTIONS[domain]).find((key) => POSITION_ACTIONS[domain][key] === action.action);
     return mode && only('position') ? {mode, position: data.position} : null;
   }
   if (action.action === 'turn_off' && !keys.length) return {mode: 'off'};
@@ -90,7 +95,7 @@ function defaults(caps, optional) {
     const mode = caps.modes.includes(current) && current !== 'off' ? current : caps.modes.find((m) => m !== 'off') || caps.modes[0];
     return {mode, temperature: a.temperature ?? round((caps.min + caps.max) / 2, caps.step), target_temp_low: a.target_temp_low ?? caps.min, target_temp_high: a.target_temp_high ?? caps.max, fan_mode: a.fan_mode, preset_mode: a.preset_mode, swing_mode: a.swing_mode, swing_horizontal_mode: a.swing_horizontal_mode};
   }
-  if (caps.domain === 'cover') return {mode: caps.modes.includes('position') ? 'position' : caps.modes[0], position: a.current_position ?? 50};
+  if (POSITION_ACTIONS[caps.domain]) return {mode: caps.modes.includes('position') ? 'position' : caps.modes[0], position: a.current_position ?? 50};
   return {mode: 'on', brightness_pct: 100, percentage: a.percentage ?? 50};
 }
 
@@ -120,7 +125,7 @@ export function describeState(state, domain) {
     if (domain === 'climate' && a.fan_mode) parts.push(pretty(a.fan_mode));
     if (domain === 'light' && a.brightness != null) parts.push(`${Math.round(a.brightness / 255 * 100)}%`);
     if (domain === 'fan' && a.percentage != null) parts.push(`${a.percentage}%`);
-    if (domain === 'cover' && a.current_position != null) parts.push(`${a.current_position}%`);
+    if (POSITION_ACTIONS[domain] && a.current_position != null) parts.push(`${a.current_position}%`);
   }
   return parts.join(' · ');
 }
@@ -137,7 +142,7 @@ export function actionForm(prefix, label, hass, ids, value, optional, draft = {}
   const mode = modes.includes(get('mode')) ? get('mode') : modes[0];
   const fields = [], more = [];
   const name = (key) => `${prefix}_${key}`;
-  fields.push(choices(name('mode'), domain === 'climate' ? 'Modalità HVAC' : domain === 'cover' ? 'Comando' : 'Stato', modes, mode, {primary: true, icons: true}));
+  fields.push(choices(name('mode'), domain === 'climate' ? 'Modalità HVAC' : POSITION_ACTIONS[domain] ? 'Comando' : 'Stato', modes, mode, {primary: true, icons: true}));
   if (domain === 'climate' && !['none', 'off'].includes(mode)) {
     if (mode !== 'fan_only' && caps.temperature) fields.push(stepperField(name('temperature'), 'Temperatura', get('temperature'), caps.min, caps.max, caps.step, caps.unit));
     if (mode !== 'fan_only' && caps.range) fields.push(stepperField(name('target_temp_low'), 'Minima', get('target_temp_low'), caps.min, caps.max, caps.step, caps.unit), stepperField(name('target_temp_high'), 'Massima', get('target_temp_high'), caps.min, caps.max, caps.step, caps.unit));
@@ -158,10 +163,10 @@ export function actionForm(prefix, label, hass, ids, value, optional, draft = {}
     if (caps.speed) fields.push(rangeField(name('percentage'), 'Velocità', get('percentage') ?? 50, 0, 100, 1, '%'));
     fields.push(choices(name('preset_mode'), 'Preset', caps.preset_modes, get('preset_mode')));
   }
-  if (domain === 'cover' && mode === 'position') fields.push(rangeField(name('position'), 'Posizione', get('position') ?? 50, 0, 100, 1, '%'));
+  if (POSITION_ACTIONS[domain] && mode === 'position') fields.push(rangeField(name('position'), 'Posizione', get('position') ?? 50, 0, 100, 1, '%'));
   const extra = more.filter(Boolean);
   const current = caps.states.length === 1 ? `<p class="sc-current">Stato attuale <strong>${escA(describeState(caps.states[0], domain))}</strong></p>` : '';
-  const json = draft[name('json')] ?? JSON.stringify(value ? {domain: value.domain, action: value.action, data: value.data} : {domain, action: domain === 'climate' ? APPLY_STATE : caps.modes.includes('on') ? 'turn_on' : 'open_cover', data: domain === 'climate' ? {state: mode} : {}}, null, 2);
+  const json = draft[name('json')] ?? JSON.stringify(value ? {domain: value.domain, action: value.action, data: value.data} : {domain, action: domain === 'climate' ? APPLY_STATE : POSITION_ACTIONS[domain]?.open || 'turn_on', data: domain === 'climate' ? {state: mode} : {}}, null, 2);
   return `<fieldset class="sc-action" data-action="${prefix}" data-domain="${escA(domain)}"><legend>${label}</legend>${current}${pro ? '<p>Azione personalizzata conservata in modalità Pro.</p>' : ''}<div class="sc-action-fields" ${pro ? 'hidden' : ''}>${fields.join('')}${extra.length ? `<details class="sc-more" data-section="${prefix}-more"><summary>Altre opzioni</summary>${extra.join('')}</details>` : ''}</div><details data-section="${prefix}-pro"><summary>Pro · azione personalizzata</summary>${check(name('pro'), 'Usa JSON al posto dei controlli', pro)}<label>Azione JSON<textarea name="${name('json')}" rows="4">${escA(json)}</textarea></label></details></fieldset>`;
 }
 
@@ -189,8 +194,8 @@ export function readAction(form, prefix, domain) {
       if (mode !== 'fan_only') { put('temperature', num('temperature')); put('target_temp_low', num('target_temp_low')); put('target_temp_high', num('target_temp_high')); }
       for (const key of ['fan_mode', 'preset_mode', 'swing_mode', 'swing_horizontal_mode']) put(key, val(key));
     }
-  } else if (domain === 'cover') {
-    action = {open: 'open_cover', close: 'close_cover', stop: 'stop_cover', position: 'set_cover_position'}[mode];
+  } else if (POSITION_ACTIONS[domain]) {
+    action = POSITION_ACTIONS[domain][mode];
     if (mode === 'position') put('position', num('position'));
   } else {
     action = mode === 'off' ? 'turn_off' : 'turn_on';
@@ -202,7 +207,7 @@ export function readAction(form, prefix, domain) {
     if (mode === 'on' && domain === 'fan') { put('percentage', num('percentage')); put('preset_mode', val('preset_mode')); }
   }
   if (!action) throw new Error('Comando non disponibile per questo dispositivo.');
-  if (action === 'set_cover_position' && data.position === undefined) throw new Error('Indica la posizione richiesta.');
+  if (/^set_(cover|valve)_position$/.test(action) && data.position === undefined) throw new Error('Indica la posizione richiesta.');
   if (Object.values(data).some((v) => typeof v === 'number' && !Number.isFinite(v))) throw new Error('Inserisci un valore numerico valido.');
   return {domain, action, data};
 }
@@ -218,7 +223,7 @@ export function describeAction(action) {
     if (d.fan_mode) parts.push(`ventola ${pretty(d.fan_mode).toLowerCase()}`);
     return parts.join(' ');
   }
-  const base = {turn_on: 'Accendi', turn_off: 'Spegni', open_cover: 'Apri', close_cover: 'Chiudi', stop_cover: 'Ferma', set_cover_position: `Posizione ${d.position}%`, set_hvac_mode: pretty(d.hvac_mode), set_temperature: `${d.temperature ?? ''}°`, set_percentage: `Velocità ${d.percentage}%`}[action.action] || pretty(action.action);
+  const base = {turn_on: 'Accendi', turn_off: 'Spegni', open_cover: 'Apri', close_cover: 'Chiudi', stop_cover: 'Ferma', set_cover_position: `Posizione ${d.position}%`, open_valve: 'Apri', close_valve: 'Chiudi', stop_valve: 'Ferma', set_valve_position: `Posizione ${d.position}%`, set_hvac_mode: pretty(d.hvac_mode), set_temperature: `${d.temperature ?? ''}°`, set_percentage: `Velocità ${d.percentage}%`}[action.action] || pretty(action.action);
   const extra = d.brightness_pct != null ? ` ${d.brightness_pct}%` : d.percentage != null && action.action === 'turn_on' ? ` ${d.percentage}%` : '';
   return base + extra;
 }
