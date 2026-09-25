@@ -7,6 +7,7 @@ const port = process.argv[2] || 9333;
 const shots = [
   ['main', 760, 1400], ['editor', 390, 844], ['action', 390, 844],
   ['conditions', 760, 1000], ['quicktimer', 420, 860], ['timeline', 760, 480],
+  ['serpentine', 760, 880], ['ring', 760, 820],
 ];
 const out = new URL('../docs/images/', import.meta.url);
 mkdirSync(out, {recursive: true});

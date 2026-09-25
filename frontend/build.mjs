@@ -16,4 +16,5 @@ mkdirSync(output, { recursive: true });
 const parts = ['state-adapter.js', 'editor.js', 'forms.js', 'action-editor.js', 'schedule-editor.js', 'timeline.js'].map((name) => module(name).trimEnd());
 const quickTimer = module('quick-timer-card.js').replace("'__SC_QT_CSS__'", JSON.stringify(css + source('quick-timer.css')));
 const timelineCard = module('timeline-card.js').replace("'__SC_TL_CSS__'", JSON.stringify(source('timeline-card.css')));
-writeFileSync(new URL('schedule-creator-card.js', output), `${[...parts, card.trimEnd(), quickTimer.trimEnd(), timelineCard.trimEnd()].join('\n')}\n`);
+const weekCards = module('week-cards.js').replace("'__SC_WK_CSS__'", JSON.stringify(source('week-cards.css')));
+writeFileSync(new URL('schedule-creator-card.js', output), `${[...parts, card.trimEnd(), quickTimer.trimEnd(), timelineCard.trimEnd(), weekCards.trimEnd()].join('\n')}\n`);

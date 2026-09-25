@@ -6,7 +6,7 @@ import { blankCondition, conditionForm, readCondition, slotsForm, readSlots, mag
 import { actionForm, readAction, describeAction, describeState, pretty } from './action-editor.js';
 
 const STYLE = '__SC_CSS__';
-const CARD_VERSION = '0.3.10';
+const CARD_VERSION = '0.3.11';
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
@@ -123,8 +123,33 @@ class ScheduleCreatorCard extends HTMLElement {
   getCardSize() { return 8; }
   setConfig(config) { this.config = config; this.render(); }
   set hass(hass) { this._hass = hass; if (this.isConnected) this.adapter.connect(hass); if (hass?.connection !== this.adapter.connection || !this.edit) this.render(); }
-  connectedCallback() { if (this._hass) this.adapter.connect(this._hass); this.render(); }
-  disconnectedCallback() { this.adapter.disconnect(); clearInterval(this.clock); this.clock = null; }
+  connectedCallback() {
+    if (this._hass) this.adapter.connect(this._hass);
+    // Serpentine/ring cards ask the main card to open a schedule (see week-cards.js).
+    this.onExternalEdit ??= (event) => {
+      const id = event.detail?.schedule_id;
+      if (event.defaultPrevented || !this.adapter.state?.config?.schedules?.some((s) => s.id === id)) return;
+      event.preventDefault(); this.openEditor('editSchedule', id); this.scrollIntoView?.({block: 'start', behavior: 'smooth'});
+    };
+    if (!this.listening) { window.addEventListener('schedule-creator-edit', this.onExternalEdit); window.__scheduleCreatorEditors = (window.__scheduleCreatorEditors || 0) + 1; this.listening = true; }
+    this.render();
+  }
+  disconnectedCallback() {
+    this.adapter.disconnect(); clearInterval(this.clock); this.clock = null;
+    if (this.listening) { window.removeEventListener('schedule-creator-edit', this.onExternalEdit); window.__scheduleCreatorEditors -= 1; this.listening = false; }
+  }
+  // A week card on another view navigates here with ?sc_edit=<schedule id>.
+  openRequestedSchedule() {
+    const params = new URLSearchParams(window.location?.search || '');
+    const id = params.get('sc_edit');
+    this.checkedRequest = true;
+    if (!id) return false;
+    params.delete('sc_edit');
+    history.replaceState(history.state, '', `${window.location.pathname}${params.size ? `?${params}` : ''}${window.location.hash}`);
+    if (!this.adapter.state.config.schedules.some((s) => s.id === id)) return false;
+    this.openEditor('editSchedule', id);
+    return true;
+  }
   closeEditor() {
     this.edit=null; this.draft=null; this.localError=null; this.localErrorDetails=null;
     this.render();
@@ -166,6 +191,7 @@ class ScheduleCreatorCard extends HTMLElement {
   }
   render() {
     if (!this.config) return;
+    if (!this.checkedRequest && this.adapter.state && this.openRequestedSchedule()) return;
     const focused = this.shadowRoot.activeElement;
     const hadDetails = this.shadowRoot.querySelector('details');
     const openSections = new Set([...this.shadowRoot.querySelectorAll('details[open]')].map((node)=>node.dataset.section || node.querySelector('summary')?.textContent));
