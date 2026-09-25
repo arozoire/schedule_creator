@@ -39,6 +39,8 @@ can live side by side; schedules can be imported from the old card's backup
 - **Safe by design** – every command goes through a durable journal with
   retries; nothing is replayed blindly after a restart.
 - **Backup, restore and RESET** from the card.
+- **Automation friendly** – switches for profiles and schedules, a next-slot
+  sensor and services to switch profiles or start timers from automations.
 - **Import from weekly-schedule-card** – load its backup file, review what
   each schedule becomes and add it as a new, inactive profile.
 
@@ -131,6 +133,45 @@ presets: [5, 15, 30, 60]  # optional, minutes
 Choose what the device should do during the timer and for how long (presets,
 slider or "until" a time). While a timer runs the card shows a countdown and a
 cancel button; when it ends the previous state is restored.
+
+## Automations, scripts and voice
+
+Every profile and schedule is also a switch, so they work in automations,
+dashboards and voice assistants (expose them to Assist to say “turn on
+Profile Holiday”):
+
+| Entity | Meaning |
+| --- | --- |
+| `switch.schedule_creator_profile_<name>` | Profile active. Turning an exclusive profile on switches the other exclusive ones off. |
+| `switch.schedule_creator_schedule_<name>` | Schedule enabled. Attributes: profile, devices, `running`. |
+| `sensor.schedule_creator_next_slot` | Start of the next slot of an active profile, with schedule and devices. |
+
+Services (profiles and schedules by name or ID):
+
+```yaml
+# Everyone left: switch to the Away profile
+action: schedule_creator.set_profile
+data:
+  profile: Away
+
+# Pause one schedule
+action: schedule_creator.set_schedule
+data:
+  schedule: Bedroom blind · Open
+  enabled: false
+
+# Cool the bedroom for 30 minutes, then put it back as it was
+action: schedule_creator.start_timer
+data:
+  entity_id: climate.bedroom
+  duration: "00:30:00"
+  action: apply_state
+  data: {state: cool, temperature: 23}
+
+action: schedule_creator.cancel_timer
+data:
+  entity_id: climate.bedroom
+```
 
 ## How it works
 

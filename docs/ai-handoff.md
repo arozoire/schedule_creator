@@ -1,5 +1,20 @@
 # AI handoff — stato attuale e piano futuro
 
+## Controllo da automazioni (F1) — 0.3.17 (2026-09-25)
+
+- `mutation_api.async_commit_config(hass, mutation, expected_revision=None)`:
+  commit + replan riusabile (WebSocket, servizi, entità);
+  `quick_timer_api.async_commit_runtime` idem per i timer. Mutazioni
+  riutilizzabili: `profile_api.profile_activation`, `schedule_api.schedule_enabling`,
+  `quick_timer_creation`, `quick_timer_cancellation`.
+- `control.py`: servizi `set_profile`, `set_schedule`, `start_timer`,
+  `cancel_timer` (registrati con la entry, rimossi allo unload; `services.yaml`,
+  traduzioni in `translations/*.json`). Stato già uguale → nessun errore.
+- `switch.py`: `ProfileSwitch`, `ScheduleSwitch` e `_SwitchManager` che segue
+  `EVENT_CONFIG_UPDATED` (aggiunge/rimuove dal registro). Nomi con prefisso nella
+  lingua di HA; un device "Schedule Creator" di tipo servizio. `sensor.py`:
+  `NextSlotSensor` (timestamp). Test: `tests/test_control.py`.
+
 ## Traduzioni EN/FR/DE/ES — 0.3.16 (2026-09-25)
 
 `frontend/src/i18n.js`: `t(testoItaliano, {param})`, `setLanguage(hass, config)`

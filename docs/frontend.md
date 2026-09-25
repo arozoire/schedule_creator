@@ -58,6 +58,16 @@ della cache. Il primo passaggio alla 0.3.5 richiede ancora riavvio e refresh.
 
 ## Contratto tecnico
 
+### Automazioni, script e voce 0.3.17
+
+Ogni profilo e ogni schedule è anche uno `switch` (profilo attivo, schedule
+abilitato) e c'è `sensor.schedule_creator_next_slot` con l'inizio della prossima
+fascia. Servizi: `schedule_creator.set_profile` (profile, active),
+`set_schedule` (schedule, enabled), `start_timer` (entity_id, duration, action,
+data), `cancel_timer` (entity_id). Profili e schedule per nome (maiuscole
+indifferenti) o ID. Esempio: quando esce l'ultima persona,
+`schedule_creator.set_profile` con `profile: Fuori casa`.
+
 ### Lingue 0.3.16
 
 Le card seguono la lingua dell'utente di Home Assistant: italiano, inglese,

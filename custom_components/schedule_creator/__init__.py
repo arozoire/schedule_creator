@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
 from homeassistant.core import CoreState, HomeAssistant
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
@@ -25,6 +26,7 @@ from .boundaries import (
 from .completions import CompletionCoordinator
 from .condition_runtime import ConditionCoordinator
 from .const import DOMAIN, INTEGRATION_VERSION
+from .control import async_register_services, async_remove_services
 from .frontend_loader import async_register_frontend
 from .horizon import HorizonRefreshCoordinator
 from .journal import RecoveryInstruction, build_recovery_plan
@@ -37,6 +39,8 @@ from .storage import ScheduleCreatorStorage
 from .websocket_api import async_register_commands
 
 LIFECYCLE_LOCK: HassKey[asyncio.Lock] = HassKey(f"{DOMAIN}.lifecycle_lock")
+# Switches for profiles and schedules, a sensor for the next slot.
+PLATFORMS = (Platform.SWITCH, Platform.SENSOR)
 
 
 @dataclass(slots=True)
@@ -170,6 +174,8 @@ async def async_setup_entry(
             entry.async_on_unload(
                 async_at_started(hass, lambda _hass: _async_first_run(hass, entry))
             )
+    async_register_services(hass)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
@@ -192,6 +198,9 @@ async def async_unload_entry(
 ) -> bool:
     """Unload Schedule Creator."""
 
+    if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        return False
+    async_remove_services(hass)
     async with lifecycle_lock(hass):
         await entry.runtime_data.async_shutdown()
     return True

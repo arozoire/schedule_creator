@@ -9,5 +9,67 @@
     "abort": {
       "already_configured": "Schedule Creator è già configurato."
     }
+  },
+  "services": {
+    "set_profile": {
+      "name": "Imposta profilo",
+      "description": "Attiva o disattiva un profilo di Schedule Creator. Attivare un profilo esclusivo disattiva gli altri esclusivi.",
+      "fields": {
+        "profile": {
+          "name": "Profilo",
+          "description": "Nome o ID del profilo."
+        },
+        "active": {
+          "name": "Attivo",
+          "description": "Acceso per attivare, spento per disattivare."
+        }
+      }
+    },
+    "set_schedule": {
+      "name": "Imposta schedule",
+      "description": "Abilita o disabilita uno schedule.",
+      "fields": {
+        "schedule": {
+          "name": "Schedule",
+          "description": "Nome o ID dello schedule."
+        },
+        "enabled": {
+          "name": "Abilitato",
+          "description": "Acceso per abilitare, spento per disabilitare."
+        }
+      }
+    },
+    "start_timer": {
+      "name": "Avvia Quick Timer",
+      "description": "Comanda un dispositivo per un certo tempo; alla fine torna allo stato precedente.",
+      "fields": {
+        "entity_id": {
+          "name": "Entità",
+          "description": "Dispositivo da comandare."
+        },
+        "duration": {
+          "name": "Durata",
+          "description": "Quanto dura il timer (fino a 7 giorni)."
+        },
+        "action": {
+          "name": "Azione",
+          "description": "Servizio del dominio del dispositivo, per esempio turn_on, oppure apply_state per uno stato desiderato."
+        },
+        "data": {
+          "name": "Dati",
+          "description": "Dati del servizio, per esempio {\"state\": \"cool\", \"temperature\": 23} con apply_state."
+        }
+      }
+    },
+    "cancel_timer": {
+      "name": "Annulla Quick Timer",
+      "description": "Ferma il Quick Timer in corso di un dispositivo e ripristina lo stato precedente.",
+      "fields": {
+        "entity_id": {
+          "name": "Entità",
+          "description": "Dispositivo di cui annullare il timer."
+        }
+      }
+    }
   }
 }

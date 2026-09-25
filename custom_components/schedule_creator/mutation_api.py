@@ -55,6 +55,51 @@ def _require_config(config: IntegrationConfig | None) -> IntegrationConfig:
     return config
 
 
+async def async_commit_config(
+    hass: HomeAssistant,
+    mutation: ConfigMutation,
+    expected_revision: int | None = None,
+) -> IntegrationConfig:
+    """Commit one configuration change and replan, for any caller.
+
+    ``expected_revision`` protects a client draft; services and entities that
+    act on the current state pass None.
+    """
+
+    from . import lifecycle_lock
+
+    async with lifecycle_lock(hass):
+        runtime = _loaded_runtime(hass)
+        if runtime is None:
+            raise MutationClientError("not_loaded", "Schedule Creator is not loaded.")
+        now = datetime.now(UTC)
+        revision = expected_revision
+        if revision is None:
+            revision = _require_config(runtime.storage.config.data).revision
+        updated = await runtime.storage.config.async_update(
+            revision,
+            lambda config: mutation(_require_config(config), now),
+        )
+        try:
+            await async_reconcile_horizon(
+                runtime.storage.runtime,
+                updated,
+                ZoneInfo(hass.config.time_zone),
+                now,
+                sun_resolver(hass),
+            )
+            await async_advance_occurrence_states(runtime.storage.runtime, now)
+            await runtime.conditions.async_refresh(now)
+            runtime.occurrence_boundaries.reschedule(now)
+        except Exception:
+            # Configuration is already authoritative and cannot be rolled back
+            # safely after a second Store fails. Startup reconciliation heals it.
+            _LOGGER.exception(
+                "Unable to reconcile occurrences after configuration commit"
+            )
+    return updated
+
+
 async def async_mutate_config(
     hass: HomeAssistant,
     connection: ActiveConnection,
@@ -67,40 +112,10 @@ async def async_mutate_config(
 ) -> None:
     """Serialize one validated optimistic mutation with entry lifecycle changes."""
 
-    from . import lifecycle_lock
-
     try:
-        async with lifecycle_lock(hass):
-            runtime = _loaded_runtime(hass)
-            if runtime is None:
-                connection.send_error(
-                    msg["id"], "not_loaded", "Schedule Creator is not loaded."
-                )
-                return
-            now = datetime.now(UTC)
-            updated = await runtime.storage.config.async_update(
-                msg["expected_revision"],
-                lambda config: mutation(_require_config(config), now),
-            )
-            try:
-                await async_reconcile_horizon(
-                    runtime.storage.runtime,
-                    updated,
-                    ZoneInfo(hass.config.time_zone),
-                    now,
-                    sun_resolver(hass),
-                )
-                await async_advance_occurrence_states(
-                    runtime.storage.runtime, now
-                )
-                await runtime.conditions.async_refresh(now)
-                runtime.occurrence_boundaries.reschedule(now)
-            except Exception:
-                # Configuration is already authoritative and cannot be rolled back
-                # safely after a second Store fails. Startup reconciliation heals it.
-                _LOGGER.exception(
-                    "Unable to reconcile occurrences after configuration commit"
-                )
+        updated = await async_commit_config(
+            hass, mutation, msg["expected_revision"]
+        )
         connection.send_result(msg["id"], response(updated))
     except RevisionConflictError as err:
         connection.send_error(
