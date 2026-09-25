@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Schedule Creator einrichten",
+        "description": "Legt die lokale Konfiguration von Schedule Creator an. Es werden weder Token, YAML noch Helfer benötigt."
+      }
+    },
+    "abort": {
+      "already_configured": "Schedule Creator ist bereits eingerichtet."
+    }
+  }
+}

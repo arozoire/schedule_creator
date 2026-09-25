@@ -1,8 +1,10 @@
 // UI-only builders. Execution, conditions and notifications belong to HA.
+import { t } from './i18n.js';
+
 export const uiEscape = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const E = uiEscape;
 export const input = (name, label, value = '', type = 'text', attrs = '') => `<label>${label}<input name="${name}" type="${type}" value="${E(value)}" ${attrs}></label>`;
-export const choice = (name, label, values, selected) => `<label>${label}<select name="${name}">${values.map(([v,t]) => `<option value="${E(v)}" ${v === selected ? 'selected' : ''}>${E(t)}</option>`).join('')}</select></label>`;
+export const choice = (name, label, values, selected) => `<label>${label}<select name="${name}">${values.map(([v,text]) => `<option value="${E(v)}" ${v === selected ? 'selected' : ''}>${E(text)}</option>`).join('')}</select></label>`;
 export const check = (name,label,checked) => `<label class="sc-check"><input type="checkbox" name="${name}" ${checked ? 'checked' : ''}>${label}</label>`;
 const commands = {
   switch: {turn_on:'Accendi',turn_off:'Spegni'}, input_boolean: {turn_on:'Attiva',turn_off:'Disattiva'},
@@ -23,7 +25,7 @@ export function notificationForm(prefix,label,value,hass,draft={}) {
   const enabled = draft[`${prefix}_enabled`] === undefined ? !!value : draft[`${prefix}_enabled`] === 'on';
   const services = ['persistent_notification.create',...Object.keys(hass.services?.notify || {}).map((x)=>`notify.${x}`)];
   if(value && !services.includes(value.action)) services.push(value.action);
-  return `<fieldset><legend>${label}</legend>${check(`${prefix}_enabled`,'Abilita notifica',enabled)}<div ${enabled ? '' : 'hidden'}>${choice(`${prefix}_action`,'Destinazione',services.map((x)=>[x,x==='persistent_notification.create'?'Notifica in Home Assistant':x]),draft[`${prefix}_action`] ?? value?.action ?? services[0])}${input(`${prefix}_title`,'Titolo',draft[`${prefix}_title`] ?? value?.title ?? '')}${input(`${prefix}_message`,'Messaggio',draft[`${prefix}_message`] ?? value?.message ?? '')}</div></fieldset>`;
+  return `<fieldset><legend>${label}</legend>${check(`${prefix}_enabled`,t('Abilita notifica'),enabled)}<div ${enabled ? '' : 'hidden'}>${choice(`${prefix}_action`,t('Destinazione'),services.map((x)=>[x,x==='persistent_notification.create'?t('Notifica in Home Assistant'):x]),draft[`${prefix}_action`] ?? value?.action ?? services[0])}${input(`${prefix}_title`,t('Titolo'),draft[`${prefix}_title`] ?? value?.title ?? '')}${input(`${prefix}_message`,t('Messaggio'),draft[`${prefix}_message`] ?? value?.message ?? '')}</div></fieldset>`;
 }
 export function readNotification(form,prefix) {
   return form.elements[`${prefix}_enabled`]?.checked ? {action:form.elements[`${prefix}_action`].value,title:form.elements[`${prefix}_title`].value,message:form.elements[`${prefix}_message`].value} : null;

@@ -5,9 +5,10 @@ import { controllable, targetEntities, notificationForm, readNotification } from
 import { blankCondition, conditionForm, readCondition, slotsForm, readSlots, magnetSnap, toMinutes, toTime, DAY_SHORTCUTS, iconPicker, colorPicker, sunMinutes, boundaryLabel } from './schedule-editor.js';
 import { actionForm, readAction, describeAction, describeState, pretty } from './action-editor.js';
 import { isWscBackup, convertWscBackup, wscImportPayload } from './wsc-import.js';
+import { t, setLanguage, locale } from './i18n.js';
 
 const STYLE = '__SC_CSS__';
-const CARD_VERSION = '0.3.15';
+const CARD_VERSION = '0.3.16';
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
@@ -39,10 +40,10 @@ const FULL_DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 
 const byOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0) || String(a.name).localeCompare(String(b.name));
 const daysLabel = (days) => {
   const d = [...days].sort((a, b) => a - b), key = d.join('');
-  if (key === '0123456') return 'Tutti i giorni';
-  if (key === '01234') return 'Lun–Ven';
-  if (key === '56') return 'Weekend';
-  return d.length > 2 && d.every((v, i) => !i || v === d[i - 1] + 1) ? `${DAYS[d[0]]}–${DAYS[d.at(-1)]}` : d.map((i) => DAYS[i]).join(', ');
+  if (key === '0123456') return t('Tutti i giorni');
+  if (key === '01234') return t('Lun–Ven');
+  if (key === '56') return t('Weekend');
+  return d.length > 2 && d.every((v, i) => !i || v === d[i - 1] + 1) ? `${t(DAYS[d[0]])}–${t(DAYS[d.at(-1)])}` : d.map((i) => t(DAYS[i])).join(', ');
 };
 const newer = (a, b) => {
   const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
@@ -52,8 +53,8 @@ const newer = (a, b) => {
 // Backend and card versions come from the same manifest at build time.
 export function versionAdvice(backend) {
   if (backend === CARD_VERSION) return '';
-  if (!backend || newer(CARD_VERSION, backend)) return `La card v${CARD_VERSION} è aggiornata, ma Home Assistant esegue ancora l’integrazione ${backend ? `v${backend}` : 'precedente'}. Riavvia Home Assistant (Impostazioni → Sistema → Riavvia) per attivare il nuovo backend.`;
-  return `L’integrazione v${backend} è attiva, ma questa pagina usa ancora la card v${CARD_VERSION}. Ricarica la pagina; nell’app mobile usa “Ricarica” o svuota la cache del frontend.`;
+  if (!backend || newer(CARD_VERSION, backend)) return t('La card v{card} è aggiornata, ma Home Assistant esegue ancora l’integrazione {backend}. Riavvia Home Assistant (Impostazioni → Sistema → Riavvia) per attivare il nuovo backend.', {card: CARD_VERSION, backend: backend ? `v${backend}` : t('precedente')});
+  return t('L’integrazione v{backend} è attiva, ma questa pagina usa ancora la card v{card}. Ricarica la pagina; nell’app mobile usa “Ricarica” o svuota la cache del frontend.', {card: CARD_VERSION, backend});
 }
 class ScheduleCreatorCard extends HTMLElement {
   constructor() {
@@ -109,7 +110,7 @@ class ScheduleCreatorCard extends HTMLElement {
         const others = [...this.shadowRoot.querySelectorAll('[name="entities"]:checked')].filter((x)=>x!==e.target);
         if (others.some((x)=>x.value.split('.')[0] !== e.target.value.split('.')[0])) {
           e.target.checked = false;
-          this.localError = 'Uno schedule controlla entità dello stesso tipo. Crea uno schedule separato per gli altri dispositivi.';
+          this.localError = t('Uno schedule controlla entità dello stesso tipo. Crea uno schedule separato per gli altri dispositivi.');
         }
       }
       this.capture();
@@ -121,7 +122,7 @@ class ScheduleCreatorCard extends HTMLElement {
       if (newDomain && previousDomain && newDomain !== previousDomain) {
         for (const key of Object.keys(this.draft)) if (/^(start|end|timer)_/.test(key) && !key.includes('notification')) delete this.draft[key];
         this.actionReset = true;
-        this.localError = 'Tipo di dispositivo cambiato: scegli nuovamente le azioni.';
+        this.localError = t('Tipo di dispositivo cambiato: scegli nuovamente le azioni.');
       }
       this.render();
     });
@@ -203,6 +204,7 @@ class ScheduleCreatorCard extends HTMLElement {
   }
   render() {
     if (!this.config) return;
+    setLanguage(this._hass, this.config);
     if (!this.checkedRequest && this.adapter.state && this.openRequestedSchedule()) return;
     const focused = this.shadowRoot.activeElement;
     const hadDetails = this.shadowRoot.querySelector('details');
@@ -241,36 +243,36 @@ class ScheduleCreatorCard extends HTMLElement {
       return item.condition_branch==='false' || waitingFor(item) ? 'is-paused' : 'is-running';
     };
     const time=minute=>`${String(Math.floor(minute/60)).padStart(2,'0')}:${String(minute%60).padStart(2,'0')}`;
-    const slots = `<div class="sc-timeline-head"><span>Ora</span>${DAYS.map((day,index)=>`<strong class="${index===now.weekday?'is-today':''}">${day}${index===now.weekday?'<span class="sc-today-tag"> · oggi</span>':''}</strong>`).join('')}</div><div class="sc-timeline-grid"><div class="sc-time-axis">${Array.from({length:13},(_,i)=>`<span style="top:${i/12*100}%">${time(i*120)}</span>`).join('')}</div>${DAYS.map((day,index)=>`<div class="sc-day-track ${index===now.weekday?'is-today':''}" data-day="${index}" aria-label="${day}" title="${this._hass?.user?.is_admin===true && group ? 'Clicca uno spazio libero per aggiungere uno schedule' : ''}">${segments[index].map(({schedule,start,end,lane,lanes})=>{
-      const label=`${schedule.name} · ${day} ${time(start)}–${time(end)}${schedule.enabled?'':' · Disabilitato'}`;
+    const slots = `<div class="sc-timeline-head"><span>${t('Orario')}</span>${DAYS.map((day,index)=>`<strong class="${index===now.weekday?'is-today':''}">${t(day)}${index===now.weekday?`<span class="sc-today-tag"> · ${t('oggi')}</span>`:''}</strong>`).join('')}</div><div class="sc-timeline-grid"><div class="sc-time-axis">${Array.from({length:13},(_,i)=>`<span style="top:${i/12*100}%">${time(i*120)}</span>`).join('')}</div>${DAYS.map((day,index)=>`<div class="sc-day-track ${index===now.weekday?'is-today':''}" data-day="${index}" aria-label="${t(day)}" title="${this._hass?.user?.is_admin===true && group ? t('Clicca uno spazio libero per aggiungere uno schedule') : ''}">${segments[index].map(({schedule,start,end,lane,lanes})=>{
+      const label=`${schedule.name} · ${t(day)} ${time(start)}–${time(end)}${schedule.enabled?'':` · ${t('Disabilitato')}`}`;
       const live=index===now.weekday && start<=now.minutes && now.minutes<end ? runningState(schedule.id) : '';
       return `<button type="button" class="sc-time-block ${schedule.enabled?'':'is-off'} ${live}" data-command="editSchedule" data-id="${esc(schedule.id)}" aria-label="${esc(label)}" title="${esc(label)}" style="top:${start/1440*100}%;height:${(end-start)/1440*100}%;left:${lane/lanes*100}%;width:${100/lanes}%;--block-color:${colorFor(schedule)}"><span>${esc(schedule.name)}</span><small>${time(start)}–${time(end)}</small></button>`;
-    }).join('')}${index===now.weekday?`<span class="sc-now-line" style="top:${now.minutes/1440*100}%" aria-label="Ora ${now.label}"></span>`:''}</div>`).join('')}</div>`;
-    const legend = `<div class="sc-legend" aria-hidden="true"><span><i class="sc-legend-temp"></i>Clima: freddo → caldo</span><span><i class="sc-legend-running"></i>In corso</span><span><i class="sc-legend-paused"></i>In pausa</span><span><i class="sc-legend-now"></i>Ora</span></div>`;
+    }).join('')}${index===now.weekday?`<span class="sc-now-line" style="top:${now.minutes/1440*100}%" aria-label="${t('Ora')} ${now.label}"></span>`:''}</div>`).join('')}</div>`;
+    const legend = `<div class="sc-legend" aria-hidden="true"><span><i class="sc-legend-temp"></i>${t('Clima: freddo → caldo')}</span><span><i class="sc-legend-running"></i>${t('In corso')}</span><span><i class="sc-legend-paused"></i>${t('In pausa')}</span><span><i class="sc-legend-now"></i>${t('Ora')}</span></div>`;
     const advice = state ? versionAdvice(state.integration_version) : '';
     const failures = state?.failures || [], recentFailures = failures.filter((f) => Date.now() - new Date(f.at) < 86400000);
-    const failureBanner = recentFailures.length ? `<div class="status sc-warning" role="status">${recentFailures.length === 1 ? 'Un comando non è riuscito' : `${recentFailures.length} comandi non sono riusciti`} nelle ultime 24 ore: dettagli in “Attività”.</div>` : '';
-    const status = `${error ? `<div class="status error" role="alert">${esc(messageFor(error))}</div>` : loading ? '<div class="status">Caricamento…</div>' : ''}${advice ? `<div class="status sc-warning" role="status">${esc(advice)}</div>` : ''}${failureBanner}${this.notice && !this.edit ? `<div class="status sc-notice" role="status">${esc(this.notice)}</div>` : ''}`;
+    const failureBanner = recentFailures.length ? `<div class="status sc-warning" role="status">${recentFailures.length === 1 ? t('Un comando non è riuscito nelle ultime 24 ore: dettagli in “Attività”.') : t('{count} comandi non sono riusciti nelle ultime 24 ore: dettagli in “Attività”.', {count: recentFailures.length})}</div>` : '';
+    const status = `${error ? `<div class="status error" role="alert">${esc(messageFor(error))}</div>` : loading ? `<div class="status">${t('Caricamento…')}</div>` : ''}${advice ? `<div class="status sc-warning" role="status">${esc(advice)}</div>` : ''}${failureBanner}${this.notice && !this.edit ? `<div class="status sc-notice" role="status">${esc(this.notice)}</div>` : ''}`;
     const info = this.localError || writeError;
     const errorDetails = this.localError ? this.localErrorDetails : writeError ? diagnosticFor(writeError, {cardVersion:CARD_VERSION,haVersion:this._hass.config?.version}) : null;
     const editable = this._hass?.user?.is_admin === true && writeError?.code !== 'unauthorized';
-    const view = state ? `<div class="profile-status-bar">${profile ? `<span class="sc-badge ${profile.active ? 'is-active' : ''}">${profile.active ? 'Profilo attivo' : 'Profilo inattivo'}</span><span>${esc(profile.profile_type === 'exclusive' ? 'Esclusivo' : 'Condiviso')}</span>` : 'Crea un profilo per iniziare'}<span>· ${state.quick_timers?.length ?? 0} timer attivi</span></div>
+    const view = state ? `<div class="profile-status-bar">${profile ? `<span class="sc-badge ${profile.active ? 'is-active' : ''}">${profile.active ? t('Profilo attivo') : t('Profilo inattivo')}</span><span>${esc(profile.profile_type === 'exclusive' ? t('Esclusivo') : t('Condiviso'))}</span>` : t('Crea un profilo per iniziare')}<span>· ${t('{count} timer attivi', {count: state.quick_timers?.length ?? 0})}</span></div>
       ${this.nowTiles(config, occurrences, state.quick_timers || [])}
-      <div class="sc-toolbar"><h2>Settimana${group ? ` · ${esc(group.name)}` : ''}</h2>${groups.length ? `<nav class="tab-bar" aria-label="Gruppi">${tabs}</nav>` : ''}</div>
-      ${schedules.length ? `<section class="sc-timeline" data-scroll="timeline" aria-label="Programmazione settimanale">${slots}</section>${legend}<details data-section="schedules" class="sc-schedules"><summary>Gestisci schedule (${schedules.length})</summary><ul class="sc-list">${schedules.map((schedule) => `<li class="sc-entry" style="--block-color:${colorFor(schedule)}"><div class="sc-entry-copy"><strong>${esc(schedule.name)}</strong><span class="sc-meta">${esc(schedule.target_entity_ids.map((id)=>this._hass.states[id]?.attributes?.friendly_name || id).join(', '))} · ${schedule.enabled ? '' : 'disabilitato · '}${schedule.time_slots?.length ?? 0} ${schedule.time_slots?.length === 1 ? 'fascia' : 'fasce'}</span></div>${editable ? `<div class="sc-entry-actions">${button('editSchedule','Modifica',schedule.id)}${button('deleteSchedule','Elimina',schedule.id)}</div>` : ''}</li>`).join('')}</ul></details>` : `<${editable ? `button type="button" data-command="${!profile ? 'newProfile' : !group ? 'newGroup' : 'newSchedule'}"` : 'div'} class="sc-empty"><strong>${!profile ? 'Inizia dal tuo primo profilo' : !group ? 'Aggiungi un gruppo di dispositivi' : 'La settimana è ancora libera'}</strong>${!profile ? 'Organizza la casa per abitudini, ambienti o stagioni.' : !group ? 'Riunisci i dispositivi che vuoi programmare.' : 'Tocca qui o su un orario del calendario per creare uno schedule.'}</${editable ? 'button' : 'div'}>`}
-      ${editable ? `<details class="sc-management" data-section="management" ${!profile || !group ? 'open' : ''}><summary>Gestisci profili e gruppi</summary><div class="sc-controls">${button('newProfile','＋ Profilo')}${profile ? `${button('editProfile','Modifica profilo',profile.id)}${button('toggleProfile',profile.active ? 'Disattiva profilo' : 'Attiva profilo',profile.id)}${button('deleteProfile','Elimina profilo',profile.id)}${button('newGroup','＋ Gruppo')}` : ''}${group ? `${button('editGroup','Modifica gruppo',group.id)}${button('deleteGroup','Elimina gruppo',group.id)}` : ''}</div></details>` : '<p class="sc-meta">Vista in sola lettura: serve un amministratore per modificare.</p>'}
+      <div class="sc-toolbar"><h2>${t('Settimana')}${group ? ` · ${esc(group.name)}` : ''}</h2>${groups.length ? `<nav class="tab-bar" aria-label="${t('Gruppi')}">${tabs}</nav>` : ''}</div>
+      ${schedules.length ? `<section class="sc-timeline" data-scroll="timeline" aria-label="${t('Programmazione settimanale')}">${slots}</section>${legend}<details data-section="schedules" class="sc-schedules"><summary>${t('Gestisci schedule ({count})', {count: schedules.length})}</summary><ul class="sc-list">${schedules.map((schedule) => `<li class="sc-entry" style="--block-color:${colorFor(schedule)}"><div class="sc-entry-copy"><strong>${esc(schedule.name)}</strong><span class="sc-meta">${esc(schedule.target_entity_ids.map((id)=>this._hass.states[id]?.attributes?.friendly_name || id).join(', '))} · ${schedule.enabled ? '' : `${t('disabilitato')} · `}${schedule.time_slots?.length === 1 ? t('1 fascia') : t('{count} fasce', {count: schedule.time_slots?.length ?? 0})}</span></div>${editable ? `<div class="sc-entry-actions">${button('editSchedule',t('Modifica'),schedule.id)}${button('deleteSchedule',t('Elimina'),schedule.id)}</div>` : ''}</li>`).join('')}</ul></details>` : `<${editable ? `button type="button" data-command="${!profile ? 'newProfile' : !group ? 'newGroup' : 'newSchedule'}"` : 'div'} class="sc-empty"><strong>${!profile ? t('Inizia dal tuo primo profilo') : !group ? t('Aggiungi un gruppo di dispositivi') : t('La settimana è ancora libera')}</strong>${!profile ? t('Organizza la casa per abitudini, ambienti o stagioni.') : !group ? t('Riunisci i dispositivi che vuoi programmare.') : t('Tocca qui o su un orario del calendario per creare uno schedule.')}</${editable ? 'button' : 'div'}>`}
+      ${editable ? `<details class="sc-management" data-section="management" ${!profile || !group ? 'open' : ''}><summary>${t('Gestisci profili e gruppi')}</summary><div class="sc-controls">${button('newProfile',`＋ ${t('Profilo')}`)}${profile ? `${button('editProfile',t('Modifica profilo'),profile.id)}${button('toggleProfile',profile.active ? t('Disattiva profilo') : t('Attiva profilo'),profile.id)}${button('deleteProfile',t('Elimina profilo'),profile.id)}${button('newGroup',`＋ ${t('Gruppo')}`)}` : ''}${group ? `${button('editGroup',t('Modifica gruppo'),group.id)}${button('deleteGroup',t('Elimina gruppo'),group.id)}` : ''}</div></details>` : `<p class="sc-meta">${t('Vista in sola lettura: serve un amministratore per modificare.')}</p>`}
       ${profiles.length ? this.overview(config, profiles) : ''}
-      ${editable ? `<details class="sc-maintenance" data-section="maintenance"><summary>Manutenzione · backup, import e RESET</summary><p class="sc-meta">Il backup salva profili, gruppi e schedule in un file JSON. Il ripristino li sostituisce e lascia i profili disattivati. L’import dalla weekly-schedule-card li aggiunge in un nuovo profilo disattivato. RESET cancella tutti i dati di Schedule Creator.</p><div class="sc-controls">${button('exportBackup','Salva backup')}${button('newRestore','Ripristina backup')}${button('newImport','Importa da Weekly Schedule Card')}${button('newReset','RESET…')}</div></details>` : ''}
-      <details class="sc-operational" data-section="operational"><summary>Attività · ${state.operational?.occurrences?.length ?? 0} fasce in corso · ${state.quick_timers?.length ?? 0} timer${failures.length ? ` · ${failures.length} errori` : ''}</summary>${failures.length ? `<div class="sc-failures"><strong>Comandi non riusciti</strong><ul>${failures.map((f) => `<li>${esc(this.failureText(f))}</li>`).join('')}</ul></div>` : ''}${(state.operational?.occurrences || []).map((x) => `<p>${esc(config.schedules?.find((s) => s.id === x.schedule_id)?.name || x.schedule_id)}: ${esc(x.state)}, condizione ${esc(x.condition_branch)}, termine ${esc(x.end_utc)}</p>`).join('') || '<p>Nessuna fascia attiva.</p>'}${(state.operational?.leases || []).map((x) => `<p>${esc(x.entity_id)}: ${esc(x.state)} (${esc(x.controller_type)})</p>`).join('')}${(state.quick_timers || []).map((x) => `<p>Timer ${esc(this._hass.states[x.entity_id]?.attributes?.friendly_name || x.entity_id)}: <span data-expiry="${esc(x.expires_at)}"></span> ${editable ? button('cancelTimer','Annulla timer',x.id) : ''}</p>`).join('')}</details>` : '';
-    const errorMarkup = `${info ? `<p class="sc-error" role="alert">${esc(typeof info === 'string' ? info : messageFor(info))}</p>` : ''}${errorDetails ? `<details class="sc-error-details" data-section="error-details"><summary>Dettagli errore</summary><p>Seleziona e copia questo testo per segnalare il problema.</p><textarea readonly aria-label="Dettagli errore da copiare" rows="10">${esc(errorDetails)}</textarea></details>` : ''}`;
+      ${editable ? `<details class="sc-maintenance" data-section="maintenance"><summary>${t('Manutenzione · backup, import e RESET')}</summary><p class="sc-meta">${t('Il backup salva profili, gruppi e schedule in un file JSON. Il ripristino li sostituisce e lascia i profili disattivati. L’import dalla weekly-schedule-card li aggiunge in un nuovo profilo disattivato. RESET cancella tutti i dati di Schedule Creator.')}</p><div class="sc-controls">${button('exportBackup',t('Salva backup'))}${button('newRestore',t('Ripristina backup'))}${button('newImport',t('Importa da Weekly Schedule Card'))}${button('newReset','RESET…')}</div></details>` : ''}
+      <details class="sc-operational" data-section="operational"><summary>${t('Attività · {slots} fasce in corso · {timers} timer', {slots: state.operational?.occurrences?.length ?? 0, timers: state.quick_timers?.length ?? 0})}${failures.length ? ` · ${t('{count} errori', {count: failures.length})}` : ''}</summary>${failures.length ? `<div class="sc-failures"><strong>${t('Comandi non riusciti')}</strong><ul>${failures.map((f) => `<li>${esc(this.failureText(f))}</li>`).join('')}</ul></div>` : ''}${(state.operational?.occurrences || []).map((x) => `<p>${esc(config.schedules?.find((s) => s.id === x.schedule_id)?.name || x.schedule_id)}: ${esc(x.state)}, ${t('condizione')} ${esc(x.condition_branch)}, ${t('termine')} ${esc(x.end_utc)}</p>`).join('') || `<p>${t('Nessuna fascia attiva.')}</p>`}${(state.operational?.leases || []).map((x) => `<p>${esc(x.entity_id)}: ${esc(x.state)} (${esc(x.controller_type)})</p>`).join('')}${(state.quick_timers || []).map((x) => `<p>${t('Timer')} ${esc(this._hass.states[x.entity_id]?.attributes?.friendly_name || x.entity_id)}: <span data-expiry="${esc(x.expires_at)}"></span> ${editable ? button('cancelTimer',t('Annulla timer'),x.id) : ''}</p>`).join('')}</details>` : '';
+    const errorMarkup = `${info ? `<p class="sc-error" role="alert">${esc(typeof info === 'string' ? info : messageFor(info))}</p>` : ''}${errorDetails ? `<details class="sc-error-details" data-section="error-details"><summary>${t('Dettagli errore')}</summary><p>${t('Seleziona e copia questo testo per segnalare il problema.')}</p><textarea readonly aria-label="${t('Dettagli errore da copiare')}" rows="10">${esc(errorDetails)}</textarea></details>` : ''}`;
     const surface=this.shadowRoot.querySelector('ha-card');
     surface.style.setProperty('--pchip-color',tint(profile?.color));
     const running = occurrences.length;
-    const header = `<div class="sc-head"><span class="sc-logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"></rect><path d="M8 2v4M16 2v4M3 10h18M8 15h3"></path></svg></span><div class="sc-head-copy"><span class="card-title">${esc(this.config.title || 'Schedule Creator')}</span><span class="sc-sub">${now.weekday >= 0 ? FULL_DAYS[now.weekday] : ''} · ${now.label}${state ? ` · ${running ? `${running} ${running === 1 ? 'fascia' : 'fasce'} in corso` : 'nessuna fascia in corso'}` : ''}</span></div><span class="sc-version">v${CARD_VERSION}</span>${state && editable ? `<div class="sc-head-actions">${button('newTimer','Quick Timer')}${group ? button('newSchedule','＋ Schedule') : ''}</div>` : ''}</div>`;
-    surface.innerHTML = `<div class="card-header">${header}${profiles.length ? `<div class="sc-segmented" role="group" aria-label="Profili">${chips}</div>` : ''}</div>${status}${this.edit ? '' : errorMarkup}${view}`;
+    const header = `<div class="sc-head"><span class="sc-logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"></rect><path d="M8 2v4M16 2v4M3 10h18M8 15h3"></path></svg></span><div class="sc-head-copy"><span class="card-title">${esc(this.config.title || 'Schedule Creator')}</span><span class="sc-sub">${now.weekday >= 0 ? t(FULL_DAYS[now.weekday]) : ''} · ${now.label}${state ? ` · ${running ? (running === 1 ? t('1 fascia in corso') : t('{count} fasce in corso', {count: running})) : t('nessuna fascia in corso')}` : ''}</span></div><span class="sc-version">v${CARD_VERSION}</span>${state && editable ? `<div class="sc-head-actions">${button('newTimer','Quick Timer')}${group ? button('newSchedule',`＋ ${t('Schedule')}`) : ''}</div>` : ''}</div>`;
+    surface.innerHTML = `<div class="card-header">${header}${profiles.length ? `<div class="sc-segmented" role="group" aria-label="${t('Profili')}">${chips}</div>` : ''}</div>${status}${this.edit ? '' : errorMarkup}${view}`;
     if(this.edit && editable) {
       const wasOpen=this.dialog.open;
-      this.dialog.innerHTML = `<div class="sc-dialog-heading"><span class="sc-dialog-brand">Schedule Creator</span><button type="button" data-command="close" aria-label="Chiudi editor">✕</button></div>${errorMarkup}${this.notice ? `<div class="status sc-notice" role="status">${esc(this.notice)}</div>` : ''}${this.editor(config,profile,group)}`;
+      this.dialog.innerHTML = `<div class="sc-dialog-heading"><span class="sc-dialog-brand">Schedule Creator</span><button type="button" data-command="close" aria-label="${t('Chiudi editor')}">✕</button></div>${errorMarkup}${this.notice ? `<div class="status sc-notice" role="status">${esc(this.notice)}</div>` : ''}${this.editor(config,profile,group)}`;
       if(!wasOpen) {
         if(this.dialog.showModal) this.dialog.showModal(); else this.dialog.setAttribute('open','');
         this.dialog.querySelector('input[name="name"],select[name="entity_id"]')?.focus({preventScroll:true});
@@ -306,15 +308,15 @@ class ScheduleCreatorCard extends HTMLElement {
       // Two exclusive profiles are never active together; any other pair can be.
       const together = list.some((a, i) => list.slice(i + 1).some((b) => a.profile_type !== 'exclusive' || b.profile_type !== 'exclusive'));
       const now = list.filter((p) => p.active).length > 1;
-      return `<li><strong>${esc(friendly(id))}</strong> · ${list.map((p) => esc(p.name)).join(', ')}<span class="sc-meta">${now ? 'Più profili attivi ora: vince la fascia iniziata per ultima.' : together ? 'Possono essere attivi insieme: se le fasce si sovrappongono vince quella iniziata per ultima.' : 'Profili esclusivi: mai attivi insieme, nessun conflitto.'}</span></li>`;
+      return `<li><strong>${esc(friendly(id))}</strong> · ${list.map((p) => esc(p.name)).join(', ')}<span class="sc-meta">${now ? t('Più profili attivi ora: vince la fascia iniziata per ultima.') : together ? t('Possono essere attivi insieme: se le fasce si sovrappongono vince quella iniziata per ultima.') : t('Profili esclusivi: mai attivi insieme, nessun conflitto.')}</span></li>`;
     });
     const rows = profiles.map((p) => {
       const groups = (config.groups || []).filter((g) => g.profile_id === p.id).length;
       const schedules = (config.schedules || []).filter((x) => x.profile_id === p.id);
       const entities = new Set(schedules.flatMap((x) => x.target_entity_ids)).size;
-      return `<li class="sc-overview-row" style="--pchip-color:${tint(p.color)}"><span class="sc-dot"></span><strong>${esc(p.name)}</strong><span class="sc-badge ${p.active ? 'is-active' : ''}">${p.active ? 'Attivo' : 'Inattivo'}</span><span class="sc-meta">${p.profile_type === 'exclusive' ? 'Esclusivo' : 'Condiviso'} · ${groups} gruppi · ${schedules.length} schedule · ${entities} entità</span></li>`;
+      return `<li class="sc-overview-row" style="--pchip-color:${tint(p.color)}"><span class="sc-dot"></span><strong>${esc(p.name)}</strong><span class="sc-badge ${p.active ? 'is-active' : ''}">${p.active ? t('Attivo') : t('Inattivo')}</span><span class="sc-meta">${p.profile_type === 'exclusive' ? t('Esclusivo') : t('Condiviso')} · ${t('{groups} gruppi · {schedules} schedule · {entities} entità', {groups, schedules: schedules.length, entities})}</span></li>`;
     }).join('');
-    return `<details class="sc-overview" data-section="overview"><summary>Panoramica profili e interazioni</summary><ul class="sc-overview-list">${rows}</ul><p class="sc-meta"><strong>Esclusivo</strong>: attivandolo si disattivano gli altri profili esclusivi. <strong>Condiviso</strong>: resta attivo insieme agli altri. Solo i profili attivi eseguono i loro schedule. Se due fasce comandano la stessa entità vince quella iniziata per ultima; a parità un Quick Timer prevale su uno schedule con condizione, che prevale su uno normale. L’ordine serve solo a disporre profili e gruppi.</p><h4>Entità comandate da più profili</h4>${shared.length ? `<ul class="sc-overview-list">${shared.join('')}</ul>` : '<p class="sc-meta">Nessuna: ogni entità è programmata da un solo profilo.</p>'}</details>`;
+    return `<details class="sc-overview" data-section="overview"><summary>${t('Panoramica profili e interazioni')}</summary><ul class="sc-overview-list">${rows}</ul><p class="sc-meta">${t('<strong>Esclusivo</strong>: attivandolo si disattivano gli altri profili esclusivi. <strong>Condiviso</strong>: resta attivo insieme agli altri. Solo i profili attivi eseguono i loro schedule. Se due fasce comandano la stessa entità vince quella iniziata per ultima; a parità un Quick Timer prevale su uno schedule con condizione, che prevale su uno normale. L’ordine serve solo a disporre profili e gruppi.')}</p><h4>${t('Entità comandate da più profili')}</h4>${shared.length ? `<ul class="sc-overview-list">${shared.join('')}</ul>` : `<p class="sc-meta">${t('Nessuna: ogni entità è programmata da un solo profilo.')}</p>`}</details>`;
   }
   canAddSchedule() {
     const config = this.adapter.state?.config;
@@ -325,19 +327,19 @@ class ScheduleCreatorCard extends HTMLElement {
   nowTiles(config, occurrences, timers) {
     const friendly = (id) => this._hass.states[id]?.attributes?.friendly_name || id;
     const zone = this._hass?.config?.time_zone || undefined;
-    const clock = (iso) => new Intl.DateTimeFormat('it-IT', {timeZone: zone, hour: '2-digit', minute: '2-digit'}).format(new Date(iso));
+    const clock = (iso) => new Intl.DateTimeFormat(locale(), {timeZone: zone, hour: '2-digit', minute: '2-digit'}).format(new Date(iso));
     const tiles = occurrences.map((item) => {
       const schedule = (config.schedules || []).find((s) => s.id === item.schedule_id);
       if (!schedule) return '';
       const paused = item.condition_branch === 'false', waiting = !paused && slotWaiting(this.adapter.state, item);
       const kind = paused || waiting ? 'is-paused' : 'is-running';
-      const label = paused ? 'In pausa' : waiting ? 'In attesa' : 'Adesso';
-      const detail = paused ? 'La condizione non è soddisfatta' : waiting ? 'Un altro schedule o timer ha la priorità' : `Fino alle ${clock(item.end_utc)}${schedule.condition ? ' · condizione vera' : ''}`;
+      const label = paused ? t('In pausa') : waiting ? t('In attesa') : t('Adesso');
+      const detail = paused ? t('La condizione non è soddisfatta') : waiting ? t('Un altro schedule o timer ha la priorità') : `${t('Fino alle {time}', {time: clock(item.end_utc)})}${schedule.condition ? ` · ${t('condizione vera')}` : ''}`;
       return `<button type="button" class="sc-now-tile ${kind}" data-command="editSchedule" data-id="${esc(schedule.id)}"><span class="sc-now-label">${label} · ${esc(schedule.target_entity_ids.map(friendly).join(', '))}</span><strong>${esc(describeAction(schedule.start_action) || schedule.name)}</strong><span class="sc-now-detail">${esc(detail)}</span></button>`;
     });
-    const timerTiles = timers.map((timer) => `<div class="sc-now-tile is-timer"><span class="sc-now-label">Timer · ${esc(friendly(timer.entity_id))}</span><strong>${esc(describeAction(timer.action))}</strong><span class="sc-now-detail">Resta <span data-expiry="${esc(timer.expires_at)}"></span>${timer.previous ? ` · poi ${esc(describeState(timer.previous, timer.entity_id.split('.')[0]))}` : ''}</span></div>`);
+    const timerTiles = timers.map((timer) => `<div class="sc-now-tile is-timer"><span class="sc-now-label">${t('Timer')} · ${esc(friendly(timer.entity_id))}</span><strong>${esc(describeAction(timer.action))}</strong><span class="sc-now-detail">${t('Resta')} <span data-expiry="${esc(timer.expires_at)}"></span>${timer.previous ? ` · ${t('poi')} ${esc(describeState(timer.previous, timer.entity_id.split('.')[0]))}` : ''}</span></div>`);
     const all = [...tiles, ...timerTiles].filter(Boolean);
-    return all.length ? `<div class="sc-now">${all.join('')}</div>` : '<p class="sc-now-empty">Nessuna fascia in corso adesso.</p>';
+    return all.length ? `<div class="sc-now">${all.join('')}</div>` : `<p class="sc-now-empty">${t('Nessuna fascia in corso adesso.')}</p>`;
   }
   otherSlots(config, ids, ownId) {
     const palette = ['#087f8c','#7057b5','#b65c21','#317a45','#b34269','#326ab2'];
@@ -351,8 +353,8 @@ class ScheduleCreatorCard extends HTMLElement {
     const url = config.settings?.notification_url;
     const here = window.location?.pathname?.startsWith('/') ? window.location.pathname : '';
     const status = this.draft?.status_notification === undefined ? this.statusEnabled(config, item?.id) : this.draft.status_notification === 'on';
-    return `<fieldset><legend>Notifica di stato</legend><label class="sc-check"><input type="checkbox" name="status_notification" ${status ? 'checked' : ''}>Notifica persistente per tutta la fascia</label><p>In Home Assistant compare una notifica che dice se lo schedule è attivo, in pausa per la condizione o in attesa di un altro controllo; si aggiorna da sola e sparisce a fine fascia.</p></fieldset>
-      <fieldset><legend>Tocco sulla notifica</legend><p>${url ? `Apre <strong>${esc(url)}</strong> (app Companion e notifiche di Home Assistant).` : 'Nessuna pagina impostata: la notifica non apre nulla.'}</p><div class="sc-controls">${url !== here && here ? button('setNotificationUrl','Apri questa dashboard',here) : ''}${url ? button('setNotificationUrl','Rimuovi collegamento','') : ''}</div></fieldset>`;
+    return `<fieldset><legend>${t('Notifica di stato')}</legend><label class="sc-check"><input type="checkbox" name="status_notification" ${status ? 'checked' : ''}>${t('Notifica persistente per tutta la fascia')}</label><p>${t('In Home Assistant compare una notifica che dice se lo schedule è attivo, in pausa per la condizione o in attesa di un altro controllo; si aggiorna da sola e sparisce a fine fascia.')}</p></fieldset>
+      <fieldset><legend>${t('Tocco sulla notifica')}</legend><p>${url ? t('Apre <strong>{url}</strong> (app Companion e notifiche di Home Assistant).', {url: esc(url)}) : t('Nessuna pagina impostata: la notifica non apre nulla.')}</p><div class="sc-controls">${url !== here && here ? button('setNotificationUrl',t('Apri questa dashboard'),here) : ''}${url ? button('setNotificationUrl',t('Rimuovi collegamento'),'') : ''}</div></fieldset>`;
   }
   entityPills(selected, allowed) {
     const states = this._hass?.states || {};
@@ -361,7 +363,7 @@ class ScheduleCreatorCard extends HTMLElement {
   }
   entityRadios(ids, selected) {
     const states = this._hass?.states || {};
-    return `<label>Ricerca entità<input type="search" name="entity_search" placeholder="Nome, dominio o ID"></label><div class="sc-entities" role="radiogroup" aria-label="Entità">${[...ids].sort().map((id) => `<label data-entity-label="${esc(`${id} ${states[id]?.attributes?.friendly_name || ''}`.toLowerCase())}"><input type="radio" name="entity_id" value="${esc(id)}" ${id === selected ? 'checked' : ''}><span><span class="sc-entity-name">${esc(states[id]?.attributes?.friendly_name || id)}</span><span class="sc-entity-id">${esc(id)}</span></span></label>`).join('')}</div>`;
+    return `<label>${t('Ricerca entità')}<input type="search" name="entity_search" placeholder="${t('Nome, dominio o ID')}"></label><div class="sc-entities" role="radiogroup" aria-label="${t('Entità')}">${[...ids].sort().map((id) => `<label data-entity-label="${esc(`${id} ${states[id]?.attributes?.friendly_name || ''}`.toLowerCase())}"><input type="radio" name="entity_id" value="${esc(id)}" ${id === selected ? 'checked' : ''}><span><span class="sc-entity-name">${esc(states[id]?.attributes?.friendly_name || id)}</span><span class="sc-entity-id">${esc(id)}</span></span></label>`).join('')}</div>`;
   }
   // Drag the slot (move) or a handle (resize) with snap and magnets, like weekly-schedule-card.
   startDrag(event) {
@@ -425,8 +427,8 @@ class ScheduleCreatorCard extends HTMLElement {
     const when = slot?.weekdays.length ? `${daysLabel(slot.weekdays)} ${boundaryLabel(slot, 'start')}–${boundaryLabel(slot, 'end')}${slots.length > 1 ? ` (+${slots.length - 1})` : ''}` : '';
     return {
       name: [who, describeAction(start), when].filter(Boolean).join(' · '),
-      start_notification_message: `${who}: ${describeAction(start) || 'avvio'}${slot ? ` alle ${slot.start}` : ''}`,
-      end_notification_message: end ? `${who}: ${describeAction(end)}${slot ? ` alle ${slot.end}` : ''}` : `${who}: fascia terminata${slot ? ` alle ${slot.end}` : ''}`,
+      start_notification_message: `${who}: ${describeAction(start) || t('avvio')}${slot ? ` ${t('alle {time}', {time: slot.start})}` : ''}`,
+      end_notification_message: end ? `${who}: ${describeAction(end)}${slot ? ` ${t('alle {time}', {time: slot.end})}` : ''}` : `${who}: ${t('fascia terminata')}${slot ? ` ${t('alle {time}', {time: slot.end})}` : ''}`,
     };
   }
   // Suggested texts replace a field only while it still holds the previous suggestion.
@@ -456,40 +458,40 @@ class ScheduleCreatorCard extends HTMLElement {
   // Preview of a weekly-schedule-card import: what becomes of each schedule.
   importContent(config) {
     const data = this.importData, hass = this._hass;
-    const intro = '<p>Gli schedule della weekly-schedule-card vengono <strong>aggiunti</strong> in un nuovo profilo, <strong>disattivato</strong>: nulla viene eseguito finché non lo attivi. La weekly-schedule-card e Scheduler non vengono modificati.</p>';
-    const input = '<label>Backup della weekly-schedule-card (.json)<input type="file" accept="application/json,.json" data-role="backup-file"></label>';
-    if (!data) return `${intro}<p class="sc-meta">Nella weekly-schedule-card: Gruppi → Manutenzione → Salva configurazione.</p>${input}`;
+    const intro = `<p>${t('Gli schedule della weekly-schedule-card vengono <strong>aggiunti</strong> in un nuovo profilo, <strong>disattivato</strong>: nulla viene eseguito finché non lo attivi. La weekly-schedule-card e Scheduler non vengono modificati.')}</p>`;
+    const input = `<label>${t('Backup della weekly-schedule-card (.json)')}<input type="file" accept="application/json,.json" data-role="backup-file"></label>`;
+    if (!data) return `${intro}<p class="sc-meta">${t('Nella weekly-schedule-card: Gruppi → Manutenzione → Salva configurazione.')}</p>${input}`;
     const {converted, backup} = data;
     const again = (config.migration_metadata?.imports || []).find((x) => x.source === 'weekly-schedule-card' && x.source_created_at && x.source_created_at === backup.createdAt);
     const leaves = (node) => !node ? [] : node.children?.length ? node.children.flatMap(leaves) : [node.entity_id];
     const entities = [...new Set(converted.profiles.flatMap((p) => p.groups.flatMap((g) => [...g.entity_ids, ...g.schedules.flatMap((s) => leaves(s.condition))])))];
     const missing = entities.filter((id) => !hass.states[id]);
-    const mark = {ok: ['✓', 'Pronto'], note: ['!', 'Da controllare'], off: ['⏸', 'Importato disattivato'], skip: ['✕', 'Non importato']};
+    const mark = {ok: ['✓', t('Pronto')], note: ['!', t('Da controllare')], off: ['⏸', t('Importato disattivato')], skip: ['✕', t('Non importato')]};
     const symbol = {numeric_greater: '>', numeric_less: '<', numeric_greater_or_equal: '≥', numeric_less_or_equal: '≤', state_equals: '=', state_not_equals: '≠'};
-    const condText = (node) => !node ? '' : ['and', 'or'].includes(node.operator) ? node.children.map(condText).join(node.operator === 'and' ? ' e ' : ' o ') : `${hass.states[node.entity_id]?.attributes?.friendly_name || node.entity_id} ${symbol[node.operator] || node.operator} ${node.value}${node.hysteresis ? ` (isteresi ${node.hysteresis})` : ''}`;
-    const rows = converted.rows.map((r) => `<li class="sc-import-row is-${r.status}"><span class="sc-import-mark" title="${esc(mark[r.status][1])}" aria-label="${esc(mark[r.status][1])}">${mark[r.status][0]}</span><div><strong>${esc(r.name || r.source)}</strong>${r.slots ? `<span class="sc-meta">${esc(r.slots.map((x) => `${daysLabel(x.weekdays)} ${boundaryLabel(x, 'start')}–${boundaryLabel(x, 'end')}`).join(' · '))} · ${esc(describeAction(r.start))}${r.end ? ` → alla fine ${esc(describeAction(r.end))}` : ''}${r.condition ? ` · se ${esc(condText(r.condition))}` : ''}</span>` : ''}${r.notes.length ? `<ul class="sc-import-notes">${r.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}</div></li>`).join('');
+    const condText = (node) => !node ? '' : ['and', 'or'].includes(node.operator) ? node.children.map(condText).join(node.operator === 'and' ? ` ${t('e')} ` : ` ${t('o')} `) : `${hass.states[node.entity_id]?.attributes?.friendly_name || node.entity_id} ${symbol[node.operator] || node.operator} ${node.value}${node.hysteresis ? ` (${t('isteresi')} ${node.hysteresis})` : ''}`;
+    const rows = converted.rows.map((r) => `<li class="sc-import-row is-${r.status}"><span class="sc-import-mark" title="${esc(mark[r.status][1])}" aria-label="${esc(mark[r.status][1])}">${mark[r.status][0]}</span><div><strong>${esc(r.name || r.source)}</strong>${r.slots ? `<span class="sc-meta">${esc(r.slots.map((x) => `${daysLabel(x.weekdays)} ${boundaryLabel(x, 'start')}–${boundaryLabel(x, 'end')}`).join(' · '))} · ${esc(describeAction(r.start))}${r.end ? ` → ${t('alla fine')} ${esc(describeAction(r.end))}` : ''}${r.condition ? ` · ${t('se')} ${esc(condText(r.condition))}` : ''}</span>` : ''}${r.notes.length ? `<ul class="sc-import-notes">${r.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}</div></li>`).join('');
     const count = (status) => converted.rows.filter((r) => r.status === status).length;
-    const profiles = converted.profiles.map((p) => `<p>Profilo <strong>«${esc(p.name)}»</strong> · ${p.profile_type === 'exclusive' ? 'esclusivo' : 'condiviso'} · ${p.groups.length} gruppi (${esc(p.groups.map((g) => g.name).join(', '))})${p.wasActive ? ' · era attivo nella weekly-schedule-card' : ''}</p>`).join('');
-    return `${intro}${input}<div class="sc-summary"><strong>${esc(data.file)}</strong><p>Salvato il ${esc(String(backup.createdAt || '').replace('T', ' ').slice(0, 16) || 'data sconosciuta')} · ${count('ok') + count('note')} pronti · ${count('off')} disattivati · ${count('skip')} non importati</p>${profiles}
-      ${again ? `<p class="sc-error">Questo backup è già stato importato il ${esc(String(again.imported_at).replace('T', ' ').slice(0, 16))}: importandolo di nuovo gli schedule saranno duplicati.</p>` : ''}
-      ${missing.length ? `<p class="sc-error">Entità non presenti in questo Home Assistant: ${esc(missing.join(', '))}</p>` : ''}
-      <p class="sc-import-warning">Prima di attivare il profilo importato spegni gli stessi schedule nella weekly-schedule-card (o in Scheduler): altrimenti i dispositivi ricevono i comandi due volte.</p></div>
+    const profiles = converted.profiles.map((p) => `<p>${t('Profilo')} <strong>«${esc(p.name)}»</strong> · ${p.profile_type === 'exclusive' ? t('esclusivo') : t('condiviso')} · ${t('{count} gruppi', {count: p.groups.length})} (${esc(p.groups.map((g) => g.name).join(', '))})${p.wasActive ? ` · ${t('era attivo nella weekly-schedule-card')}` : ''}</p>`).join('');
+    return `${intro}${input}<div class="sc-summary"><strong>${esc(data.file)}</strong><p>${t('Salvato il {date}', {date: esc(String(backup.createdAt || '').replace('T', ' ').slice(0, 16) || t('data sconosciuta'))})} · ${t('{ready} pronti · {off} disattivati · {skip} non importati', {ready: count('ok') + count('note'), off: count('off'), skip: count('skip')})}</p>${profiles}
+      ${again ? `<p class="sc-error">${t('Questo backup è già stato importato il {date}: importandolo di nuovo gli schedule saranno duplicati.', {date: esc(String(again.imported_at).replace('T', ' ').slice(0, 16))})}</p>` : ''}
+      ${missing.length ? `<p class="sc-error">${t('Entità non presenti in questo Home Assistant: {list}', {list: esc(missing.join(', '))})}</p>` : ''}
+      <p class="sc-import-warning">${t('Prima di attivare il profilo importato spegni gli stessi schedule nella weekly-schedule-card (o in Scheduler): altrimenti i dispositivi ricevono i comandi due volte.')}</p></div>
       <ul class="sc-import">${rows}</ul>`;
   }
   // Activity counters of one schedule (debug aid, bottom of the editor).
   statsOf(id) { return this.adapter.state?.stats?.[id] || {activations: 0, muted: 0, last_activation: null, last_muted: null}; }
-  statsSummary(id) { const s = this.statsOf(id); return `${s.activations} ${s.activations === 1 ? 'attivazione' : 'attivazioni'}`; }
+  statsSummary(id) { const s = this.statsOf(id); return s.activations === 1 ? t('1 attivazione') : t('{count} attivazioni', {count: s.activations}); }
   statsBody(id) {
     const s = this.statsOf(id);
-    const when = (iso) => iso ? new Intl.DateTimeFormat('it-IT', {timeZone: this._hass?.config?.time_zone || undefined, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}).format(new Date(iso)) : 'mai';
-    return `<dl class="sc-stats"><dt>Attivazioni</dt><dd>${s.activations}</dd><dt>Fasce bloccate dalla condizione</dt><dd>${s.muted}</dd><dt>Ultima attivazione</dt><dd>${esc(when(s.last_activation))}</dd><dt>Ultimo blocco per condizione</dt><dd>${esc(when(s.last_muted))}</dd></dl><p class="sc-meta">Conteggi da quando è installata la versione 0.3.15; una fascia conta una volta sola.</p>`;
+    const when = (iso) => iso ? new Intl.DateTimeFormat(locale(), {timeZone: this._hass?.config?.time_zone || undefined, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}).format(new Date(iso)) : t('mai');
+    return `<dl class="sc-stats"><dt>${t('Attivazioni')}</dt><dd>${s.activations}</dd><dt>${t('Fasce bloccate dalla condizione')}</dt><dd>${s.muted}</dd><dt>${t('Ultima attivazione')}</dt><dd>${esc(when(s.last_activation))}</dd><dt>${t('Ultimo blocco per condizione')}</dt><dd>${esc(when(s.last_muted))}</dd></dl><p class="sc-meta">${t('Conteggi da quando è installata la versione 0.3.15; una fascia conta una volta sola.')}</p>`;
   }
   // One readable line for a command that failed for good.
   failureText(f) {
-    const when = new Intl.DateTimeFormat('it-IT', {timeZone: this._hass?.config?.time_zone || undefined, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}).format(new Date(f.at));
-    const who = f.quick_timer ? 'Quick Timer' : f.schedule_name || 'Schedule eliminato';
-    const what = f.kind === 'notification' ? 'notifica' : f.kind === 'restore' ? 'ripristino dello stato' : f.phase === 'schedule_end' ? 'azione finale' : f.phase === 'condition_fallback' ? 'azione a condizione falsa' : 'azione iniziale';
-    const why = {sent_outcome_unknown: 'esito sconosciuto: Home Assistant si è riavviato durante l’invio', service_failed: `il servizio ha restituito un errore o non ha risposto (${f.attempts} tentativi)`, restore_failed: `ripristino non riuscito (${f.attempts} tentativi)`, notification_failed: `notifica non inviata (${f.attempts} tentativi)`, invalid_payload: 'dati del comando non validi', invalid_snapshot: 'stato iniziale non disponibile'}[f.error_code] || f.error_code || 'errore sconosciuto';
+    const when = new Intl.DateTimeFormat(locale(), {timeZone: this._hass?.config?.time_zone || undefined, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}).format(new Date(f.at));
+    const who = f.quick_timer ? 'Quick Timer' : f.schedule_name || t('Schedule eliminato');
+    const what = f.kind === 'notification' ? t('notifica') : f.kind === 'restore' ? t('ripristino dello stato') : f.phase === 'schedule_end' ? t('azione finale') : f.phase === 'condition_fallback' ? t('azione a condizione falsa') : t('azione iniziale');
+    const why = {sent_outcome_unknown: t('esito sconosciuto: Home Assistant si è riavviato durante l’invio'), service_failed: t('il servizio ha restituito un errore o non ha risposto ({count} tentativi)', {count: f.attempts}), restore_failed: t('ripristino non riuscito ({count} tentativi)', {count: f.attempts}), notification_failed: t('notifica non inviata ({count} tentativi)', {count: f.attempts}), invalid_payload: t('dati del comando non validi'), invalid_snapshot: t('stato iniziale non disponibile')}[f.error_code] || f.error_code || t('errore sconosciuto');
     const entity = f.entity_id ? ` · ${this._hass?.states?.[f.entity_id]?.attributes?.friendly_name || f.entity_id}` : '';
     return `${when} · ${who}${entity} · ${what}: ${why}`;
   }
@@ -502,7 +504,7 @@ class ScheduleCreatorCard extends HTMLElement {
       link.href = url; link.download = `schedule-creator-backup-${new Date().toISOString().slice(0, 10)}.json`;
       document.body.append(link); link.click(); link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      this.notice = `Backup salvato: ${backup.config.profiles.length} profili, ${backup.config.groups.length} gruppi, ${backup.config.schedules.length} schedule.`;
+      this.notice = t('Backup salvato: {profiles} profili, {groups} gruppi, {schedules} schedule.', {profiles: backup.config.profiles.length, groups: backup.config.groups.length, schedules: backup.config.schedules.length});
     } catch (error) {
       this.localError = messageFor({...error, operation: 'schedule_creator/backup/export'});
     }
@@ -521,9 +523,9 @@ class ScheduleCreatorCard extends HTMLElement {
       } else if (backup?.format === 'schedule_creator.backup' && backup.config) {
         this.restoreData = backup;
         if (this.edit) this.edit = ['restore', null];
-      } else throw new Error('Il file non è un backup di Schedule Creator né della weekly-schedule-card.');
+      } else throw new Error(t('Il file non è un backup di Schedule Creator né della weekly-schedule-card.'));
     } catch (error) {
-      this.localError = error instanceof SyntaxError ? 'Il file non contiene JSON valido.' : error.message;
+      this.localError = error instanceof SyntaxError ? t('Il file non contiene JSON valido.') : error.message;
     }
     this.render();
   }
@@ -538,15 +540,15 @@ class ScheduleCreatorCard extends HTMLElement {
   entities(selected = [], allowed = null) {
     const states = this._hass?.states || {};
     const ids = [...new Set([...targetEntities(this._hass,allowed),...selected.filter((id)=>!allowed || allowed.includes(id))])];
-    return `<label>Ricerca entità<input type="search" name="entity_search" placeholder="Nome, dominio o ID"></label><div class="sc-entities">${ids.sort().map((id) => `<label data-entity-label="${esc(`${id} ${states[id]?.attributes?.friendly_name || ''}`.toLowerCase())}"><input type="checkbox" name="entities" value="${esc(id)}" ${selected.includes(id) ? 'checked' : ''}><span><span class="sc-entity-name">${esc(states[id]?.attributes?.friendly_name || id)}</span><span class="sc-entity-id">${esc(id)}${controllable(this._hass,id)?'':' · non disponibile/supportata'}</span></span></label>`).join('')}</div>`;
+    return `<label>${t('Ricerca entità')}<input type="search" name="entity_search" placeholder="${t('Nome, dominio o ID')}"></label><div class="sc-entities">${ids.sort().map((id) => `<label data-entity-label="${esc(`${id} ${states[id]?.attributes?.friendly_name || ''}`.toLowerCase())}"><input type="checkbox" name="entities" value="${esc(id)}" ${selected.includes(id) ? 'checked' : ''}><span><span class="sc-entity-name">${esc(states[id]?.attributes?.friendly_name || id)}</span><span class="sc-entity-id">${esc(id)}${controllable(this._hass,id)?'':` · ${t('non disponibile/supportata')}`}</span></span></label>`).join('')}</div>`;
   }
   editor(config, profile, group) {
     const [kind, id] = this.edit;
     const item = this.editRecord;
     const d = this.draft || {};
     let content = '';
-    if (kind === 'profile') content = `${field('name', 'Nome', item?.name)}${select('profile_type', 'Tipo', [['exclusive','Esclusivo'],['shared','Condiviso']], item?.profile_type || 'exclusive')}${iconPicker(d.icon ?? item?.icon)}${colorPicker(d.color ?? item?.color)}${field('order','Posizione nell’elenco (0 = primo)',item?.order ?? 0,'number')}<p>Serve solo a ordinare l’elenco: non cambia priorità né esecuzione.</p>`;
-    if (kind === 'group') content = `${field('name','Nome',item?.name)}${iconPicker(d.icon ?? item?.icon)}${colorPicker(d.color ?? item?.color)}${field('order','Posizione nell’elenco (0 = primo)',item?.order ?? 0,'number')}<p>Serve solo a ordinare l’elenco: non cambia priorità né esecuzione.</p>${this.entities(d.selectedEntities || item?.entity_ids || [])}`;
+    if (kind === 'profile') content = `${field('name', t('Nome'), item?.name)}${select('profile_type', t('Tipo'), [['exclusive',t('Esclusivo')],['shared',t('Condiviso')]], item?.profile_type || 'exclusive')}${iconPicker(d.icon ?? item?.icon)}${colorPicker(d.color ?? item?.color)}${field('order',t('Posizione nell’elenco (0 = primo)'),item?.order ?? 0,'number')}<p>${t('Serve solo a ordinare l’elenco: non cambia priorità né esecuzione.')}</p>`;
+    if (kind === 'group') content = `${field('name',t('Nome'),item?.name)}${iconPicker(d.icon ?? item?.icon)}${colorPicker(d.color ?? item?.color)}${field('order',t('Posizione nell’elenco (0 = primo)'),item?.order ?? 0,'number')}<p>${t('Serve solo a ordinare l’elenco: non cambia priorità né esecuzione.')}</p>${this.entities(d.selectedEntities || item?.entity_ids || [])}`;
     if (kind === 'schedule') {
       const owner = config.groups.find((g) => g.id === this.ownerGroup);
       const ids = d.selectedEntities || item?.target_entity_ids || targetEntities(this._hass,owner?.entity_ids || []).slice(0,1);
@@ -554,43 +556,43 @@ class ScheduleCreatorCard extends HTMLElement {
       const slots = this.slotDraft || item?.time_slots || [{weekdays:[0,1,2,3,4,5,6],start:'08:00',end:'09:00'}];
       const condition = this.conditionDraft === undefined ? item?.condition : this.conditionDraft;
       const friendly = (x) => this._hass.states[x]?.attributes?.friendly_name || x;
-      const endSummary = d.end_mode ? pretty(d.end_mode) : this.actionReset || !item?.end_action ? 'Nessuna azione' : describeAction(item.end_action);
+      const endSummary = d.end_mode ? pretty(d.end_mode) : this.actionReset || !item?.end_action ? t('Nessuna azione') : describeAction(item.end_action);
       const leafs = (node) => !node ? [] : ['and','or'].includes(node.operator) ? node.children.flatMap(leafs) : [node];
-      const conditionSummary = !condition ? 'Nessuna' : leafs(condition).length > 1 ? `${leafs(condition).length} condizioni` : friendly(leafs(condition)[0].entity_id) || 'Da completare';
+      const conditionSummary = !condition ? t('Nessuna') : leafs(condition).length > 1 ? t('{count} condizioni', {count: leafs(condition).length}) : friendly(leafs(condition)[0].entity_id) || t('Da completare');
       const notified = (key, fallback) => d[`${key}_enabled`] === undefined ? !!fallback : d[`${key}_enabled`] === 'on';
-      const notificationSummary = [notified('start_notification', item?.start_notification) && 'Inizio', notified('end_notification', item?.end_notification) && 'Fine', (d.status_notification === undefined ? this.statusEnabled(config, item?.id) : d.status_notification === 'on') && 'Stato'].filter(Boolean).join(' · ') || 'Nessuna';
+      const notificationSummary = [notified('start_notification', item?.start_notification) && t('Inizio'), notified('end_notification', item?.end_notification) && t('Fine'), (d.status_notification === undefined ? this.statusEnabled(config, item?.id) : d.status_notification === 'on') && t('Stato')].filter(Boolean).join(' · ') || t('Nessuna');
       const row = (section, label, summary, body) => `<details class="sc-row" data-section="${section}"><summary><span>${label}</span><em>${esc(summary)}</em></summary><div class="sc-row-body">${body}</div></details>`;
-      content = `<div class="sc-name-row">${field('name','Nome',item?.name)}${button('suggestName','Suggerisci')}</div>
-        <div class="sc-field"><span class="sc-field-label">Dispositivi · ${esc(owner?.name || 'gruppo')}</span>${this.entityPills(ids,owner?.entity_ids || [])}</div>
-        <div class="sc-section-label">Quando</div>${slotsForm(slots,{others:this.otherSlots(config,ids,item?.id),snap:this.snap})}
-        <div class="sc-section-label">All’inizio</div>${actionForm('start','Azione iniziale',this._hass,ids,this.actionReset?null:item?.start_action,false,d)}
+      content = `<div class="sc-name-row">${field('name',t('Nome'),item?.name)}${button('suggestName',t('Suggerisci'))}</div>
+        <div class="sc-field"><span class="sc-field-label">${t('Dispositivi')} · ${esc(owner?.name || t('gruppo'))}</span>${this.entityPills(ids,owner?.entity_ids || [])}</div>
+        <div class="sc-section-label">${t('Quando')}</div>${slotsForm(slots,{others:this.otherSlots(config,ids,item?.id),snap:this.snap})}
+        <div class="sc-section-label">${t('All’inizio')}</div>${actionForm('start',t('Azione iniziale'),this._hass,ids,this.actionReset?null:item?.start_action,false,d)}
         <div class="sc-rows">
-        ${row('row-end','Alla fine',endSummary,actionForm('end','Azione finale',this._hass,ids,this.actionReset?null:item?.end_action,true,d))}
-        ${row('row-conditions','Condizioni',conditionSummary,`${conditionForm(condition,this._hass)}<datalist id="sc-condition-entities">${Object.keys(this._hass.states||{}).sort().map((id)=>`<option value="${esc(id)}">${esc(this._hass.states[id].attributes?.friendly_name||id)}</option>`).join('')}</datalist><p>Se falsa: azione finale se presente, altrimenti ripristino deciso dal motore. La fine fascia senza azione finale non invia comandi.</p>`)}
-        ${row('row-notifications','Notifiche',notificationSummary,`${notificationForm('start_notification','Notifica iniziale',item?.start_notification,this._hass,d)}${notificationForm('end_notification','Notifica finale',item?.end_notification,this._hass,d)}${this.notificationExtras(config,item)}`)}
-        ${row('row-options','Altre opzioni',item?.enabled === false ? 'Disabilitato' : 'Abilitato',`<label class="sc-check"><input name="enabled" type="checkbox" ${item?.enabled !== false ? 'checked' : ''}>Schedule abilitato</label><p>Orari nel fuso ${esc(this._hass.config?.time_zone || 'di Home Assistant')}. Se la fine precede l’inizio, la fascia termina il giorno successivo.</p>${select('override_policy','Comandi manuali', [['cooperative','Cooperativa'],['manual_override','Priorità al comando manuale']],item?.override_policy || 'cooperative')}${field('inclusion_dates','Date incluse (AAAA-MM-GG, separate da virgola)',(item?.inclusion_dates || []).join(', '))}${field('exclusion_dates','Date escluse (AAAA-MM-GG, separate da virgola)',(item?.exclusion_dates || []).join(', '))}`)}
-        ${id ? row('row-stats','Statistiche',this.statsSummary(id),this.statsBody(id)) : ''}
+        ${row('row-end',t('Alla fine'),endSummary,actionForm('end',t('Azione finale'),this._hass,ids,this.actionReset?null:item?.end_action,true,d))}
+        ${row('row-conditions',t('Condizioni'),conditionSummary,`${conditionForm(condition,this._hass)}<datalist id="sc-condition-entities">${Object.keys(this._hass.states||{}).sort().map((id)=>`<option value="${esc(id)}">${esc(this._hass.states[id].attributes?.friendly_name||id)}</option>`).join('')}</datalist><p>${t('Se falsa: azione finale se presente, altrimenti ripristino deciso dal motore. La fine fascia senza azione finale non invia comandi.')}</p>`)}
+        ${row('row-notifications',t('Notifiche'),notificationSummary,`${notificationForm('start_notification',t('Notifica iniziale'),item?.start_notification,this._hass,d)}${notificationForm('end_notification',t('Notifica finale'),item?.end_notification,this._hass,d)}${this.notificationExtras(config,item)}`)}
+        ${row('row-options',t('Altre opzioni'),item?.enabled === false ? t('Disabilitato') : t('Abilitato'),`<label class="sc-check"><input name="enabled" type="checkbox" ${item?.enabled !== false ? 'checked' : ''}>${t('Schedule abilitato')}</label><p>${t('Orari nel fuso {zone}. Se la fine precede l’inizio, la fascia termina il giorno successivo.', {zone: esc(this._hass.config?.time_zone || 'Home Assistant')})}</p>${select('override_policy',t('Comandi manuali'), [['cooperative',t('Cooperativa')],['manual_override',t('Priorità al comando manuale')]],item?.override_policy || 'cooperative')}${field('inclusion_dates',t('Date incluse (AAAA-MM-GG, separate da virgola)'),(item?.inclusion_dates || []).join(', '))}${field('exclusion_dates',t('Date escluse (AAAA-MM-GG, separate da virgola)'),(item?.exclusion_dates || []).join(', '))}`)}
+        ${id ? row('row-stats',t('Statistiche'),this.statsSummary(id),this.statsBody(id)) : ''}
         </div>
-        <details><summary>Pro · configurazione JSON</summary><label class="sc-check"><input type="checkbox" name="pro_config_enabled">Usa JSON per condizioni, fasce e notifiche</label>${area('pro_config','Configurazione avanzata',json({time_slots:slots,condition:condition||null,start_notification:item?.start_notification||null,end_notification:item?.end_notification||null}),8)}</details>`;
+        <details><summary>${t('Pro · configurazione JSON')}</summary><label class="sc-check"><input type="checkbox" name="pro_config_enabled">${t('Usa JSON per condizioni, fasce e notifiche')}</label>${area('pro_config',t('Configurazione avanzata'),json({time_slots:slots,condition:condition||null,start_notification:item?.start_notification||null,end_notification:item?.end_notification||null}),8)}</details>`;
     }
     if (kind === 'restore') {
       const b = this.restoreData?.config;
       const missing = b ? [...new Set([...(b.groups || []).flatMap((g) => g.entity_ids || []), ...(b.schedules || []).flatMap((x) => x.target_entity_ids || [])])].filter((id) => !this._hass.states[id]) : [];
-      content = `<p>Il ripristino <strong>sostituisce</strong> tutti i profili, gruppi e schedule attuali con quelli del file. I profili ripristinati restano <strong>disattivati</strong>: attivali quando vuoi che eseguano i comandi. Timer e fasce in corso non fanno parte del backup.</p><label>File di backup (.json)<input type="file" accept="application/json,.json" data-role="backup-file"></label>${b ? `<div class="sc-summary"><strong>Contenuto del file</strong><p>${(b.profiles || []).length} profili · ${(b.groups || []).length} gruppi · ${(b.schedules || []).length} schedule</p><p>Salvato il ${esc(String(this.restoreData.exported_at || '').replace('T', ' ').slice(0, 16) || 'data sconosciuta')} con la versione ${esc(this.restoreData.integration_version || 'sconosciuta')}.</p>${missing.length ? `<p class="sc-error">Entità non presenti in questo Home Assistant: ${esc(missing.join(', '))}. Gli schedule collegati non potranno comandarle.</p>` : ''}</div>` : '<p>Scegli un file creato con “Salva backup”.</p>'}`;
+      content = `<p>${t('Il ripristino <strong>sostituisce</strong> tutti i profili, gruppi e schedule attuali con quelli del file. I profili ripristinati restano <strong>disattivati</strong>: attivali quando vuoi che eseguano i comandi. Timer e fasce in corso non fanno parte del backup.')}</p><label>${t('File di backup (.json)')}<input type="file" accept="application/json,.json" data-role="backup-file"></label>${b ? `<div class="sc-summary"><strong>${t('Contenuto del file')}</strong><p>${t('{profiles} profili · {groups} gruppi · {schedules} schedule', {profiles: (b.profiles || []).length, groups: (b.groups || []).length, schedules: (b.schedules || []).length})}</p><p>${t('Salvato il {date} con la versione {version}.', {date: esc(String(this.restoreData.exported_at || '').replace('T', ' ').slice(0, 16) || t('data sconosciuta')), version: esc(this.restoreData.integration_version || t('sconosciuta'))})}</p>${missing.length ? `<p class="sc-error">${t('Entità non presenti in questo Home Assistant: {list}. Gli schedule collegati non potranno comandarle.', {list: esc(missing.join(', '))})}</p>` : ''}</div>` : `<p>${t('Scegli un file creato con “Salva backup”.')}</p>`}`;
     }
     if (kind === 'import') content = this.importContent(config);
     if (kind === 'reset') {
       const timers = this.adapter.state.quick_timers?.length ?? 0;
-      content = `<p>RESET cancella <strong>tutti</strong> i dati di Schedule Creator: ${config.profiles.length} profili, ${config.groups.length} gruppi, ${config.schedules.length} schedule, ${timers} timer attivi, fasce in corso e storico operazioni. L’integrazione resta installata e vuota.</p><p>I dispositivi restano nello stato in cui si trovano: nessun comando di spegnimento o ripristino viene inviato. Dispositivi, entità, automazioni e la vecchia weekly-schedule-card non vengono toccati.</p><p>Prima di procedere puoi salvare un backup.</p><div class="sc-controls">${button('exportBackup','Salva backup')}</div>${field('confirm','Scrivi RESET per confermare','')}`;
+      content = `<p>${t('RESET cancella <strong>tutti</strong> i dati di Schedule Creator: {profiles} profili, {groups} gruppi, {schedules} schedule, {timers} timer attivi, fasce in corso e storico operazioni. L’integrazione resta installata e vuota.', {profiles: config.profiles.length, groups: config.groups.length, schedules: config.schedules.length, timers})}</p><p>${t('I dispositivi restano nello stato in cui si trovano: nessun comando di spegnimento o ripristino viene inviato. Dispositivi, entità, automazioni e la vecchia weekly-schedule-card non vengono toccati.')}</p><p>${t('Prima di procedere puoi salvare un backup.')}</p><div class="sc-controls">${button('exportBackup',t('Salva backup'))}</div>${field('confirm',t('Scrivi RESET per confermare'),'')}`;
     }
     if (kind === 'timer') {
       const ids = targetEntities(this._hass);
       const selected = d.entity_id || ids[0];
       this.actionDomain = selected?.split('.')[0];
-      content = `${this.entityRadios(ids,selected)}${field('duration_seconds','Durata in secondi (1–604800)',300,'number')}${actionForm('timer','Azione timer',this._hass,selected?[selected]:[],null,false,d)}`;
+      content = `${this.entityRadios(ids,selected)}${field('duration_seconds',t('Durata in secondi (1–604800)'),300,'number')}${actionForm('timer',t('Azione timer'),this._hass,selected?[selected]:[],null,false,d)}`;
     }
     const subtitle = kind === 'schedule' ? config.groups.find((g) => g.id === this.ownerGroup)?.name : kind === 'group' ? profile?.name : '';
-    return `<form data-editor="${esc(kind)}" class="sc-editor"><h3 id="sc-editor-title">${subtitle ? `<small>${esc(subtitle)}</small>` : ''}${({profile:id?'Modifica profilo':'Nuovo profilo',group:id?'Modifica gruppo':'Nuovo gruppo',schedule:id?'Modifica schedule':'Nuovo schedule',timer:'Quick Timer',restore:'Ripristina backup',import:'Importa da Weekly Schedule Card',reset:'RESET completo'})[kind]}</h3>${content}<div class="sc-actions"><button type="submit" class="sc-save ${kind === 'reset' ? 'sc-danger' : ''}">${({restore:'Ripristina',import:'Importa',reset:'Cancella tutto',schedule:'Salva schedule'})[kind] || 'Salva'}</button>${button('close','Annulla')}</div></form>`;
+    return `<form data-editor="${esc(kind)}" class="sc-editor"><h3 id="sc-editor-title">${subtitle ? `<small>${esc(subtitle)}</small>` : ''}${({profile:id?t('Modifica profilo'):t('Nuovo profilo'),group:id?t('Modifica gruppo'):t('Nuovo gruppo'),schedule:id?t('Modifica schedule'):t('Nuovo schedule'),timer:'Quick Timer',restore:t('Ripristina backup'),import:t('Importa da Weekly Schedule Card'),reset:t('RESET completo')})[kind]}</h3>${content}<div class="sc-actions"><button type="submit" class="sc-save ${kind === 'reset' ? 'sc-danger' : ''}">${({restore:t('Ripristina'),import:t('Importa'),reset:t('Cancella tutto'),schedule:t('Salva schedule')})[kind] || t('Salva')}</button>${button('close',t('Annulla'))}</div></form>`;
   }
   async click(event) {
     const track = event.target.closest?.('.sc-day-track');
@@ -687,10 +689,10 @@ class ScheduleCreatorCard extends HTMLElement {
   }
   async runCommand(command, id, types) {
     if (!types[command]) return;
-    if (command.startsWith('delete') && !confirm('Eliminare questo elemento?')) return;
+    if (command.startsWith('delete') && !confirm(t('Eliminare questo elemento?'))) return;
     const payload = command === 'toggleProfile' ? { profile_id: id, active: !this.adapter.state.config.profiles.find((p) => p.id === id)?.active } :
       { [command === 'cancelTimer' ? 'quick_timer_id' : `${command.slice(6).toLowerCase()}_id`]: id };
-    if (this.adapter.conflicted && !confirm('I dati sono cambiati su un altro client. Hai verificato le modifiche prima di procedere?')) return;
+    if (this.adapter.conflicted && !confirm(t('I dati sono cambiati su un altro client. Hai verificato le modifiche prima di procedere?'))) return;
     await this.adapter.mutate(types[command], payload, { runtime: command === 'cancelTimer' });
   }
   async submit(event) {
@@ -699,63 +701,63 @@ class ScheduleCreatorCard extends HTMLElement {
     this.localError = null; this.localErrorDetails = null;
     const [kind,id] = this.edit;
     const type = ({timer:'quick_timer/create',restore:'backup/import',import:'import/merge',reset:'reset'})[kind] || `${kind}/${id ? 'update' : 'create'}`;
-    let phase = 'lettura del modulo';
+    let phase = t('lettura del modulo');
     try {
       this.capture();
       const data = Object.fromEntries(new FormData(form));
       const config = this.adapter.state.config;
       let payload;
-      phase = 'validazione del nome';
-      if (!['timer','restore','import','reset'].includes(kind) && !data.name?.trim()) throw new Error('Inserisci un nome prima di salvare.');
+      phase = t('validazione del nome');
+      if (!['timer','restore','import','reset'].includes(kind) && !data.name?.trim()) throw new Error(t('Inserisci un nome prima di salvare.'));
       if (kind === 'restore') {
-        if (!this.restoreData) throw new Error('Scegli prima un file di backup.');
+        if (!this.restoreData) throw new Error(t('Scegli prima un file di backup.'));
         payload = {backup: this.restoreData};
       }
       if (kind === 'import') {
         const count = this.importData?.converted.profiles.reduce((n, p) => n + p.groups.reduce((m, g) => m + g.schedules.length, 0), 0);
-        if (!count) throw new Error('Scegli prima un backup della weekly-schedule-card con almeno uno schedule importabile.');
+        if (!count) throw new Error(t('Scegli prima un backup della weekly-schedule-card con almeno uno schedule importabile.'));
         payload = wscImportPayload(this.importData.converted, this.importData.backup);
       }
       if (kind === 'reset') {
-        if (data.confirm?.trim() !== 'RESET') throw new Error('Scrivi RESET in maiuscolo per confermare la cancellazione.');
+        if (data.confirm?.trim() !== 'RESET') throw new Error(t('Scrivi RESET in maiuscolo per confermare la cancellazione.'));
         payload = {confirm: 'RESET'};
       }
-      phase = 'preparazione dei dati';
+      phase = t('preparazione dei dati');
       if (kind === 'profile') payload = { name: data.name.trim(), profile_type: data.profile_type, icon: data.icon || null, color: data.color || null, order: Number(data.order) };
       if (kind === 'group') payload = { name: data.name.trim(), entity_ids: this.draft.selectedEntities, icon: data.icon || null, color: data.color || null, order: Number(data.order) };
       if (kind === 'schedule') {
-        phase = 'validazione delle entità';
+        phase = t('validazione delle entità');
         const owner = config.groups.find((g)=>g.id===this.ownerGroup);
         const domain = this.draft.selectedEntities[0]?.split('.')[0];
-        if (!domain || !this.draft.selectedEntities.every((x)=>x.startsWith(`${domain}.`) && owner?.entity_ids.includes(x))) throw new Error('Scegli entità dello stesso tipo appartenenti al gruppo.');
-        phase = 'lettura delle fasce orarie';
+        if (!domain || !this.draft.selectedEntities.every((x)=>x.startsWith(`${domain}.`) && owner?.entity_ids.includes(x))) throw new Error(t('Scegli entità dello stesso tipo appartenenti al gruppo.'));
+        phase = t('lettura delle fasce orarie');
         const slots = readSlots(form, sunMinutes(this._hass));
-        if (!slots.length || slots.some((s)=>!s.weekdays.length || !s.start || !s.end || s.start===s.end)) throw new Error('Ogni fascia richiede almeno un giorno e orari diversi.');
+        if (!slots.length || slots.some((s)=>!s.weekdays.length || !s.start || !s.end || s.start===s.end)) throw new Error(t('Ogni fascia richiede almeno un giorno e orari diversi.'));
         const dates = (str)=>[...new Set(str.split(',').map((x)=>x.trim()).filter(Boolean))].sort();
-        phase = 'lettura azione iniziale';
+        phase = t('lettura azione iniziale');
         const startAction = readAction(form,'start',domain);
-        phase = 'lettura azione finale';
+        phase = t('lettura azione finale');
         const endAction = readAction(form,'end',domain);
-        phase = 'lettura condizioni e notifiche';
+        phase = t('lettura condizioni e notifiche');
         payload = {name:data.name.trim(),enabled:form.elements.enabled.checked,target_entity_ids:this.draft.selectedEntities,
           time_slots:slots,start_action:startAction,end_action:endAction,
           condition:readCondition(form),override_policy:data.override_policy,inclusion_dates:dates(data.inclusion_dates),exclusion_dates:dates(data.exclusion_dates),
           start_notification:readNotification(form,'start_notification'),end_notification:readNotification(form,'end_notification')};
         if (form.elements.pro_config_enabled.checked) {
-          const pro = parseJson(data.pro_config,'Configurazione Pro');
-          if (!pro || Array.isArray(pro) || typeof pro!=='object' || Object.keys(pro).some((k)=>!['time_slots','condition','start_notification','end_notification'].includes(k))) throw new Error('Campi Pro non validi.');
+          const pro = parseJson(data.pro_config,t('Configurazione Pro'));
+          if (!pro || Array.isArray(pro) || typeof pro!=='object' || Object.keys(pro).some((k)=>!['time_slots','condition','start_notification','end_notification'].includes(k))) throw new Error(t('Campi Pro non validi.'));
           Object.assign(payload,clean(pro));
         }
-        for (const key of ['start_notification','end_notification']) if (payload[key] && !payload[key].message.trim()) throw new Error('Inserisci il messaggio della notifica oppure disabilitala.');
+        for (const key of ['start_notification','end_notification']) if (payload[key] && !payload[key].message.trim()) throw new Error(t('Inserisci il messaggio della notifica oppure disabilitala.'));
         const statusWanted = form.elements.status_notification?.checked ?? false;
         if (statusWanted !== this.statusEnabled(config, id)) payload.status_notification = statusWanted;
-        const validateCondition = (node) => {if (!node) return;if (['and','or'].includes(node.operator)) {if(node.children.length<2) throw new Error('Servono due regole per E/O.');node.children.forEach(validateCondition);} else {if (!node.entity_id || !this._hass.states[node.entity_id]) throw new Error('Seleziona un’entità valida nella condizione.');if (node.operator === 'numeric_range' ? node.lower === null || node.upper === null : node.operator !== 'available' && (node.value === null || node.value === '')) throw new Error('Completa il valore della condizione.');}};
+        const validateCondition = (node) => {if (!node) return;if (['and','or'].includes(node.operator)) {if(node.children.length<2) throw new Error(t('Servono due regole per E/O.'));node.children.forEach(validateCondition);} else {if (!node.entity_id || !this._hass.states[node.entity_id]) throw new Error(t('Seleziona un’entità valida nella condizione.'));if (node.operator === 'numeric_range' ? node.lower === null || node.upper === null : node.operator !== 'available' && (node.value === null || node.value === '')) throw new Error(t('Completa il valore della condizione.'));}};
         validateCondition(payload.condition);
       }
-      if (kind === 'timer') { const domain = data.entity_id.split('.')[0]; payload = {entity_id:data.entity_id,duration_seconds:Number(data.duration_seconds),action:readAction(form,'timer',domain)}; if (payload.duration_seconds<1 || payload.duration_seconds>604800) throw new Error('La durata deve essere tra 1 e 604800 secondi.'); }
-      if (!payload) throw new Error('Editor non disponibile.');
-      phase = 'confronto con la configurazione esistente';
-      if (this.adapter.conflicted && !confirm('I dati sono cambiati su un altro client. Hai confrontato la bozza con i nuovi dati prima di salvare?')) return;
+      if (kind === 'timer') { const domain = data.entity_id.split('.')[0]; payload = {entity_id:data.entity_id,duration_seconds:Number(data.duration_seconds),action:readAction(form,'timer',domain)}; if (payload.duration_seconds<1 || payload.duration_seconds>604800) throw new Error(t('La durata deve essere tra 1 e 604800 secondi.')); }
+      if (!payload) throw new Error(t('Editor non disponibile.'));
+      phase = t('confronto con la configurazione esistente');
+      if (this.adapter.conflicted && !confirm(t('I dati sono cambiati su un altro client. Hai confrontato la bozza con i nuovi dati prima di salvare?'))) return;
       if (id) {
         if (kind === 'schedule' && !this.actionReset) {
           for (const prefix of ['start','end']) {
@@ -768,16 +770,16 @@ class ScheduleCreatorCard extends HTMLElement {
       }
       if (!id && kind === 'group') payload.profile_id = this.ownerProfile;
       if (!id && kind === 'schedule') { payload.profile_id = this.ownerProfile; payload.group_id = this.ownerGroup; }
-      phase = 'salvataggio e aggiornamento della vista';
+      phase = t('salvataggio e aggiornamento della vista');
       const ok = await this.adapter.mutate(type,payload,{ runtime: kind === 'timer', expectedRevision: kind === 'timer' || this.adapter.conflicted ? undefined : this.editRevision });
       if (ok && kind === 'import') {
         const names = this.importData.converted.profiles.map((p) => p.name);
         this.selectedProfile = this.adapter.state?.config?.profiles?.find((p) => p.name === names[0])?.id || null; this.selectedGroup = null;
-        this.notice = `Importato in ${names.map((n) => `«${n}»`).join(', ')}. Il profilo è disattivato: spegni gli schedule nella weekly-schedule-card prima di attivarlo.`;
+        this.notice = t('Importato in {names}. Il profilo è disattivato: spegni gli schedule nella weekly-schedule-card prima di attivarlo.', {names: names.map((n) => `«${n}»`).join(', ')});
       }
       if (ok && ['restore','reset'].includes(kind)) {
         this.selectedProfile = null; this.selectedGroup = null;
-        this.notice = kind === 'reset' ? 'RESET completato: Schedule Creator è vuoto.' : 'Backup ripristinato. I profili sono disattivati: attivali per eseguire gli schedule.';
+        this.notice = kind === 'reset' ? t('RESET completato: Schedule Creator è vuoto.') : t('Backup ripristinato. I profili sono disattivati: attivali per eseguire gli schedule.');
       }
       if (ok) this.closeEditor();
     } catch (error) {
@@ -792,7 +794,8 @@ class ScheduleCreatorCardEditor extends HTMLElement {
   set hass(hass) { this._hass = hass; }
   render() {
     if (!this.config) return;
-    this.innerHTML = `<div style="padding:12px"><label>Titolo della card <input type="text" value="${esc(this.config.title || '')}"></label></div>`;
+    setLanguage(this._hass, this.config);
+    this.innerHTML = `<div style="padding:12px"><label>${t('Titolo della card')} <input type="text" value="${esc(this.config.title || '')}"></label></div>`;
     this.querySelector('input').addEventListener('input', (event) => {
       this.config = { ...this.config, title: event.target.value };
       this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this.config }, bubbles: true, composed: true }));

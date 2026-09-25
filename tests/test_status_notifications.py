@@ -183,7 +183,7 @@ async def test_status_notification_follows_the_slot_and_links_dashboard(
     await hass.async_block_till_done()
     notifications = persistent_notification._async_get_or_create_notifications(hass)
     assert status_id in notifications
-    assert "Attivo" in notifications[status_id]["message"]
+    assert notifications[status_id]["message"].startswith("▶")
     assert "/lovelace/casa" in notifications[status_id]["message"]
     assert sent == [
         {

@@ -5,6 +5,7 @@ import { uiEscape } from './forms.js';
 import { messageFor } from './editor.js';
 import { describeAction, describeState } from './action-editor.js';
 import { temperatureColor } from './schedule-creator-card.js';
+import { t, setLanguage, locale } from './i18n.js';
 
 const tlEsc = uiEscape;
 const TL_STYLE = '__SC_TL_CSS__';
@@ -21,7 +22,7 @@ export function shortAction(action) {
   if (d.brightness_pct != null) return `${d.brightness_pct}%`;
   if (d.position != null) return `${d.position}%`;
   if (d.percentage != null) return `${d.percentage}%`;
-  return {turn_on: 'ON', turn_off: 'OFF', open_cover: 'Apri', close_cover: 'Chiudi', open_valve: 'Apri', close_valve: 'Chiudi'}[action.action] || describeAction(action);
+  return {turn_on: 'ON', turn_off: 'OFF', open_cover: t('Apri'), close_cover: t('Chiudi'), open_valve: t('Apri'), close_valve: t('Chiudi')}[action.action] || describeAction(action);
 }
 
 // The occurrence that really controls an entity now, from the lease it holds;
@@ -79,9 +80,10 @@ export class ScheduleCreatorTimelineCard extends HTMLElement {
   }
   render() {
     if (!this.config) return;
+    setLanguage(this._hass, this.config);
     const surface = this.shadowRoot.querySelector('ha-card'), hass = this._hass;
     const {state, error} = this.adapter;
-    if (!hass || (!state && !error)) { surface.innerHTML = '<div class="tl-body"><p class="tl-muted">Caricamento…</p></div>'; return; }
+    if (!hass || (!state && !error)) { surface.innerHTML = `<div class="tl-body"><p class="tl-muted">${t('Caricamento…')}</p></div>`; return; }
     if (!state) { surface.innerHTML = `<div class="tl-body"><p class="tl-error">${tlEsc(messageFor(error))}</p></div>`; return; }
     const config = state.config || {}, now = this.now();
     const day = this.day ?? now.weekday, today = day === now.weekday;
@@ -90,25 +92,25 @@ export class ScheduleCreatorTimelineCard extends HTMLElement {
     const schedules = (config.schedules || []).filter((s) => activeIds.has(s.profile_id));
     const timers = state.quick_timers || [];
     const wanted = Array.isArray(this.config.entities) && this.config.entities.length ? this.config.entities : null;
-    const entities = [...new Set([...schedules.flatMap((s) => s.target_entity_ids), ...timers.map((t) => t.entity_id)])].filter((id) => !wanted || wanted.includes(id));
+    const entities = [...new Set([...schedules.flatMap((s) => s.target_entity_ids), ...timers.map((timer) => timer.entity_id)])].filter((id) => !wanted || wanted.includes(id));
     if (wanted) entities.sort((a, b) => wanted.indexOf(a) - wanted.indexOf(b)); else entities.sort((a, b) => (hass.states[a]?.attributes?.friendly_name || a).localeCompare(hass.states[b]?.attributes?.friendly_name || b));
     const colorOf = (schedule) => { const d = schedule.start_action?.data || {}; return schedule.start_action?.domain === 'climate' && d.temperature != null && d.state !== 'off' ? temperatureColor(d.temperature) : TL_PALETTE[(config.schedules || []).indexOf(schedule) % TL_PALETTE.length]; };
-    const clock = (iso) => new Intl.DateTimeFormat('it-IT', {timeZone: now.zone, hour: '2-digit', minute: '2-digit'}).format(new Date(iso));
+    const clock = (iso) => new Intl.DateTimeFormat(locale(), {timeZone: now.zone, hour: '2-digit', minute: '2-digit'}).format(new Date(iso));
     const dates = TL_DAYS.map((label, i) => {
       const d = new Date(Date.now() + (i - now.weekday) * 86400000);
-      return `<button type="button" class="tl-day${i === day ? ' is-selected' : ''}" data-day="${i}" aria-pressed="${i === day}"><span>${label}</span><strong>${new Intl.DateTimeFormat('it-IT', {timeZone: now.zone, day: 'numeric'}).format(d)}</strong></button>`;
+      return `<button type="button" class="tl-day${i === day ? ' is-selected' : ''}" data-day="${i}" aria-pressed="${i === day}"><span>${t(label)}</span><strong>${new Intl.DateTimeFormat(locale(), {timeZone: now.zone, day: 'numeric'}).format(d)}</strong></button>`;
     }).join('');
     const rows = entities.map((entityId) => {
       const st = hass.states[entityId], domain = entityId.split('.')[0];
       const blocks = dayBlocks(schedules, entityId, day);
       const live = today ? liveOccurrence(state, schedules, entityId) : null, running = live?.occurrence;
-      const timer = timers.find((t) => t.entity_id === entityId);
+      const timer = timers.find((item) => item.entity_id === entityId);
       const next = today ? blocks.find((b) => b.start > now.minutes) : blocks[0];
       let status = '', kind = '';
-      if (timer) { status = `Timer · fino alle ${clock(timer.expires_at)}`; kind = 'is-timer'; }
-      else if (running) { const paused = live.paused; status = paused ? 'In pausa · condizione' : `${shortAction(schedules.find((s) => s.id === running.schedule_id)?.start_action)} · fino alle ${clock(running.end_utc)}`; kind = paused ? 'is-paused' : 'is-running'; }
-      else if (next) status = `${today ? 'Prossima' : 'Dalle'} ${tlTime(next.start)}`;
-      else status = st ? describeState(st, domain) : 'Non disponibile';
+      if (timer) { status = `${t('Timer')} · ${t('fino alle {time}', {time: clock(timer.expires_at)})}`; kind = 'is-timer'; }
+      else if (running) { const paused = live.paused; status = paused ? t('In pausa · condizione') : `${shortAction(schedules.find((s) => s.id === running.schedule_id)?.start_action)} · ${t('fino alle {time}', {time: clock(running.end_utc)})}`; kind = paused ? 'is-paused' : 'is-running'; }
+      else if (next) status = today ? t('Prossima {time}', {time: tlTime(next.start)}) : t('Dalle {time}', {time: tlTime(next.start)});
+      else status = st ? describeState(st, domain) : t('Non disponibile');
       const bars = blocks.map((b) => {
         const live = today && b.start <= now.minutes && now.minutes < b.end && running?.schedule_id === b.schedule.id ? (kind === 'is-paused' ? ' is-paused' : ' is-running') : '';
         const label = `${b.schedule.name} · ${tlTime(b.start)}–${tlTime(b.end)}`;
@@ -117,12 +119,12 @@ export class ScheduleCreatorTimelineCard extends HTMLElement {
       const timerBar = timer && today ? (() => { const left = now.minutes, width = Math.max(1, Math.min(1440 - left, (new Date(timer.expires_at) - Date.now()) / 60000)); return `<span class="tl-block tl-timer" style="left:${left / 14.4}%;width:${width / 14.4}%" title="Quick Timer"></span>`; })() : '';
       return `<div class="tl-row"><div class="tl-name"><strong>${tlEsc(st?.attributes?.friendly_name || entityId)}</strong><span class="${kind}">${tlEsc(status)}</span></div><div class="tl-track" aria-label="${tlEsc(st?.attributes?.friendly_name || entityId)}">${bars}${timerBar}${today ? `<span class="tl-now" style="left:${now.minutes / 14.4}%"></span>` : ''}</div></div>`;
     }).join('');
-    surface.innerHTML = `<div class="tl-body"><div class="tl-head"><div><span class="tl-eyebrow">${active.length ? `Profili attivi · ${tlEsc(active.map((p) => p.name).join(', '))}` : 'Nessun profilo attivo'}</span><strong class="tl-title">${tlEsc(this.config.title || (today ? 'Oggi' : ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'][day]))}</strong></div></div>
-      <div class="tl-days" role="group" aria-label="Giorno">${dates}</div>
-      ${entities.length ? `<div class="tl-grid"><div class="tl-row tl-axis"><span></span><div class="tl-ticks"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div></div>${rows}</div>` : '<p class="tl-muted">Nessuna entità programmata nei profili attivi.</p>'}</div>`;
+    surface.innerHTML = `<div class="tl-body"><div class="tl-head"><div><span class="tl-eyebrow">${active.length ? `${t('Profili attivi')} · ${tlEsc(active.map((p) => p.name).join(', '))}` : t('Nessun profilo attivo')}</span><strong class="tl-title">${tlEsc(this.config.title || (today ? t('Oggi') : t(['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'][day])))}</strong></div></div>
+      <div class="tl-days" role="group" aria-label="${t('Giorno')}">${dates}</div>
+      ${entities.length ? `<div class="tl-grid"><div class="tl-row tl-axis"><span></span><div class="tl-ticks"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div></div>${rows}</div>` : `<p class="tl-muted">${t('Nessuna entità programmata nei profili attivi.')}</p>`}</div>`;
   }
 }
 
 if (!customElements.get('schedule-creator-timeline-card')) customElements.define('schedule-creator-timeline-card', ScheduleCreatorTimelineCard);
 window.customCards = window.customCards || [];
-if (!window.customCards.some((card) => card.type === 'schedule-creator-timeline-card')) window.customCards.push({type: 'schedule-creator-timeline-card', name: 'Schedule Creator · Timeline', description: 'Giornata per dispositivo con tutti i profili attivi'});
+if (!window.customCards.some((card) => card.type === 'schedule-creator-timeline-card')) window.customCards.push({type: 'schedule-creator-timeline-card', name: 'Schedule Creator · Timeline', description: 'One day per device across all active profiles'});

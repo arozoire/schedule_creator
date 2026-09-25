@@ -58,6 +58,14 @@ della cache. Il primo passaggio alla 0.3.5 richiede ancora riavvio e refresh.
 
 ## Contratto tecnico
 
+### Lingue 0.3.16
+
+Le card seguono la lingua dell'utente di Home Assistant: italiano, inglese,
+francese, tedesco e spagnolo (altre lingue → inglese). Ogni card accetta
+`language: it|en|fr|de|es` per forzarla. Anche la notifica di stato persistente
+e la configurazione dell'integrazione sono tradotte. I testi sono in
+`frontend/src/i18n-strings.js`, con il testo italiano come chiave.
+
 ### Import dalla weekly-schedule-card 0.3.12
 
 **Manutenzione → Importa da Weekly Schedule Card** (anche scegliendo il file in

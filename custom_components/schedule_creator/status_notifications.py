@@ -50,10 +50,61 @@ def notification_url(settings: Mapping[str, FrozenJsonValue]) -> str | None:
     return value if isinstance(value, str) and value.startswith("/") else None
 
 
+# Texts follow the Home Assistant language; unknown languages use English.
+_TEXTS: dict[str, dict[str, str]] = {
+    "it": {
+        "paused": "⏸ In pausa: la condizione non è soddisfatta.",
+        "waiting": "⏸ In attesa: un altro schedule o timer ha la priorità.",
+        "active": "▶ Attivo.",
+        "end": "Fine fascia alle {end}.",
+        "open": "Apri Schedule Creator",
+    },
+    "en": {
+        "paused": "⏸ Paused: the condition is not met.",
+        "waiting": "⏸ Waiting: another schedule or timer has priority.",
+        "active": "▶ Active.",
+        "end": "Slot ends at {end}.",
+        "open": "Open Schedule Creator",
+    },
+    "fr": {
+        "paused": "⏸ En pause : la condition n’est pas remplie.",
+        "waiting": "⏸ En attente : un autre planning ou minuteur est prioritaire.",
+        "active": "▶ Actif.",
+        "end": "Fin de la plage à {end}.",
+        "open": "Ouvrir Schedule Creator",
+    },
+    "de": {
+        "paused": "⏸ Pausiert: die Bedingung ist nicht erfüllt.",
+        "waiting": "⏸ Wartet: ein anderer Zeitplan oder Timer hat Vorrang.",
+        "active": "▶ Aktiv.",
+        "end": "Zeitfenster endet um {end}.",
+        "open": "Schedule Creator öffnen",
+    },
+    "es": {
+        "paused": "⏸ En pausa: la condición no se cumple.",
+        "waiting": "⏸ En espera: otra programación o temporizador tiene prioridad.",
+        "active": "▶ Activo.",
+        "end": "La franja termina a las {end}.",
+        "open": "Abrir Schedule Creator",
+    },
+}
+
+
+def status_texts(language: str | None) -> dict[str, str]:
+    """Notification texts for a Home Assistant language code such as "de-CH"."""
+
+    return _TEXTS.get(str(language or "en")[:2].lower(), _TEXTS["en"])
+
+
 def desired_status(
-    config: IntegrationConfig, runtime: RuntimeStoreData, now: datetime
+    config: IntegrationConfig,
+    runtime: RuntimeStoreData,
+    now: datetime,
+    language: str | None = "it",
 ) -> dict[str, tuple[str, str]]:
     """Map schedule ID to (title, message) for schedules currently in a slot."""
+
+    texts = status_texts(language)
 
     wanted = opted_in(config.settings)
     names = {schedule.id: schedule.name for schedule in config.schedules}
@@ -74,15 +125,15 @@ def desired_status(
             for lease in runtime.leases
         )
         if occurrence.condition_branch is ConditionBranch.FALSE:
-            status = "⏸ In pausa: la condizione non è soddisfatta."
+            status = texts["paused"]
         elif suspended:
-            status = "⏸ In attesa: un altro schedule o timer ha la priorità."
+            status = texts["waiting"]
         else:
-            status = "▶ Attivo."
+            status = texts["active"]
         end = dt_util.as_local(occurrence.end_utc).strftime("%H:%M")
-        message = f"{status}\nFine fascia alle {end}."
+        message = f"{status}\n{texts['end'].format(end=end)}"
         if url:
-            message += f"\n\n[Apri Schedule Creator]({url})"
+            message += f"\n\n[{texts['open']}]({url})"
         result[schedule_id] = (f"Schedule Creator · {names[schedule_id]}", message)
     return result
 
@@ -120,7 +171,9 @@ class StatusNotificationCoordinator:
         config = self._config.data
         if config is None:
             return
-        desired = desired_status(config, self._runtime.data, now)
+        desired = desired_status(
+            config, self._runtime.data, now, self._hass.config.language
+        )
         for schedule_id in set(self._published) - set(desired):
             persistent_notification.async_dismiss(
                 self._hass, notification_id(schedule_id)
