@@ -236,12 +236,12 @@ async def test_get_state_populated(hass, hass_ws_client, hass_storage):
     before = _stored(hass_storage)
     storage = entry.runtime_data.storage
     reconciled_runtime = storage.runtime.data
-    reconciled_pending = next(
-        operation
+    # The fixture slot ended more than a week ago: startup supersedes its stale
+    # retry and retention then removes the finished slot with its operations.
+    assert all(
+        operation.id != pending.id
         for operation in reconciled_runtime.pending_operations
-        if operation.id == pending.id
     )
-    assert reconciled_pending.state is OperationState.SUPERSEDED
     models_before = (storage.config.data, storage.runtime.data, storage.audit.data)
     response = await _read(client)
     assert response["success"] is True
