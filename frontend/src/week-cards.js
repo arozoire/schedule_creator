@@ -6,6 +6,7 @@ import { messageFor } from './editor.js';
 import { describeAction } from './action-editor.js';
 import { temperatureColor } from './schedule-creator-card.js';
 import { shortAction, liveOccurrence } from './timeline-card.js';
+import { t, setLanguage, locale } from './i18n.js';
 
 const wkEsc = uiEscape;
 const WK_STYLE = '__SC_WK_CSS__';
@@ -13,6 +14,8 @@ const WK_DAYS = ['LUN', 'MAR', 'MER', 'GIO', 'VEN', 'SAB', 'DOM'];
 const WK_FULL = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
 const WK_PALETTE = ['#3aa17e', '#9b7fd1', '#d9822b', '#326ab2', '#b34269', '#087f8c'];
 const WEEK = 10080;
+const wkDay = (i) => t(WK_DAYS[i]);
+const wkFull = (i) => t(WK_FULL[i]);
 const WK_TURN = 120; // minutes drawn on each half U-turn: midnight sits at the apex
 const wkMinutes = (value) => { const [h, m] = String(value).split(':').map(Number); return h * 60 + (m || 0); };
 const wkTime = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
@@ -150,7 +153,7 @@ class ScheduleCreatorWeekCard extends HTMLElement {
     let entities = [...new Set([...schedules.flatMap((s) => s.target_entity_ids), ...timers.map((t) => t.entity_id)])].filter((id) => !wanted || wanted.includes(id));
     if (wanted) entities.sort((a, b) => wanted.indexOf(a) - wanted.indexOf(b)); else entities.sort((a, b) => name(a).localeCompare(name(b)));
     entities = entities.slice(0, Math.max(1, Math.min(8, Number(this.config.max_lanes) || 6)));
-    const clock = (iso) => new Intl.DateTimeFormat('it-IT', {timeZone: now.zone, hour: '2-digit', minute: '2-digit'}).format(new Date(iso));
+    const clock = (iso) => new Intl.DateTimeFormat(locale(), {timeZone: now.zone, hour: '2-digit', minute: '2-digit'}).format(new Date(iso));
     const lanes = entities.map((entityId, index) => {
       const base = WK_PALETTE[index % WK_PALETTE.length];
       const colorOf = (schedule) => { const d = schedule.start_action?.data || {}; if (schedule.start_action?.domain !== 'climate') return base; return d.state === 'off' ? '#9aa5ad' : d.temperature != null ? temperatureColor(d.temperature) : base; };
@@ -161,8 +164,8 @@ class ScheduleCreatorWeekCard extends HTMLElement {
         return {...b, key: `${index}-${i}`, color: colorOf(b.schedule), live: live ? (paused ? 'paused' : 'running') : ''};
       });
       let status = '';
-      if (timer) status = `Timer fino alle ${clock(timer.expires_at)}`;
-      else if (running) status = paused ? 'In pausa · condizione' : `${shortAction(schedules.find((s) => s.id === running.schedule_id)?.start_action)} fino alle ${clock(running.end_utc)}`;
+      if (timer) status = `${t('Timer')} ${t('fino alle {time}', {time: clock(timer.expires_at)})}`;
+      else if (running) status = paused ? t('In pausa · condizione') : `${shortAction(schedules.find((s) => s.id === running.schedule_id)?.start_action)} ${t('fino alle {time}', {time: clock(running.end_utc)})}`;
       const climate = entityId.startsWith('climate.');
       return {entityId, name: name(entityId), color: base, climate, blocks, status, statusKind: timer ? 'timer' : running ? (paused ? 'paused' : 'running') : '',
         timer: timer ? {start: now.week, end: Math.min(now.week + Math.max(1, (new Date(timer.expires_at) - Date.now()) / 60000), now.week + WEEK)} : null};
@@ -174,38 +177,39 @@ class ScheduleCreatorWeekCard extends HTMLElement {
   }
   header(m, fallback) {
     const chips = m.lanes.map((l) => `<span class="wk-chip"><i style="background:${l.climate ? 'linear-gradient(90deg,#4a90d9,#96c4e8,#f08a4b)' : l.color}"></i>${wkEsc(l.name)}</span>`).join('');
-    return `<div class="wk-head"><div><span class="wk-eyebrow">${m.active.length ? `Profili attivi · ${wkEsc(m.active.map((p) => p.name).join(', '))}` : 'Nessun profilo attivo'}</span><strong class="wk-title">${wkEsc(this.config.title || fallback)}</strong></div><span class="wk-clock">${WK_DAYS[m.now.weekday].toLowerCase()} ${m.now.label}</span></div>
+    return `<div class="wk-head"><div><span class="wk-eyebrow">${m.active.length ? `${t('Profili attivi')} · ${wkEsc(m.active.map((p) => p.name).join(', '))}` : t('Nessun profilo attivo')}</span><strong class="wk-title">${wkEsc(this.config.title || fallback)}</strong></div><span class="wk-clock">${wkDay(m.now.weekday).toLowerCase()} ${m.now.label}</span></div>
       ${chips ? `<div class="wk-chips">${chips}</div>` : ''}`;
   }
   detail(m) {
     if (!m.pick) return '';
     const {lane, block} = m.pick, s = block.schedule;
     const from = Math.floor(block.start / 1440) % 7;
-    const when = `${WK_DAYS[from].charAt(0)}${WK_DAYS[from].slice(1).toLowerCase()} ${wkTime(block.start % 1440)}–${wkTime(block.end % 1440)}`;
+    const when = `${wkDay(from).charAt(0)}${wkDay(from).slice(1).toLowerCase()} ${wkTime(block.start % 1440)}–${wkTime(block.end % 1440)}`;
     const profile = m.profiles.find((p) => p.id === s.profile_id)?.name;
-    const live = block.live === 'running' ? ' · in corso' : block.live === 'paused' ? ' · in pausa' : '';
+    const live = block.live === 'running' ? ` · ${t('in corso')}` : block.live === 'paused' ? ` · ${t('in pausa')}` : '';
     const canEdit = this._hass?.user?.is_admin === true && (window.__scheduleCreatorEditors > 0 || this.config.edit_path);
-    return `<div class="wk-detail" style="--block:${block.color}" role="status"><span class="wk-swatch"></span><div class="wk-detail-copy"><strong>${wkEsc(s.name)}</strong><span>${wkEsc([lane.name, when + live, describeAction(s.start_action), profile && `profilo ${profile}`].filter(Boolean).join(' · '))}</span></div>${canEdit ? `<button type="button" class="wk-edit" data-edit="${wkEsc(s.id)}">Modifica</button>` : ''}<button type="button" class="wk-close" data-close aria-label="Chiudi">×</button></div>`;
+    return `<div class="wk-detail" style="--block:${block.color}" role="status"><span class="wk-swatch"></span><div class="wk-detail-copy"><strong>${wkEsc(s.name)}</strong><span>${wkEsc([lane.name, when + live, describeAction(s.start_action), profile && t('profilo {name}', {name: profile})].filter(Boolean).join(' · '))}</span></div>${canEdit ? `<button type="button" class="wk-edit" data-edit="${wkEsc(s.id)}">${t('Modifica')}</button>` : ''}<button type="button" class="wk-close" data-close aria-label="${t('Chiudi')}">×</button></div>`;
   }
   blockLabel(lane, block) {
     const d = Math.floor(block.start / 1440) % 7;
-    return `${lane.name} · ${block.schedule.name} · ${WK_FULL[d]} ${wkTime(block.start % 1440)}–${wkTime(block.end % 1440)} · ${shortAction(block.schedule.start_action)}`;
+    return `${lane.name} · ${block.schedule.name} · ${wkFull(d)} ${wkTime(block.start % 1440)}–${wkTime(block.end % 1440)} · ${shortAction(block.schedule.start_action)}`;
   }
   render() {
     if (!this.config) return;
+    setLanguage(this._hass, this.config);
     const surface = this.shadowRoot.querySelector('ha-card');
     const {state, error} = this.adapter;
-    if (!this._hass || (!state && !error)) { surface.innerHTML = '<div class="wk-body"><p class="wk-muted">Caricamento…</p></div>'; return; }
+    if (!this._hass || (!state && !error)) { surface.innerHTML = `<div class="wk-body"><p class="wk-muted">${t('Caricamento…')}</p></div>`; return; }
     if (!state) { surface.innerHTML = `<div class="wk-body"><p class="wk-error">${wkEsc(messageFor(error))}</p></div>`; return; }
     const m = this.model(state);
-    const body = m.lanes.length ? this.drawing(m) : '<p class="wk-muted">Nessuna entità programmata nei profili attivi.</p>';
-    surface.innerHTML = `<div class="wk-body">${this.header(m, this.defaultTitle)}${body}${this.detail(m)}${m.lanes.length ? `<div class="wk-legend"><span>${wkEsc(this.hint)}</span><span class="wk-key"><i class="is-paused"></i>in pausa</span><span class="wk-key"><i class="is-running"></i>in corso</span><span class="wk-key"><i class="is-now"></i>ora</span></div>` : ''}</div>`;
+    const body = m.lanes.length ? this.drawing(m) : `<p class="wk-muted">${t('Nessuna entità programmata nei profili attivi.')}</p>`;
+    surface.innerHTML = `<div class="wk-body">${this.header(m, this.defaultTitle)}${body}${this.detail(m)}${m.lanes.length ? `<div class="wk-legend"><span>${wkEsc(this.hint)}</span><span class="wk-key"><i class="is-paused"></i>${t('in pausa')}</span><span class="wk-key"><i class="is-running"></i>${t('in corso')}</span><span class="wk-key"><i class="is-now"></i>${t('ora')}</span></div>` : ''}</div>`;
   }
 }
 
 export class ScheduleCreatorSerpentineCard extends ScheduleCreatorWeekCard {
-  get defaultTitle() { return 'La settimana'; }
-  get hint() { return 'Lun → · Mar ← · la mezzanotte è nella curva'; }
+  get defaultTitle() { return t('La settimana'); }
+  get hint() { return t('Lun → · Mar ← · la mezzanotte è nella curva'); }
   drawing(m) {
     const width = Math.max(320, (this.measured || 728) - 40);
     const L = serpentineLayout(width, m.lanes.length);
@@ -216,7 +220,7 @@ export class ScheduleCreatorSerpentineCard extends ScheduleCreatorWeekCard {
       ticks.push(`<line class="wk-tick" x1="${wkNum(x1)}" y1="${wkNum(y1)}" x2="${wkNum(x2)}" y2="${wkNum(y2)}"/>`);
     }
     const hours = [6, 12, 18].map((h) => { const [x, y] = L.point(h * 60, L.half + 8); return `<text class="wk-hour" x="${wkNum(x)}" y="${wkNum(y)}">${String(h).padStart(2, '0')}</text>`; }).join('');
-    const labels = WK_DAYS.map((day, d) => `<text class="wk-day${d === m.now.weekday ? ' is-today' : ''}" x="${d % 2 ? L.width - 4 : 4}" y="${wkNum(L.top + d * 2 * L.r + 4)}" text-anchor="${d % 2 ? 'end' : 'start'}">${day}</text>`).join('');
+    const labels = WK_DAYS.map((day, d) => `<text class="wk-day${d === m.now.weekday ? ' is-today' : ''}" x="${d % 2 ? L.width - 4 : 4}" y="${wkNum(L.top + d * 2 * L.r + 4)}" text-anchor="${d % 2 ? 'end' : 'start'}">${t(day)}</text>`).join('');
     const blocks = m.lanes.map((lane, i) => {
       const s = L.lane(i);
       const drawn = lane.blocks.map((b) => {
@@ -230,13 +234,13 @@ export class ScheduleCreatorSerpentineCard extends ScheduleCreatorWeekCard {
     }).join('');
     const [ax, ay] = L.point(m.now.week, L.half + 2), [bx, by] = L.point(m.now.week, -L.half - 2);
     const now = `<line class="wk-now" x1="${wkNum(ax)}" y1="${wkNum(ay)}" x2="${wkNum(bx)}" y2="${wkNum(by)}"/><circle class="wk-now-dot" cx="${wkNum(ax)}" cy="${wkNum(ay)}" r="3"/>`;
-    return `<svg class="wk-svg" viewBox="0 0 ${wkNum(L.width)} ${wkNum(L.height)}" role="group" aria-label="Settimana a serpentina"><path class="wk-track" d="${track}" style="stroke-width:${L.half * 2}"/>${ticks.join('')}${hours}${labels}${blocks}${now}</svg>`;
+    return `<svg class="wk-svg" viewBox="0 0 ${wkNum(L.width)} ${wkNum(L.height)}" role="group" aria-label="${t('Settimana a serpentina')}"><path class="wk-track" d="${track}" style="stroke-width:${L.half * 2}"/>${ticks.join('')}${hours}${labels}${blocks}${now}</svg>`;
   }
 }
 
 export class ScheduleCreatorRingCard extends ScheduleCreatorWeekCard {
-  get defaultTitle() { return 'La settimana ad anello'; }
-  get hint() { return 'Ogni anello è un dispositivo · lo spazio tra i settori è la mezzanotte'; }
+  get defaultTitle() { return t('La settimana ad anello'); }
+  get hint() { return t('Ogni anello è un dispositivo · lo spazio tra i settori è la mezzanotte'); }
   drawing(m) {
     const L = ringLayout(m.lanes.length), n = m.lanes.length;
     const bands = [], labels = [];
@@ -244,7 +248,7 @@ export class ScheduleCreatorRingCard extends ScheduleCreatorWeekCard {
       const a0 = -90 + d * L.span + L.gapDeg / 2, a1 = a0 + L.span - L.gapDeg;
       for (let i = 0; i < n; i++) { const [ro, ri] = L.radii(i); bands.push(`<path class="wk-band" d="${L.sector(a0, a1, ro, ri)}"/>`); }
       const [x, y] = L.at((a0 + a1) / 2, L.outer + 18);
-      labels.push(`<text class="wk-day${d === m.now.weekday ? ' is-today' : ''}" x="${wkNum(x)}" y="${wkNum(y + 4)}" text-anchor="middle">${WK_DAYS[d]}</text>`);
+      labels.push(`<text class="wk-day${d === m.now.weekday ? ' is-today' : ''}" x="${wkNum(x)}" y="${wkNum(y + 4)}" text-anchor="middle">${wkDay(d)}</text>`);
     }
     const blocks = m.lanes.map((lane, i) => {
       const [ro, ri] = L.radii(i);
@@ -260,18 +264,18 @@ export class ScheduleCreatorRingCard extends ScheduleCreatorWeekCard {
     const now = `<line class="wk-now" x1="${wkNum(x1)}" y1="${wkNum(y1)}" x2="${wkNum(x2)}" y2="${wkNum(y2)}"/><circle class="wk-now-dot" cx="${wkNum(dx)}" cy="${wkNum(dy)}" r="3.5"/>`;
     // Centre: what is happening now, or the next block when nothing runs.
     const live = m.lanes.filter((l) => l.status).slice(0, 3);
-    const lines = live.length ? live.map((l) => [`${l.name}`, l.status, l.statusKind]) : m.next ? [['Nessuna attività in corso', '', ''], [`Prossima: ${m.next.lane.name}`, `${WK_DAYS[Math.floor(m.next.block.start / 1440)].toLowerCase()} ${wkTime(m.next.block.start % 1440)}`, '']] : [['Nessuna attività in corso', '', '']];
+    const lines = live.length ? live.map((l) => [`${l.name}`, l.status, l.statusKind]) : m.next ? [[t('Nessuna attività in corso'), '', ''], [t('Prossima: {name}', {name: m.next.lane.name}), `${wkDay(Math.floor(m.next.block.start / 1440)).toLowerCase()} ${wkTime(m.next.block.start % 1440)}`, '']] : [[t('Nessuna attività in corso'), '', '']];
     const hub = L.inner - 12, cut = (text, max) => text.length > max ? `${text.slice(0, max - 1)}…` : text, max = Math.floor(hub / 5);
     let y = L.c - (lines.length * 36) / 2 + 4;
     const text = lines.map(([title, sub, kind]) => { const out = `<text class="wk-hub-title" x="${L.c}" y="${wkNum(y)}">${wkEsc(cut(title, max))}</text>${sub ? `<text class="wk-hub-sub${kind ? ` is-${kind}` : ''}" x="${L.c}" y="${wkNum(y + 17)}">${wkEsc(cut(sub, max))}</text>` : ''}`; y += 36; return out; }).join('');
-    const center = `<circle class="wk-hub" cx="${L.c}" cy="${L.c}" r="${hub}"/><text class="wk-hub-eyebrow" x="${L.c}" y="${wkNum(L.c - (lines.length * 36) / 2 - 20)}">${WK_FULL[m.now.weekday].toUpperCase()} ${m.now.label}</text>${text}`;
-    return `<svg class="wk-svg wk-ring" viewBox="0 0 ${L.size} ${L.size}" role="group" aria-label="Settimana ad anello">${bands.join('')}${labels.join('')}${blocks}${center}${now}</svg>`;
+    const center = `<circle class="wk-hub" cx="${L.c}" cy="${L.c}" r="${hub}"/><text class="wk-hub-eyebrow" x="${L.c}" y="${wkNum(L.c - (lines.length * 36) / 2 - 20)}">${wkFull(m.now.weekday).toUpperCase()} ${m.now.label}</text>${text}`;
+    return `<svg class="wk-svg wk-ring" viewBox="0 0 ${L.size} ${L.size}" role="group" aria-label="${t('Settimana ad anello')}">${bands.join('')}${labels.join('')}${blocks}${center}${now}</svg>`;
   }
 }
 
 for (const [tag, cls, name, description] of [
-  ['schedule-creator-serpentine-card', ScheduleCreatorSerpentineCard, 'Schedule Creator · Serpentina', 'La settimana di più dispositivi su un percorso a serpentina'],
-  ['schedule-creator-ring-card', ScheduleCreatorRingCard, 'Schedule Creator · Anello', 'La settimana ad anello: un settore per giorno, un anello per dispositivo'],
+  ['schedule-creator-serpentine-card', ScheduleCreatorSerpentineCard, 'Schedule Creator · Serpentine', 'The week of several devices on a serpentine path'],
+  ['schedule-creator-ring-card', ScheduleCreatorRingCard, 'Schedule Creator · Ring', 'The week as a ring: one sector per day, one ring per device'],
 ]) {
   if (!customElements.get(tag)) customElements.define(tag, cls);
   window.customCards = window.customCards || [];

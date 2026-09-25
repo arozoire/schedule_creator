@@ -9,9 +9,10 @@ Schedule Creator is the server-side successor of
 can live side by side; schedules can be imported from the old card's backup
 (see [Moving from weekly-schedule-card](#moving-from-weekly-schedule-card)).
 
-> The card interface is currently in **Italian**. The screenshots below come from
-> the repository preview (`frontend/preview.html`) with demo data, not from a
-> real installation.
+> The cards speak **English, Italian, French, German and Spanish**, following the
+> language of each Home Assistant user (add `language: en` to a card to force
+> one). The screenshots below come from the repository preview
+> (`frontend/preview.html`) with demo data, not from a real installation.
 
 ![Main card: profiles, what is running now and the week](docs/images/main.png)
 
@@ -167,6 +168,7 @@ needed. No cache clearing or `?v=` parameters are required.
 ## Documentation
 
 - [Card and installation details](docs/frontend.md) (Italian)
+- Translations: `frontend/src/i18n-strings.js` (Italian text is the key)
 - [WebSocket API](docs/websocket-api.md)
 - [Storage schema and journal](docs/storage-schema.md)
 - [Development hand-off notes](docs/ai-handoff.md) (Italian)

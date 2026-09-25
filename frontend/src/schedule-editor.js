@@ -1,6 +1,7 @@
 // Schedule editor widgets modelled on weekly-schedule-card: time bar with magnets,
 // day shortcuts, entity-first conditions, icon and colour pickers.
 import { uiEscape } from './forms.js';
+import { t } from './i18n.js';
 
 const escS = uiEscape;
 const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
@@ -27,7 +28,7 @@ export function boundaryLabel(slot, side) {
   const event = slot[`${side}_sun`];
   if (!event) return String(slot[side] || '').slice(0, 5);
   const offset = slot[`${side}_offset_minutes`] || 0;
-  return `${SUN_LABELS[event]}${offset ? ` ${signed(offset)}` : ''}`;
+  return `${t(SUN_LABELS[event])}${offset ? ` ${signed(offset)}` : ''}`;
 }
 
 // Background blocks: other slots on at least one of the selected days.
@@ -53,26 +54,26 @@ function timebar(i, slot, others, snap) {
   const edit = overnight
     ? `<div class="sc-tb-edit is-static" style="left:${pct(start)};width:${pct(1440 - start)}"></div>${end ? `<div class="sc-tb-edit is-static" style="left:0;width:${pct(end)}"></div>` : ''}`
     : `<div class="sc-tb-edit${end - start < 300 ? ' is-narrow' : ''}" data-slot-bar="${i}" style="left:${pct(start)};width:${pct(end - start)}"><span class="sc-tb-handle" data-handle="start"></span><span class="sc-tb-label">${toTime(start)}–${toTime(end)}</span><span class="sc-tb-handle" data-handle="end"></span></div>`;
-  return `<div class="sc-timebar" data-timebar="${i}" data-magnets="${magnets.join(',')}" data-snap="${snap}">${blocks.map((b) => `<div class="sc-tb-bg" title="${escS(`${b.name} ${toTime(b.from)}–${toTime(b.to)}`)}" style="left:${pct(b.from)};width:${pct(b.to - b.from)};--block-color:${b.color}"></div>`).join('')}${magnets.map((m) => `<div class="sc-tb-magnet" data-min="${m}" style="left:${pct(m)}"></div>`).join('')}${edit}</div><div class="sc-tb-ticks" aria-hidden="true">${[0, 6, 12, 18, 24].map((h) => `<span>${String(h).padStart(2, '0')}:00</span>`).join('')}</div>${overnight ? '<p>Fascia a cavallo della mezzanotte: modifica gli orari nei campi qui sotto.</p>' : blocks.length ? '<p>Trascina la fascia o le maniglie: si aggancia agli inizi/fini degli altri schedule (magnete).</p>' : '<p>Trascina la fascia o le maniglie per cambiare gli orari.</p>'}`;
+  return `<div class="sc-timebar" data-timebar="${i}" data-magnets="${magnets.join(',')}" data-snap="${snap}">${blocks.map((b) => `<div class="sc-tb-bg" title="${escS(`${b.name} ${toTime(b.from)}–${toTime(b.to)}`)}" style="left:${pct(b.from)};width:${pct(b.to - b.from)};--block-color:${b.color}"></div>`).join('')}${magnets.map((m) => `<div class="sc-tb-magnet" data-min="${m}" style="left:${pct(m)}"></div>`).join('')}${edit}</div><div class="sc-tb-ticks" aria-hidden="true">${[0, 6, 12, 18, 24].map((h) => `<span>${String(h).padStart(2, '0')}:00</span>`).join('')}</div><p>${overnight ? t('Fascia a cavallo della mezzanotte: modifica gli orari nei campi qui sotto.') : blocks.length ? t('Trascina la fascia o le maniglie: si aggancia agli inizi/fini degli altri schedule (magnete).') : t('Trascina la fascia o le maniglie per cambiare gli orari.')}</p>`;
 }
 
 export function slotsForm(slots, {others = [], snap = 15} = {}) {
-  const snapRow = `<div class="sc-snap" role="group" aria-label="Passo di aggancio"><span>Passo</span>${SNAP_OPTIONS.map((s) => `<button type="button" class="sc-pill${s === snap ? ' is-selected' : ''}" data-command="setSnap" data-id="${s}" aria-pressed="${s === snap}">${s} min</button>`).join('')}</div>`;
+  const snapRow = `<div class="sc-snap" role="group" aria-label="${t('Passo di aggancio')}"><span>${t('Passo')}</span>${SNAP_OPTIONS.map((s) => `<button type="button" class="sc-pill${s === snap ? ' is-selected' : ''}" data-command="setSnap" data-id="${s}" aria-pressed="${s === snap}">${s} min</button>`).join('')}</div>`;
   return snapRow + slots.map((slot, i) => {
     const key = slot.weekdays.join('');
-    const shortcuts = [['all', 'Tutti'], ['workdays', 'Feriali'], ['weekend', 'Weekend']].map(([id, label]) => `<button type="button" class="sc-pill${DAY_SHORTCUTS[id].join('') === key ? ' is-selected' : ''}" data-command="slotDays" data-id="${i}:${id}">${label}</button>`).join('');
-    const days = DAY_LABELS.map((d, day) => `<label class="sc-day-chip"><input type="checkbox" name="slot_${i}_days" value="${day}" ${slot.weekdays.includes(day) ? 'checked' : ''}><span>${d}</span></label>`).join('');
-    const siblings = slots.filter((_, j) => j !== i).map((s) => ({...s, name: 'Altra fascia di questo schedule', color: '#8a96a3'}));
-    return `<fieldset data-slot="${i}"><legend>Fascia ${i + 1}</legend>${timebar(i, slot, [...others, ...siblings], snap)}<div class="sc-time-row">${boundaryField(i, 'start', 'Inizio', slot)}${boundaryField(i, 'end', 'Fine', slot)}</div><div class="sc-shortcuts">${shortcuts}</div><div class="sc-days">${days}</div>${slots.length > 1 ? `<button type="button" data-command="removeSlot" data-id="${i}">Rimuovi fascia</button>` : ''}</fieldset>`;
-  }).join('') + '<button type="button" data-command="addSlot">＋ Fascia successiva</button>';
+    const shortcuts = [['all', t('Tutti')], ['workdays', t('Feriali')], ['weekend', t('Weekend')]].map(([id, label]) => `<button type="button" class="sc-pill${DAY_SHORTCUTS[id].join('') === key ? ' is-selected' : ''}" data-command="slotDays" data-id="${i}:${id}">${label}</button>`).join('');
+    const days = DAY_LABELS.map((d, day) => `<label class="sc-day-chip"><input type="checkbox" name="slot_${i}_days" value="${day}" ${slot.weekdays.includes(day) ? 'checked' : ''}><span>${t(d)}</span></label>`).join('');
+    const siblings = slots.filter((_, j) => j !== i).map((s) => ({...s, name: t('Altra fascia di questo schedule'), color: '#8a96a3'}));
+    return `<fieldset data-slot="${i}"><legend>${t('Fascia {n}', {n: i + 1})}</legend>${timebar(i, slot, [...others, ...siblings], snap)}<div class="sc-time-row">${boundaryField(i, 'start', t('Inizio'), slot)}${boundaryField(i, 'end', t('Fine'), slot)}</div><div class="sc-shortcuts">${shortcuts}</div><div class="sc-days">${days}</div>${slots.length > 1 ? `<button type="button" data-command="removeSlot" data-id="${i}">${t('Rimuovi fascia')}</button>` : ''}</fieldset>`;
+  }).join('') + `<button type="button" data-command="addSlot">＋ ${t('Fascia successiva')}</button>`;
 }
 
 // A boundary is a fixed time or sunrise/sunset with an offset in minutes.
 function boundaryField(i, side, label, slot) {
   const event = slot[`${side}_sun`] || '';
-  const kind = `<select name="slot_${i}_${side}_sun" aria-label="${label}: riferimento">${[['', 'Orario'], ['sunrise', SUN_LABELS.sunrise], ['sunset', SUN_LABELS.sunset]].map(([v, t]) => `<option value="${v}" ${v === event ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
+  const kind = `<select name="slot_${i}_${side}_sun" aria-label="${label}: ${t('riferimento')}">${[['', t('Orario')], ['sunrise', t(SUN_LABELS.sunrise)], ['sunset', t(SUN_LABELS.sunset)]].map(([v, text]) => `<option value="${v}" ${v === event ? 'selected' : ''}>${text}</option>`).join('')}</select>`;
   const value = event
-    ? `<input name="slot_${i}_${side}_offset" type="number" min="-360" max="360" step="5" value="${escS(slot[`${side}_offset_minutes`] ?? 0)}" aria-label="${label}: minuti prima (−) o dopo (+)"><input type="hidden" name="slot_${i}_${side}" value="${escS(slot[side])}"><small>min · ≈ ${escS(String(slot[side] || '').slice(0, 5))} oggi</small>`
+    ? `<input name="slot_${i}_${side}_offset" type="number" min="-360" max="360" step="5" value="${escS(slot[`${side}_offset_minutes`] ?? 0)}" aria-label="${label}: ${t('minuti prima (−) o dopo (+)')}"><input type="hidden" name="slot_${i}_${side}" value="${escS(slot[side])}"><small>${t('min · ≈ {time} oggi', {time: escS(String(slot[side] || '').slice(0, 5))})}</small>`
     : `<input name="slot_${i}_${side}" type="time" value="${escS(slot[side])}">`;
   return `<div class="sc-bound"><span class="sc-field-label">${label}</span><div class="sc-bound-row">${kind}${value}</div></div>`;
 }
@@ -123,48 +124,50 @@ export function defaultHysteresis(unit, value) {
 }
 
 const valueLabels = {on: 'Acceso / Sì', off: 'Spento / No', home: 'A casa', not_home: 'Fuori casa', open: 'Aperta', closed: 'Chiusa', opening: 'In apertura', closing: 'In chiusura'};
+const valueLabel = (value) => (valueLabels[value] ? t(valueLabels[value]) : value);
 const DURATIONS = [[0, 'Subito'], [60, '1 min'], [300, '5 min'], [600, '10 min'], [900, '15 min'], [1800, '30 min']];
+const durations = () => DURATIONS.map(([s, label]) => [s, s ? label : t(label)]);
 const radios = (name, options, selected, cls = 'sc-choices') => `<div class="${cls}" role="radiogroup">${options.map(([v, label]) => `<label class="sc-choice${String(v) === String(selected) ? ' is-selected' : ''}"><input type="radio" name="${name}" value="${escS(v)}" ${String(v) === String(selected) ? 'checked' : ''}><span>${escS(label)}</span></label>`).join('')}</div>`;
 
 function leafForm(node, path, hass) {
   const friendly = (id) => hass.states?.[id]?.attributes?.friendly_name || id;
-  const entity = `<label>1 · Entità da controllare<input name="${path}_entity_id" value="${escS(node.entity_id || '')}" list="sc-condition-entities" placeholder="Cerca per nome o ID" autocomplete="off"></label>`;
-  const remove = `<button type="button" data-command="removeCondition" data-id="${path}">Rimuovi condizione</button>`;
+  const entity = `<label>${t('1 · Entità da controllare')}<input name="${path}_entity_id" value="${escS(node.entity_id || '')}" list="sc-condition-entities" placeholder="${t('Cerca per nome o ID')}" autocomplete="off"></label>`;
+  const remove = `<button type="button" data-command="removeCondition" data-id="${path}">${t('Rimuovi condizione')}</button>`;
   const spec = conditionKind(hass, node.entity_id);
-  if (spec.kind === 'none') return `<fieldset class="sc-condition" data-condition="${path}"><input type="hidden" name="${path}_operator" value="${escS(node.operator)}">${entity}<p>Scegli un’entità: poi vedrai solo i confronti possibili (acceso/spento, maggiore/minore…).</p>${remove}</fieldset>`;
-  const now = `<p class="sc-current">Ora <strong>${escS(friendly(node.entity_id))}: ${escS(spec.kind === 'numeric' ? spec.current : valueLabels[spec.current] || spec.current)}${spec.unit ? ` ${escS(spec.unit)}` : ''}</strong></p>`;
+  if (spec.kind === 'none') return `<fieldset class="sc-condition" data-condition="${path}"><input type="hidden" name="${path}_operator" value="${escS(node.operator)}">${entity}<p>${t('Scegli un’entità: poi vedrai solo i confronti possibili (acceso/spento, maggiore/minore…).')}</p>${remove}</fieldset>`;
+  const now = `<p class="sc-current">${t('Ora')} <strong>${escS(friendly(node.entity_id))}: ${escS(spec.kind === 'numeric' ? spec.current : valueLabel(spec.current))}${spec.unit ? ` ${escS(spec.unit)}` : ''}</strong></p>`;
   let body;
   if (spec.kind === 'numeric') {
-    const ops = [['numeric_greater', '>'], ['numeric_greater_or_equal', '≥'], ['numeric_less', '<'], ['numeric_less_or_equal', '≤'], ['numeric_range', 'tra'], ['available', 'disponibile']];
+    const ops = [['numeric_greater', '>'], ['numeric_greater_or_equal', '≥'], ['numeric_less', '<'], ['numeric_less_or_equal', '≤'], ['numeric_range', t('tra')], ['available', t('disponibile')]];
     const op = ops.some(([v]) => v === node.operator) ? node.operator : 'numeric_greater';
     const limits = `step="${spec.step}"${spec.min != null ? ` min="${spec.min}"` : ''}${spec.max != null ? ` max="${spec.max}"` : ''}`;
     const unit = spec.unit ? ` (${escS(spec.unit)})` : '';
     const values = op === 'numeric_range'
-      ? `<div class="sc-time-row"><label>Da${unit}<input name="${path}_lower" type="number" ${limits} value="${escS(node.lower ?? '')}"></label><label>A${unit}<input name="${path}_upper" type="number" ${limits} value="${escS(node.upper ?? '')}"></label></div>`
-      : op === 'available' ? '' : `<label>3 · Valore${unit}<input name="${path}_value" type="number" ${limits} value="${escS(node.value ?? '')}" placeholder="${escS(spec.current)}"></label>`;
+      ? `<div class="sc-time-row"><label>${t('Da')}${unit}<input name="${path}_lower" type="number" ${limits} value="${escS(node.lower ?? '')}"></label><label>${t('A')}${unit}<input name="${path}_upper" type="number" ${limits} value="${escS(node.upper ?? '')}"></label></div>`
+      : op === 'available' ? '' : `<label>${t('3 · Valore')}${unit}<input name="${path}_value" type="number" ${limits} value="${escS(node.value ?? '')}" placeholder="${escS(spec.current)}"></label>`;
     const reference = op === 'numeric_range' ? node.lower : node.value;
-    const hysteresis = op === 'available' ? '' : `<label>Isteresi${unit}<input name="${path}_hysteresis" type="number" min="0" step="0.1" value="${escS(node.hysteresis ?? defaultHysteresis(spec.unit, reference ?? spec.current))}"></label><p>Margine anti-oscillazione: una volta vera, la condizione torna falsa solo oltre la soglia ± isteresi.</p>`;
-    body = `<div class="sc-field"><span class="sc-field-label">2 · Confronto</span>${radios(`${path}_operator`, ops, op)}</div>${values}${hysteresis}`;
+    const hysteresis = op === 'available' ? '' : `<label>${t('Isteresi')}${unit}<input name="${path}_hysteresis" type="number" min="0" step="0.1" value="${escS(node.hysteresis ?? defaultHysteresis(spec.unit, reference ?? spec.current))}"></label><p>${t('Margine anti-oscillazione: una volta vera, la condizione torna falsa solo oltre la soglia ± isteresi.')}</p>`;
+    body = `<div class="sc-field"><span class="sc-field-label">${t('2 · Confronto')}</span>${radios(`${path}_operator`, ops, op)}</div>${values}${hysteresis}`;
   } else {
-    const ops = [['state_equals', 'è'], ['state_not_equals', 'non è'], ['available', 'disponibile']];
+    const ops = [['state_equals', t('è')], ['state_not_equals', t('non è')], ['available', t('disponibile')]];
     const op = ops.some(([v]) => v === node.operator) ? node.operator : 'state_equals';
     const options = [...new Set([...spec.options, ...(node.value != null && node.value !== '' ? [String(node.value)] : [])])];
     const value = op === 'available' ? '' : spec.free
-      ? `<label>3 · Valore<input name="${path}_value" value="${escS(node.value ?? spec.current ?? '')}"></label>`
-      : `<div class="sc-field"><span class="sc-field-label">3 · Valore</span>${radios(`${path}_value`, options.map((v) => [v, valueLabels[v] || v]), node.value ?? options[0])}</div>`;
-    body = `<div class="sc-field"><span class="sc-field-label">2 · Confronto</span>${radios(`${path}_operator`, ops, op)}</div>${value}`;
+      ? `<label>${t('3 · Valore')}<input name="${path}_value" value="${escS(node.value ?? spec.current ?? '')}"></label>`
+      : `<div class="sc-field"><span class="sc-field-label">${t('3 · Valore')}</span>${radios(`${path}_value`, options.map((v) => [v, valueLabel(v)]), node.value ?? options[0])}</div>`;
+    body = `<div class="sc-field"><span class="sc-field-label">${t('2 · Confronto')}</span>${radios(`${path}_operator`, ops, op)}</div>${value}`;
   }
-  const presets = (seconds) => [...DURATIONS, ...(DURATIONS.some(([s]) => s === seconds) ? [] : [[seconds, `${Math.round(seconds / 60 * 10) / 10} min`]])];
+  const presets = (seconds) => [...durations(), ...(DURATIONS.some(([s]) => s === seconds) ? [] : [[seconds, `${Math.round(seconds / 60 * 10) / 10} min`]])];
   const duration = Number(node.minimum_duration_seconds || 0), release = Number(node.release_delay_seconds || 0);
-  const durationField = `<div class="sc-field"><span class="sc-field-label">Diventa vera dopo</span>${radios(`${path}_minimum_duration_seconds`, presets(duration), duration)}</div><div class="sc-field"><span class="sc-field-label">Torna falsa dopo</span>${radios(`${path}_release_delay_seconds`, presets(release), release)}<p>Evita avanti e indietro: la condizione cambia solo se resta vera (o falsa) per questo tempo. Esempio tende: chiudi dopo 10 min sopra 500 lx, riapri dopo 15 min sotto.</p></div>`;
+  const durationField = `<div class="sc-field"><span class="sc-field-label">${t('Diventa vera dopo')}</span>${radios(`${path}_minimum_duration_seconds`, presets(duration), duration)}</div><div class="sc-field"><span class="sc-field-label">${t('Torna falsa dopo')}</span>${radios(`${path}_release_delay_seconds`, presets(release), release)}<p>${t('Evita avanti e indietro: la condizione cambia solo se resta vera (o falsa) per questo tempo. Esempio tende: chiudi dopo 10 min sopra 500 lx, riapri dopo 15 min sotto.')}</p></div>`;
   return `<fieldset class="sc-condition" data-condition="${path}">${entity}${now}${body}${durationField}${remove}</fieldset>`;
 }
 
 export function conditionForm(node, hass, path = 'condition') {
-  if (!node) return '<p>Nessuna condizione: lo schedule esegue sempre nelle sue fasce.</p><button type="button" data-command="addCondition">＋ Condizione</button>';
-  if (!['and', 'or'].includes(node.operator)) return `${leafForm(node, path, hass)}${path === 'condition' ? '<button type="button" data-command="addCondition">＋ Altra condizione</button>' : ''}`;
-  const group = `<div class="sc-field"><span class="sc-field-label">Quando vale lo schedule</span>${radios(`${path}_operator`, [['and', 'Tutte le condizioni'], ['or', 'Almeno una']], node.operator)}</div>`;
-  return `<div class="sc-condition-group" data-condition="${path}">${group}${node.children.map((child, i) => conditionForm(child, hass, `${path}.${i}`)).join('')}<button type="button" data-command="${path === 'condition' ? 'addCondition' : 'addConditionChild'}" data-id="${path}">＋ Altra condizione</button></div>`;
+  if (!node) return `<p>${t('Nessuna condizione: lo schedule esegue sempre nelle sue fasce.')}</p><button type="button" data-command="addCondition">＋ ${t('Condizione')}</button>`;
+  if (!['and', 'or'].includes(node.operator)) return `${leafForm(node, path, hass)}${path === 'condition' ? `<button type="button" data-command="addCondition">＋ ${t('Altra condizione')}</button>` : ''}`;
+  const group = `<div class="sc-field"><span class="sc-field-label">${t('Quando vale lo schedule')}</span>${radios(`${path}_operator`, [['and', t('Tutte le condizioni')], ['or', t('Almeno una')]], node.operator)}</div>`;
+  return `<div class="sc-condition-group" data-condition="${path}">${group}${node.children.map((child, i) => conditionForm(child, hass, `${path}.${i}`)).join('')}<button type="button" data-command="${path === 'condition' ? 'addCondition' : 'addConditionChild'}" data-id="${path}">＋ ${t('Altra condizione')}</button></div>`;
 }
 
 export function readCondition(form, path = 'condition') {
@@ -197,13 +200,13 @@ export const COLORS = ['#e53935', '#fb8c00', '#fdd835', '#43a047', '#00897b', '#
 export function iconPicker(selected) {
   const value = String(selected || '').replace(/^mdi:/, '');
   const known = ICONS.some(([id]) => id === value);
-  const options = [['', 'Nessuna', ''], ...ICONS.map(([id, label]) => [`mdi:${id}`, label, id]), ...(value && !known ? [[selected, value, value]] : [])];
-  return `<div class="sc-field"><span class="sc-field-label">Icona</span><div class="sc-icon-grid" role="radiogroup" aria-label="Icona">${options.map(([v, label, icon]) => `<label class="sc-icon-choice${(selected || '') === v ? ' is-selected' : ''}" title="${escS(label)}"><input type="radio" name="icon" value="${escS(v)}" ${(selected || '') === v ? 'checked' : ''}>${icon ? `<ha-icon icon="mdi:${escS(icon)}" aria-hidden="true"></ha-icon>` : '<span aria-hidden="true">∅</span>'}<small>${escS(label)}</small></label>`).join('')}</div></div>`;
+  const options = [['', t('Nessuna'), ''], ...ICONS.map(([id, label]) => [`mdi:${id}`, t(label), id]), ...(value && !known ? [[selected, value, value]] : [])];
+  return `<div class="sc-field"><span class="sc-field-label">${t('Icona')}</span><div class="sc-icon-grid" role="radiogroup" aria-label="${t('Icona')}">${options.map(([v, label, icon]) => `<label class="sc-icon-choice${(selected || '') === v ? ' is-selected' : ''}" title="${escS(label)}"><input type="radio" name="icon" value="${escS(v)}" ${(selected || '') === v ? 'checked' : ''}>${icon ? `<ha-icon icon="mdi:${escS(icon)}" aria-hidden="true"></ha-icon>` : '<span aria-hidden="true">∅</span>'}<small>${escS(label)}</small></label>`).join('')}</div></div>`;
 }
 
 export function colorPicker(selected) {
   const value = (selected || '').toLowerCase();
   const custom = value && !COLORS.includes(value);
-  return `<div class="sc-field"><span class="sc-field-label">Colore</span><div class="sc-swatches" role="radiogroup" aria-label="Colore"><label class="sc-swatch sc-swatch-none${!value ? ' is-selected' : ''}" title="Automatico"><input type="radio" name="color" value="" ${!value ? 'checked' : ''}><span>Auto</span></label>${COLORS.map((c) => `<label class="sc-swatch${value === c ? ' is-selected' : ''}" style="--swatch:${c}" title="${c}"><input type="radio" name="color" value="${c}" ${value === c ? 'checked' : ''}></label>`).join('')}<label class="sc-swatch sc-swatch-custom${custom ? ' is-selected' : ''}" title="Altro colore"${custom ? ` style="--swatch:${escS(value)}"` : ''}><input type="radio" name="color" value="${escS(custom ? value : '#607d8b')}" data-custom ${custom ? 'checked' : ''}><input type="color" data-color-custom value="${escS(custom ? value : '#607d8b')}" aria-label="Altro colore"><span>＋</span></label></div></div>`;
+  return `<div class="sc-field"><span class="sc-field-label">${t('Colore')}</span><div class="sc-swatches" role="radiogroup" aria-label="${t('Colore')}"><label class="sc-swatch sc-swatch-none${!value ? ' is-selected' : ''}" title="${t('Automatico')}"><input type="radio" name="color" value="" ${!value ? 'checked' : ''}><span>Auto</span></label>${COLORS.map((c) => `<label class="sc-swatch${value === c ? ' is-selected' : ''}" style="--swatch:${c}" title="${c}"><input type="radio" name="color" value="${c}" ${value === c ? 'checked' : ''}></label>`).join('')}<label class="sc-swatch sc-swatch-custom${custom ? ' is-selected' : ''}" title="${t('Altro colore')}"${custom ? ` style="--swatch:${escS(value)}"` : ''}><input type="radio" name="color" value="${escS(custom ? value : '#607d8b')}" data-custom ${custom ? 'checked' : ''}><input type="color" data-color-custom value="${escS(custom ? value : '#607d8b')}" aria-label="${t('Altro colore')}"><span>＋</span></label></div></div>`;
 }
 

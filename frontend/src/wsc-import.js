@@ -2,6 +2,7 @@
 // into Schedule Creator drafts for schedule_creator/import/merge. Pure: the
 // card shows the result for review and the backend validates everything again.
 import { describeAction } from './action-editor.js';
+import { t } from './i18n.js';
 
 export const WSC_SCHEMA = 'weekly-schedule-card/backup';
 const WSC_DAYS = {mon: [0], tue: [1], wed: [2], thu: [3], fri: [4], sat: [5], sun: [6], daily: [0, 1, 2, 3, 4, 5, 6], workday: [0, 1, 2, 3, 4], weekend: [5, 6]};
@@ -60,14 +61,14 @@ function wscStartAction(calls, entityId, extras, notes) {
     if (preset) state.preset_mode = preset;
     if (mode) return {domain, action: 'apply_state', data: mode === 'off' ? {state: 'off'} : {state: mode, ...state}};
     // Temperature only: the device keeps its current mode, as in WSC.
-    if (Object.keys(state).length) { notes.push('Solo temperatura: la modalità resta quella del dispositivo.'); return {domain, action: 'set_temperature', data: state}; }
+    if (Object.keys(state).length) { notes.push(t('Solo temperatura: la modalità resta quella del dispositivo.')); return {domain, action: 'set_temperature', data: state}; }
     return null;
   }
   const own = services.filter(([s]) => s.split('.')[0] === domain);
   const generic = services.filter(([s]) => /^homeassistant\.turn_(on|off)$/.test(s)).map(([s, d]) => [`${domain}.${s.split('.')[1]}`, d]);
   const usable = own.length ? own : generic;
   if (!usable.length) return null;
-  if (usable.length > 1) notes.push(`Più comandi nella fascia: importato solo “${usable[0][0]}”.`);
+  if (usable.length > 1) notes.push(t('Più comandi nella fascia: importato solo “{service}”.', {service: usable[0][0]}));
   const [service, data] = usable[0];
   return {domain, action: service.split('.')[1], data};
 }
@@ -101,11 +102,11 @@ const wscCombine = (nodes, operator) => nodes.length === 1 ? nodes[0] : {operato
 
 // One comparison; null with a note when Schedule Creator cannot express it.
 function wscConditionLeaf(entity, attribute, operator, raw, hysteresis, notes) {
-  if (!entity || !operator) { notes.push('Condizione incompleta ignorata.'); return null; }
-  if (attribute) { notes.push(`Condizione sull’attributo “${attribute}” di ${entity}: non supportata.`); return null; }
+  if (!entity || !operator) { notes.push(t('Condizione incompleta ignorata.')); return null; }
+  if (attribute) { notes.push(t('Condizione sull’attributo “{attribute}” di {entity}: non supportata.', {attribute, entity})); return null; }
   if (operator.startsWith('numeric')) {
     const value = Number(raw);
-    if (!Number.isFinite(value)) { notes.push(`Valore non numerico “${raw}” per ${entity}.`); return null; }
+    if (!Number.isFinite(value)) { notes.push(t('Valore non numerico “{value}” per {entity}.', {value: raw, entity})); return null; }
     const band = Number(hysteresis);
     return wscLeaf(operator, entity, value, Number.isFinite(band) && band > 0 ? band : null);
   }
@@ -125,7 +126,7 @@ function wscConditionOf(link, slot, notes) {
     const valid = own.filter(Boolean);
     if (valid.length) {
       nodes.push(wscCombine(valid, slot.condition_type === 'or' ? 'or' : 'and'));
-      if (!slot.track_conditions) notes.push('La condizione di Scheduler era valutata solo all’inizio: ora vale per tutta la fascia.');
+      if (!slot.track_conditions) notes.push(t('La condizione di Scheduler era valutata solo all’inizio: ora vale per tutta la fascia.'));
     }
   }
   if (!nodes.length) return {condition: null, broken};
@@ -137,22 +138,22 @@ const wscNotifyAction = (service) => { const s = String(service || '').trim(); r
 
 // Returns {profiles: drafts for import/merge, rows: one line per source schedule}.
 export function convertWscBackup(backup, {existingProfileNames = [], entityName = (id) => id, sun = null} = {}) {
-  if (!isWscBackup(backup)) throw new Error('Il file non è un backup della weekly-schedule-card.');
+  if (!isWscBackup(backup)) throw new Error(t('Il file non è un backup della weekly-schedule-card.'));
   const byId = new Map(backup.schedules.map((s) => [s.entityId, s.config]));
   const used = new Set(existingProfileNames.map((n) => String(n).toLowerCase()));
   const active = new Set(backup.profileData.activeProfiles || []);
   const rows = [], profiles = [];
   for (const source of backup.profileData.profiles || []) {
-    let name = String(source.name || 'Profilo WSC').trim() || 'Profilo WSC';
+    let name = String(source.name || t('Profilo WSC')).trim() || t('Profilo WSC');
     if (used.has(name.toLowerCase())) name = `${name} (WSC)`;
     used.add(name.toLowerCase());
     const wscGroups = (source.groups?.length ? source.groups : backup.profileData.groups) || [];
     const names = new Map(wscGroups.flatMap((g) => (g.entities || []).map((e) => [e.entity, e.name])));
     const label = (id) => names.get(id) || entityName(id);
-    const groups = wscGroups.map((g) => ({name: String(g.name || 'Gruppo'), color: /^#[0-9a-f]{6}$/i.test(g.color || '') ? g.color : null, entity_ids: [...new Set((g.entities || []).map((e) => e.entity).filter(Boolean))], schedules: []}));
+    const groups = wscGroups.map((g) => ({name: String(g.name || t('Gruppo')), color: /^#[0-9a-f]{6}$/i.test(g.color || '') ? g.color : null, entity_ids: [...new Set((g.entities || []).map((e) => e.entity).filter(Boolean))], schedules: []}));
     const groupFor = (entityId) => {
       let group = groups.find((g) => g.entity_ids.includes(entityId));
-      if (!group) { group = groups.find((g) => g.name === 'Altri dispositivi') || {name: 'Altri dispositivi', color: null, entity_ids: [], schedules: []}; if (!groups.includes(group)) groups.push(group); group.entity_ids.push(entityId); }
+      if (!group) { group = groups.find((g) => g.name === t('Altri dispositivi')) || {name: t('Altri dispositivi'), color: null, entity_ids: [], schedules: []}; if (!groups.includes(group)) groups.push(group); group.entity_ids.push(entityId); }
       return group;
     };
     const links = new Map((source.scheduleLinks || []).map((l) => [l.id, l]));
@@ -162,38 +163,38 @@ export function convertWscBackup(backup, {existingProfileNames = [], entityName 
       const row = {profile: name, source: config?.name || id, status: 'ok', notes: []};
       rows.push(row);
       const skip = (why) => { row.status = 'skip'; row.notes.push(why); };
-      if (!config) { skip('Configurazione mancante nel backup.'); continue; }
-      if (link.oneShot || config.repeat_type === 'single') { skip('Schedule una tantum: non importato.'); continue; }
+      if (!config) { skip(t('Configurazione mancante nel backup.')); continue; }
+      if (link.oneShot || config.repeat_type === 'single') { skip(t('Schedule una tantum: non importato.')); continue; }
       const days = [...new Set((config.weekdays || []).flatMap((d) => WSC_DAYS[d] || []))].sort((a, b) => a - b);
-      if (!days.length) { skip('Giorni non riconosciuti.'); continue; }
-      if ((config.weekdays || []).includes('workday')) row.notes.push('“Giorni lavorativi” importati come lunedì–venerdì.');
-      if (config.start_date || config.end_date) row.notes.push(`Periodo ${config.start_date || '…'} → ${config.end_date || '…'} non supportato: vale tutto l’anno.`);
-      if (link.autoChildId) row.notes.push('Fine gestita da uno schedule figlio della vecchia versione: controlla l’azione finale.');
+      if (!days.length) { skip(t('Giorni non riconosciuti.')); continue; }
+      if ((config.weekdays || []).includes('workday')) row.notes.push(t('“Giorni lavorativi” importati come lunedì–venerdì.'));
+      if (config.start_date || config.end_date) row.notes.push(t('Periodo {from} → {to} non supportato: vale tutto l’anno.', {from: config.start_date || '…', to: config.end_date || '…'}));
+      if (link.autoChildId) row.notes.push(t('Fine gestita da uno schedule figlio della vecchia versione: controlla l’azione finale.'));
       const slots = [];
       let start = null, entityId = null;
       for (const slot of config.timeslots || []) {
         const calls = wscSlotCalls(slot), entities = [...new Set(calls.flatMap(wscCallEntity))];
         const first = wscBoundary(slot.start, sun);
-        if (!first) { row.notes.push(`Orario “${slot.start}” non supportato.`); continue; }
+        if (!first) { row.notes.push(t('Orario “{time}” non supportato.', {time: slot.start})); continue; }
         let last = slot.stop ? wscBoundary(slot.stop, sun) : null;
-        if (slot.stop && !last) { row.notes.push(`Orario “${slot.stop}” non supportato.`); continue; }
+        if (slot.stop && !last) { row.notes.push(t('Orario “{time}” non supportato.', {time: slot.stop})); continue; }
         if (!last) {
           last = first.sun ? {time: wscClock(Number(first.time.slice(0, 2)) * 60 + Number(first.time.slice(3)) + 1), sun: first.sun, offset: first.offset + 1} : {time: wscClock(Number(first.time.slice(0, 2)) * 60 + Number(first.time.slice(3)) + 1)};
-          row.notes.push('Azione puntuale: diventa una fascia di un minuto.');
+          row.notes.push(t('Azione puntuale: diventa una fascia di un minuto.'));
         }
         const from = first.time, to = last.time;
-        if (!first.sun && !last.sun && from === to) { row.notes.push('Fascia di durata zero ignorata.'); continue; }
-        if (entities.length !== 1 || (entityId && entities[0] !== entityId)) { row.notes.push('Fascia con più dispositivi: ignorata.'); continue; }
+        if (!first.sun && !last.sun && from === to) { row.notes.push(t('Fascia di durata zero ignorata.')); continue; }
+        if (entities.length !== 1 || (entityId && entities[0] !== entityId)) { row.notes.push(t('Fascia con più dispositivi: ignorata.')); continue; }
         const action = wscStartAction(calls, entities[0], link.extras, row.notes);
-        if (!action) { row.notes.push(`Comando non riconosciuto per ${entities[0]}.`); continue; }
-        if (start && JSON.stringify(start) !== JSON.stringify(action)) { row.notes.push('Fasce con azioni diverse: importata solo la prima azione.'); continue; }
+        if (!action) { row.notes.push(t('Comando non riconosciuto per {entity}.', {entity: entities[0]})); continue; }
+        if (start && JSON.stringify(start) !== JSON.stringify(action)) { row.notes.push(t('Fasce con azioni diverse: importata solo la prima azione.')); continue; }
         start = action; entityId = entities[0];
         const entry = {weekdays: days, start: from, end: to};
         if (first.sun) Object.assign(entry, {start_sun: first.sun, start_offset_minutes: first.offset});
         if (last.sun) Object.assign(entry, {end_sun: last.sun, end_offset_minutes: last.offset});
         slots.push(entry);
       }
-      if (!slots.length) { skip(row.notes.pop() || 'Nessuna fascia importabile.'); continue; }
+      if (!slots.length) { skip(row.notes.pop() || t('Nessuna fascia importabile.')); continue; }
       const {condition, broken} = wscConditionOf(link, (config.timeslots || [])[0], row.notes);
       const draft = {
         name: '', enabled: config.enabled !== false, target_entity_ids: [entityId], time_slots: slots, start_action: start,
@@ -201,9 +202,10 @@ export function convertWscBackup(backup, {existingProfileNames = [], entityName 
         override_policy: link.overrideEnabled ? 'manual_override' : 'cooperative',
         start_notification: null, end_notification: null,
       };
-      if (config.enabled === false) { row.status = 'off'; row.notes.push('Era disattivato nella weekly-schedule-card: resta disattivato.'); }
-      if (broken) { draft.enabled = false; row.status = 'off'; row.notes.push('Importato disattivato: completa la condizione e riattivalo.'); }
-      if (condition) row.notes.push('Quando la condizione è falsa viene eseguita l’azione finale.');
+      if (config.enabled === false) { row.status = 'off'; row.notes.push(t('Era disattivato nella weekly-schedule-card: resta disattivato.')); }
+      if (broken) { draft.enabled = false; row.status = 'off'; row.notes.push(t('Importato disattivato: completa la condizione e riattivalo.')); }
+      const conditionNote = t('Quando la condizione è falsa viene eseguita l’azione finale.');
+      if (condition) row.notes.push(conditionNote);
       const service = wscNotifyAction(link.notifyService), trigger = link.notifyTrigger || 'start';
       if (service && trigger !== 'end' && link.notifyMessage) draft.start_notification = {action: service, title: '', message: link.notifyMessage};
       if (service && trigger !== 'start' && link.notifyMessageEnd) draft.end_notification = {action: service, title: '', message: link.notifyMessageEnd};
@@ -212,7 +214,7 @@ export function convertWscBackup(backup, {existingProfileNames = [], entityName 
       taken.add(title);
       draft.name = title;
       Object.assign(row, {name: title, entity: entityId, slots, start, end: draft.end_action, condition, enabled: draft.enabled});
-      if (row.status === 'ok' && row.notes.some((n) => !n.startsWith('Quando la condizione'))) row.status = 'note';
+      if (row.status === 'ok' && row.notes.some((n) => n !== conditionNote)) row.status = 'note';
       groupFor(entityId).schedules.push(draft);
     }
     const kept = groups.filter((g) => g.entity_ids.length);

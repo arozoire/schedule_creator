@@ -1,5 +1,18 @@
 # AI handoff — stato attuale e piano futuro
 
+## Traduzioni EN/FR/DE/ES — 0.3.16 (2026-09-25)
+
+`frontend/src/i18n.js`: `t(testoItaliano, {param})`, `setLanguage(hass, config)`
+(opzione card `language`, poi `hass.locale.language`/`hass.language`, lingue
+non supportate → inglese), `locale()` per `Intl`. `i18n-strings.js` generato:
+chiave = testo italiano, segnaposto `{nome}` identici (verificato dal test
+`frontend/tests/i18n.test.mjs`, che controlla anche che la card in inglese non
+mostri parole italiane). Ogni `render()` chiama `setLanguage`. Nuovi testi: usare
+sempre `t('…')` e aggiungere le 4 traduzioni. Backend: `status_notifications`
+traduce con `hass.config.language`; `translations/de.json`, `es.json`.
+Anteprima: `preview.html#shot=…&lang=en` (nomi demo tradotti); le schermate del
+README sono in inglese.
+
 ## Alba/tramonto, stato precedente, statistiche — 0.3.15 (2026-09-25)
 
 - **F2** `TimeSlot` ha campi opzionali `start_sun`/`end_sun` (`sunrise`|`sunset`)

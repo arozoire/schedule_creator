@@ -1,6 +1,7 @@
 // Desired-state action editor inspired by the weekly-schedule-card Quick Timer:
 // mode buttons, sliders and option chips. HA executes; this only builds payloads.
 import { uiEscape, check } from './forms.js';
+import { t } from './i18n.js';
 
 const escA = uiEscape;
 export const APPLY_STATE = 'apply_state';
@@ -11,7 +12,7 @@ const every = (states, test) => states.length > 0 && states.every(test);
 const features = (s) => s.attributes?.supported_features || 0;
 export const modeLabels = {off:'Spento',on:'Acceso',auto:'Auto',heat_cool:'Caldo/Freddo',cool:'Freddo',heat:'Caldo',dry:'Deumidifica',fan_only:'Ventola',open:'Apri',close:'Chiudi',stop:'Ferma',position:'Posizione',none:'Nessuna azione',restore:'Stato precedente'};
 const modeIcons = {off:'power',on:'power',auto:'autorenew',heat_cool:'sun-snowflake',cool:'snowflake',heat:'fire',dry:'water-percent',fan_only:'fan',open:'arrow-up',close:'arrow-down',stop:'stop',position:'tune-vertical',none:'minus-circle-outline',restore:'history'};
-export const pretty = (value) => modeLabels[value] || String(value).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+export const pretty = (value) => (modeLabels[value] ? t(modeLabels[value]) : null) || String(value).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 const round = (value, step) => Math.round(value / step) * step;
 // Covers and valves share open/close/stop/position commands and feature bits.
 export const POSITION_ACTIONS = {
@@ -116,13 +117,13 @@ export function rangeField(name, label, value, min, max, step = 1, unit = '') {
 // Big value with − / + like the weekly-schedule-card editor (climate temperature).
 export function stepperField(name, label, value, min, max, step, unit = '') {
   const v = Math.min(max, Math.max(min, Number(value ?? min)));
-  return `<div class="sc-field sc-stepper"><span class="sc-field-label" id="${name}-label">${escA(label)}</span><div class="sc-stepper-row"><button type="button" class="sc-step" data-command="stepValue" data-id="${name}:-1" aria-label="Diminuisci">−</button><span class="sc-stepper-value"><input type="number" name="${name}" aria-labelledby="${name}-label" min="${min}" max="${max}" step="${step}" value="${v}" inputmode="decimal"><span>${escA(unit)}</span></span><button type="button" class="sc-step" data-command="stepValue" data-id="${name}:1" aria-label="Aumenta">+</button></div><div class="sc-range-labels" aria-hidden="true"><span>${min}</span><span>${max}</span></div></div>`;
+  return `<div class="sc-field sc-stepper"><span class="sc-field-label" id="${name}-label">${escA(label)}</span><div class="sc-stepper-row"><button type="button" class="sc-step" data-command="stepValue" data-id="${name}:-1" aria-label="${t('Diminuisci')}">−</button><span class="sc-stepper-value"><input type="number" name="${name}" aria-labelledby="${name}-label" min="${min}" max="${max}" step="${step}" value="${v}" inputmode="decimal"><span>${escA(unit)}</span></span><button type="button" class="sc-step" data-command="stepValue" data-id="${name}:1" aria-label="${t('Aumenta')}">+</button></div><div class="sc-range-labels" aria-hidden="true"><span>${min}</span><span>${max}</span></div></div>`;
 }
 
 export function describeState(state, domain) {
   if (!state) return '';
   const a = state.attributes || {};
-  const parts = [{open: 'Aperta', closed: 'Chiusa', opening: 'In apertura', closing: 'In chiusura'}[state.state] || pretty(state.state)];
+  const parts = [{open: t('Aperta'), closed: t('Chiusa'), opening: t('In apertura'), closing: t('In chiusura')}[state.state] || pretty(state.state)];
   if (!['off', 'unknown', 'unavailable'].includes(state.state)) {
     if (domain === 'climate' && a.temperature != null && state.state !== 'fan_only') parts.push(`${a.temperature}${a.temperature_unit || '°C'}`);
     if (domain === 'climate' && a.fan_mode) parts.push(pretty(a.fan_mode));
@@ -136,7 +137,7 @@ export function describeState(state, domain) {
 export function actionForm(prefix, label, hass, ids, value, optional, draft = {}) {
   const caps = capabilities(hass, ids);
   const {domain} = caps;
-  if (!domain) return `<fieldset><legend>${label}</legend><p>Seleziona prima un’entità.</p></fieldset>`;
+  if (!domain) return `<fieldset><legend>${label}</legend><p>${t('Seleziona prima un’entità.')}</p></fieldset>`;
   const parsed = value === undefined || value === null ? (optional ? {mode: 'none'} : null) : actionToUi(domain, value, caps);
   const base = {...defaults(caps, false), ...(value ? parsed || {} : optional ? {mode: 'none'} : {})};
   const get = (key) => draft[`${prefix}_${key}`] ?? base[key];
@@ -145,32 +146,32 @@ export function actionForm(prefix, label, hass, ids, value, optional, draft = {}
   const mode = modes.includes(get('mode')) ? get('mode') : modes[0];
   const fields = [], more = [];
   const name = (key) => `${prefix}_${key}`;
-  fields.push(choices(name('mode'), domain === 'climate' ? 'Modalità HVAC' : POSITION_ACTIONS[domain] ? 'Comando' : 'Stato', modes, mode, {primary: true, icons: true}));
+  fields.push(choices(name('mode'), domain === 'climate' ? t('Modalità HVAC') : POSITION_ACTIONS[domain] ? t('Comando') : t('Stato'), modes, mode, {primary: true, icons: true}));
   if (domain === 'climate' && !['none', 'off', 'restore'].includes(mode)) {
-    if (mode !== 'fan_only' && caps.temperature) fields.push(stepperField(name('temperature'), 'Temperatura', get('temperature'), caps.min, caps.max, caps.step, caps.unit));
-    if (mode !== 'fan_only' && caps.range) fields.push(stepperField(name('target_temp_low'), 'Minima', get('target_temp_low'), caps.min, caps.max, caps.step, caps.unit), stepperField(name('target_temp_high'), 'Massima', get('target_temp_high'), caps.min, caps.max, caps.step, caps.unit));
-    fields.push(choices(name('fan_mode'), 'Ventola', caps.fan_modes, get('fan_mode')));
+    if (mode !== 'fan_only' && caps.temperature) fields.push(stepperField(name('temperature'), t('Temperatura'), get('temperature'), caps.min, caps.max, caps.step, caps.unit));
+    if (mode !== 'fan_only' && caps.range) fields.push(stepperField(name('target_temp_low'), t('Minima'), get('target_temp_low'), caps.min, caps.max, caps.step, caps.unit), stepperField(name('target_temp_high'), t('Massima'), get('target_temp_high'), caps.min, caps.max, caps.step, caps.unit));
+    fields.push(choices(name('fan_mode'), t('Ventola'), caps.fan_modes, get('fan_mode')));
     more.push(choices(name('preset_mode'), 'Preset', caps.preset_modes, get('preset_mode')));
     more.push(choices(name('swing_mode'), 'Swing', caps.swing_modes, get('swing_mode')));
-    more.push(choices(name('swing_horizontal_mode'), 'Swing orizzontale', caps.swing_horizontal_modes, get('swing_horizontal_mode')));
+    more.push(choices(name('swing_horizontal_mode'), t('Swing orizzontale'), caps.swing_horizontal_modes, get('swing_horizontal_mode')));
   }
   if (domain === 'light' && mode === 'on') {
-    if (caps.dimmable) fields.push(rangeField(name('brightness_pct'), 'Luminosità', get('brightness_pct') ?? 100, 1, 100, 1, '%'));
-    const colors = [['', 'Non cambiare colore'], ...(caps.rgb ? [['rgb', 'Colore']] : []), ...(caps.kelvin ? [['kelvin', 'Temperatura colore']] : [])];
+    if (caps.dimmable) fields.push(rangeField(name('brightness_pct'), t('Luminosità'), get('brightness_pct') ?? 100, 1, 100, 1, '%'));
+    const colors = [['', t('Non cambiare colore')], ...(caps.rgb ? [['rgb', t('Colore')]] : []), ...(caps.kelvin ? [['kelvin', t('Temperatura colore')]] : [])];
     const colorMode = get('color_mode') || '';
-    if (colors.length > 1) fields.push(`<label>Colore<select name="${name('color_mode')}">${colors.map(([v, t]) => `<option value="${v}" ${v === colorMode ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`);
-    if (colorMode === 'rgb') fields.push(`<label>Colore<input name="${name('color')}" type="color" value="${escA(draft[name('color')] ?? (base.rgb_color ? '#' + base.rgb_color.map((v) => v.toString(16).padStart(2, '0')).join('') : '#ffffff'))}"></label>`);
-    if (colorMode === 'kelvin') fields.push(rangeField(name('color_temp_kelvin'), 'Temperatura colore', get('color_temp_kelvin') ?? 3000, caps.minK, caps.maxK, 50, 'K'));
+    if (colors.length > 1) fields.push(`<label>${t('Colore')}<select name="${name('color_mode')}">${colors.map(([v, text]) => `<option value="${v}" ${v === colorMode ? 'selected' : ''}>${text}</option>`).join('')}</select></label>`);
+    if (colorMode === 'rgb') fields.push(`<label>${t('Colore')}<input name="${name('color')}" type="color" value="${escA(draft[name('color')] ?? (base.rgb_color ? '#' + base.rgb_color.map((v) => v.toString(16).padStart(2, '0')).join('') : '#ffffff'))}"></label>`);
+    if (colorMode === 'kelvin') fields.push(rangeField(name('color_temp_kelvin'), t('Temperatura colore'), get('color_temp_kelvin') ?? 3000, caps.minK, caps.maxK, 50, 'K'));
   }
   if (domain === 'fan' && mode === 'on') {
-    if (caps.speed) fields.push(rangeField(name('percentage'), 'Velocità', get('percentage') ?? 50, 0, 100, 1, '%'));
+    if (caps.speed) fields.push(rangeField(name('percentage'), t('Velocità'), get('percentage') ?? 50, 0, 100, 1, '%'));
     fields.push(choices(name('preset_mode'), 'Preset', caps.preset_modes, get('preset_mode')));
   }
-  if (POSITION_ACTIONS[domain] && mode === 'position') fields.push(rangeField(name('position'), 'Posizione', get('position') ?? 50, 0, 100, 1, '%'));
+  if (POSITION_ACTIONS[domain] && mode === 'position') fields.push(rangeField(name('position'), t('Posizione'), get('position') ?? 50, 0, 100, 1, '%'));
   const extra = more.filter(Boolean);
-  const current = caps.states.length === 1 ? `<p class="sc-current">Stato attuale <strong>${escA(describeState(caps.states[0], domain))}</strong></p>` : '';
+  const current = caps.states.length === 1 ? `<p class="sc-current">${t('Stato attuale')} <strong>${escA(describeState(caps.states[0], domain))}</strong></p>` : '';
   const json = draft[name('json')] ?? JSON.stringify(value ? {domain: value.domain, action: value.action, data: value.data} : {domain, action: domain === 'climate' ? APPLY_STATE : POSITION_ACTIONS[domain]?.open || 'turn_on', data: domain === 'climate' ? {state: mode} : {}}, null, 2);
-  return `<fieldset class="sc-action" data-action="${prefix}" data-domain="${escA(domain)}"><legend>${label}</legend>${current}${pro ? '<p>Azione personalizzata conservata in modalità Pro.</p>' : ''}<div class="sc-action-fields" ${pro ? 'hidden' : ''}>${fields.join('')}${extra.length ? `<details class="sc-more" data-section="${prefix}-more"><summary>Altre opzioni</summary>${extra.join('')}</details>` : ''}</div><details data-section="${prefix}-pro"><summary>Pro · azione personalizzata</summary>${check(name('pro'), 'Usa JSON al posto dei controlli', pro)}<label>Azione JSON<textarea name="${name('json')}" rows="4">${escA(json)}</textarea></label></details></fieldset>`;
+  return `<fieldset class="sc-action" data-action="${prefix}" data-domain="${escA(domain)}"><legend>${label}</legend>${current}${pro ? `<p>${t('Azione personalizzata conservata in modalità Pro.')}</p>` : ''}<div class="sc-action-fields" ${pro ? 'hidden' : ''}>${fields.join('')}${extra.length ? `<details class="sc-more" data-section="${prefix}-more"><summary>${t('Altre opzioni')}</summary>${extra.join('')}</details>` : ''}</div><details data-section="${prefix}-pro"><summary>${t('Pro · azione personalizzata')}</summary>${check(name('pro'), t('Usa JSON al posto dei controlli'), pro)}<label>${t('Azione JSON')}<textarea name="${name('json')}" rows="4">${escA(json)}</textarea></label></details></fieldset>`;
 }
 
 export function readAction(form, prefix, domain) {
@@ -180,15 +181,15 @@ export function readAction(form, prefix, domain) {
   const num = (key) => (val(key) === undefined || val(key) === '' ? undefined : Number(val(key)));
   if (el('pro')?.checked) {
     const a = JSON.parse(val('json'));
-    if (!a || a.domain !== domain || !a.action || !a.data || typeof a.data !== 'object' || Array.isArray(a.data)) throw new Error('Azione Pro non valida per le entità selezionate.');
-    if (['entity_id', 'device_id', 'area_id'].some((k) => k in a.data)) throw new Error('Il target è già definito dalle entità selezionate.');
-    if (a.action === APPLY_STATE && typeof a.data.state !== 'string') throw new Error('apply_state richiede il campo "state".');
+    if (!a || a.domain !== domain || !a.action || !a.data || typeof a.data !== 'object' || Array.isArray(a.data)) throw new Error(t('Azione Pro non valida per le entità selezionate.'));
+    if (['entity_id', 'device_id', 'area_id'].some((k) => k in a.data)) throw new Error(t('Il target è già definito dalle entità selezionate.'));
+    if (a.action === APPLY_STATE && typeof a.data.state !== 'string') throw new Error(t('apply_state richiede il campo "state".'));
     return {domain: a.domain, action: a.action, data: a.data};
   }
   const mode = val('mode');
   if (mode === 'none') return null;
   if (mode === 'restore') return {domain, action: RESTORE_PREVIOUS, data: {}};
-  if (!mode) throw new Error('Scegli cosa deve fare il dispositivo.');
+  if (!mode) throw new Error(t('Scegli cosa deve fare il dispositivo.'));
   const data = {};
   const put = (key, value) => { if (value !== undefined && value !== '') data[key] = value; };
   let action;
@@ -210,25 +211,25 @@ export function readAction(form, prefix, domain) {
     }
     if (mode === 'on' && domain === 'fan') { put('percentage', num('percentage')); put('preset_mode', val('preset_mode')); }
   }
-  if (!action) throw new Error('Comando non disponibile per questo dispositivo.');
-  if (/^set_(cover|valve)_position$/.test(action) && data.position === undefined) throw new Error('Indica la posizione richiesta.');
-  if (Object.values(data).some((v) => typeof v === 'number' && !Number.isFinite(v))) throw new Error('Inserisci un valore numerico valido.');
+  if (!action) throw new Error(t('Comando non disponibile per questo dispositivo.'));
+  if (/^set_(cover|valve)_position$/.test(action) && data.position === undefined) throw new Error(t('Indica la posizione richiesta.'));
+  if (Object.values(data).some((v) => typeof v === 'number' && !Number.isFinite(v))) throw new Error(t('Inserisci un valore numerico valido.'));
   return {domain, action, data};
 }
 
 // Short human text used for suggested names and notification messages.
 export function describeAction(action) {
   if (!action) return '';
-  if (action.action === RESTORE_PREVIOUS) return 'Stato precedente';
+  if (action.action === RESTORE_PREVIOUS) return t('Stato precedente');
   const d = action.data || {};
   if (action.action === APPLY_STATE) {
     const parts = [pretty(d.state)];
     if (d.temperature != null) parts.push(`${d.temperature}°`);
     if (d.target_temp_low != null && d.target_temp_high != null) parts.push(`${d.target_temp_low}–${d.target_temp_high}°`);
-    if (d.fan_mode) parts.push(`ventola ${pretty(d.fan_mode).toLowerCase()}`);
+    if (d.fan_mode) parts.push(t('ventola {mode}', {mode: pretty(d.fan_mode).toLowerCase()}));
     return parts.join(' ');
   }
-  const base = {turn_on: 'Accendi', turn_off: 'Spegni', open_cover: 'Apri', close_cover: 'Chiudi', stop_cover: 'Ferma', set_cover_position: `Posizione ${d.position}%`, open_valve: 'Apri', close_valve: 'Chiudi', stop_valve: 'Ferma', set_valve_position: `Posizione ${d.position}%`, set_hvac_mode: pretty(d.hvac_mode), set_temperature: `${d.temperature ?? ''}°`, set_percentage: `Velocità ${d.percentage}%`}[action.action] || pretty(action.action);
+  const base = {turn_on: t('Accendi'), turn_off: t('Spegni'), open_cover: t('Apri'), close_cover: t('Chiudi'), stop_cover: t('Ferma'), set_cover_position: t('Posizione {value}%', {value: d.position}), open_valve: t('Apri'), close_valve: t('Chiudi'), stop_valve: t('Ferma'), set_valve_position: t('Posizione {value}%', {value: d.position}), set_hvac_mode: pretty(d.hvac_mode), set_temperature: `${d.temperature ?? ''}°`, set_percentage: t('Velocità {value}%', {value: d.percentage})}[action.action] || pretty(action.action);
   const extra = d.brightness_pct != null ? ` ${d.brightness_pct}%` : d.percentage != null && action.action === 'turn_on' ? ` ${d.percentage}%` : '';
   return base + extra;
 }

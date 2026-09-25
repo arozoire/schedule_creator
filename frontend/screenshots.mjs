@@ -25,7 +25,7 @@ async function capture(name, width, height) {
   const send = (method, params = {}) => new Promise((resolve) => { pending.set(++id, resolve); ws.send(JSON.stringify({id, method, params})); });
   await send('Emulation.setDeviceMetricsOverride', {width, height, deviceScaleFactor: 2, mobile: width < 500});
   await send('Page.enable');
-  await send('Page.navigate', {url: `http://localhost:8765/frontend/preview.html#shot=${name}`});
+  await send('Page.navigate', {url: `http://localhost:8765/frontend/preview.html#shot=${name}&lang=en`});
   for (let i = 0; i < 50; i++) {
     const ready = await send('Runtime.evaluate', {expression: 'document.body?.dataset.ready === "1"', returnByValue: true});
     if (ready.result.value) break;
