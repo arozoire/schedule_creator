@@ -265,7 +265,7 @@ async def test_get_state_populated(hass, hass_ws_client, hass_storage):
                 for lease in reconciled_runtime.leases
             ),
             "pending_operations": len(reconciled_runtime.pending_operations),
-            "quick_timers": 1,
+            "quick_timers": len(reconciled_runtime.quick_timers),
             "recovery_instructions": len(entry.runtime_data.recovery_plan),
         },
         "quick_timers": [
