@@ -8,7 +8,7 @@ import { isWscBackup, convertWscBackup, wscImportPayload } from './wsc-import.js
 import { t, setLanguage, locale } from './i18n.js';
 
 const STYLE = '__SC_CSS__';
-const CARD_VERSION = '0.4.2';
+const CARD_VERSION = '0.4.3';
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
@@ -785,20 +785,6 @@ class ScheduleCreatorCard extends HTMLElement {
     }
   }
 }
-class ScheduleCreatorCardEditor extends HTMLElement {
-  setConfig(config) { this.config = config; if (this.querySelector('input')?.value !== (config.title || '')) this.render(); }
-  set hass(hass) { this._hass = hass; }
-  render() {
-    if (!this.config) return;
-    setLanguage(this._hass, this.config);
-    this.innerHTML = `<div style="padding:12px"><label>${t('Titolo della card')} <input type="text" value="${esc(this.config.title || '')}"></label></div>`;
-    this.querySelector('input').addEventListener('input', (event) => {
-      this.config = { ...this.config, title: event.target.value };
-      this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this.config }, bubbles: true, composed: true }));
-    });
-  }
-}
 if (!customElements.get('schedule-creator-card')) customElements.define('schedule-creator-card', ScheduleCreatorCard);
-if (!customElements.get('schedule-creator-card-editor')) customElements.define('schedule-creator-card-editor', ScheduleCreatorCardEditor);
 window.customCards = window.customCards || [];
 if (!window.customCards.some((card) => card.type === 'schedule-creator-card')) window.customCards.push({ type: 'schedule-creator-card', name: 'Schedule Creator', description: 'Schedule Creator profiles, schedules and timers' });

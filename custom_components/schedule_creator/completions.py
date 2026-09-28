@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid5
 
 from homeassistant.exceptions import HomeAssistantError
@@ -177,8 +177,7 @@ async def async_prepare_schedule_end_actions(
             if (occurrence.id, entity_id) in successful_targets
             and _schedule_end_id(occurrence.id, entity_id) not in existing_ids
             and (
-                occurrence.frozen_schedule.end_action.action
-                != RESTORE_PREVIOUS_ACTION
+                occurrence.frozen_schedule.end_action.action != RESTORE_PREVIOUS_ACTION
                 or (occurrence.id, entity_id) in snapshots
             )
         )
@@ -443,6 +442,42 @@ def _due_restores(
     )
 
 
+_VALVE_SET_POSITION = 4
+
+
+def restore_request(
+    entity_id: str, snapshot: Snapshot
+) -> tuple[str, str, dict[str, Any]] | None:
+    """Service call that puts an entity back as captured in its snapshot."""
+
+    if entity_id.split(".", 1)[0] != "valve":
+        return (
+            "scene",
+            "apply",
+            {"entities": {entity_id: {**snapshot.attributes, "state": snapshot.state}}},
+        )
+    # HA has no reproduce_state for valves: scene.apply would leave them as
+    # they are, so the valve services are called directly.
+    position = snapshot.attributes.get("current_position")
+    features = snapshot.attributes.get("supported_features")
+    if (
+        isinstance(position, int | float)
+        and not isinstance(position, bool)
+        and isinstance(features, int)
+        and features & _VALVE_SET_POSITION
+    ):
+        return (
+            "valve",
+            "set_valve_position",
+            {"entity_id": entity_id, "position": round(position)},
+        )
+    if snapshot.state in {"open", "opening"}:
+        return "valve", "open_valve", {"entity_id": entity_id}
+    if snapshot.state in {"closed", "closing"}:
+        return "valve", "close_valve", {"entity_id": entity_id}
+    return None
+
+
 def _restore_snapshot(
     runtime: RuntimeStoreData, operation: PendingOperation
 ) -> Snapshot | None:
@@ -522,20 +557,19 @@ async def async_execute_restores(
                 operation.id, now=wall_clock, error_code="invalid_snapshot"
             )
             continue
+        request = restore_request(operation.entity_id, snapshot)
+        if request is None:
+            await journal.async_fail_final(
+                operation.id, now=wall_clock, error_code="invalid_snapshot"
+            )
+            continue
         sent = await journal.async_mark_sent(operation.id, wall_clock)
         try:
             await async_call_service(
                 hass,
-                "scene",
-                "apply",
-                service_data={
-                    "entities": {
-                        operation.entity_id: {
-                            **snapshot.attributes,
-                            "state": snapshot.state,
-                        }
-                    }
-                },
+                request[0],
+                request[1],
+                service_data=request[2],
                 blocking=True,
             )
         except (HomeAssistantError, TimeoutError):

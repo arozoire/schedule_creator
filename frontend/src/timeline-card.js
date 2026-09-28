@@ -68,6 +68,7 @@ export class ScheduleCreatorTimelineCard extends HTMLElement {
     });
   }
   static getStubConfig() { return {}; }
+  static getConfigElement() { return document.createElement('schedule-creator-timeline-card-editor'); }
   getCardSize() { return 6; }
   setConfig(config) { this.config = config || {}; this.render(); }
   set hass(hass) { const previous = this._hass; this._hass = hass; if (this.isConnected) this.adapter.connect(hass); if (hassChanged(previous, hass, watchedEntities(this.adapter.state))) this.render(); }

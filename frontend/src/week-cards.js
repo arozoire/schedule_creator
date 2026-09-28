@@ -118,6 +118,7 @@ class ScheduleCreatorWeekCard extends HTMLElement {
     this.shadowRoot.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.closest?.('[data-block]')) { e.preventDefault(); pick(e); } });
   }
   static getStubConfig() { return {}; }
+  static getConfigElement() { return document.createElement('schedule-creator-week-card-editor'); }
   getCardSize() { return 8; }
   setConfig(config) { this.config = config || {}; this.render(); }
   set hass(hass) { const previous = this._hass; this._hass = hass; if (this.isConnected) this.adapter.connect(hass); if (hassChanged(previous, hass, watchedEntities(this.adapter.state))) this.render(); }
