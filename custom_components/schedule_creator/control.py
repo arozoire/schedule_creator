@@ -7,6 +7,8 @@ commits; asking for the state something already has is not an error.
 
 from __future__ import annotations
 
+from dataclasses import replace
+from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
@@ -16,25 +18,36 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN
-from .models import APPLY_STATE_ACTION, ModelValidationError, QuickTimerState
+from .models import (
+    APPLY_STATE_ACTION,
+    ConditionBranch,
+    LeaseState,
+    ModelValidationError,
+    OccurrenceState,
+    QuickTimerState,
+)
 from .mutation_api import MutationClientError, _loaded_runtime, async_commit_config
 from .profile_api import profile_activation
 from .quick_timer_api import (
+    RuntimeApiMutation,
     async_commit_runtime,
     quick_timer_cancellation,
     quick_timer_creation,
 )
 from .schedule_api import schedule_enabling
+from .storage import RuntimeStoreData
 
 SERVICE_SET_PROFILE = "set_profile"
 SERVICE_SET_SCHEDULE = "set_schedule"
 SERVICE_START_TIMER = "start_timer"
 SERVICE_CANCEL_TIMER = "cancel_timer"
+SERVICE_RESUME = "resume"
 SERVICES = (
     SERVICE_SET_PROFILE,
     SERVICE_SET_SCHEDULE,
     SERVICE_START_TIMER,
     SERVICE_CANCEL_TIMER,
+    SERVICE_RESUME,
 )
 MAX_TIMER_SECONDS = 604800
 
@@ -59,6 +72,7 @@ _START_TIMER_SCHEMA = vol.Schema(
     }
 )
 _CANCEL_TIMER_SCHEMA = vol.Schema({vol.Required("entity_id"): cv.entity_id})
+_RESUME_SCHEMA = vol.Schema({vol.Required("entity_id"): cv.entity_ids})
 
 
 def find_record(records: Any, reference: str, kind: str) -> Any:
@@ -168,6 +182,71 @@ async def _handle_cancel_timer(call: ServiceCall) -> None:
             raise HomeAssistantError(err.client_message) from err
 
 
+def resumable_lease_ids(
+    runtime: RuntimeStoreData, entity_ids: set[str], now: datetime
+) -> set[str]:
+    """Leases of running slots, not blocked by their condition, on the entities."""
+
+    running = {
+        item.id
+        for item in runtime.occurrences
+        if item.state is OccurrenceState.ACTIVE
+        and item.start_utc <= now < item.end_utc
+        and (
+            item.frozen_schedule.condition is None
+            or item.condition_branch is ConditionBranch.TRUE
+        )
+    }
+    return {
+        lease.id
+        for lease in runtime.leases
+        if lease.entity_id in entity_ids
+        and lease.state is LeaseState.ACTIVE
+        and lease.occurrence_id in running
+    }
+
+
+def lease_renewal(entity_ids: set[str]) -> RuntimeApiMutation:
+    """Send the start action of the running slot again to these entities.
+
+    A new lease generation is a new target action for the same slot, so the
+    command goes through the usual journal, retries and failure reporting.
+    """
+
+    def mutation(current: RuntimeStoreData, now: datetime) -> RuntimeStoreData:
+        wanted = resumable_lease_ids(current, entity_ids, now)
+        if not wanted:
+            raise ValueError("nothing to resume")
+        return replace(
+            current,
+            revision=current.revision + 1,
+            leases=tuple(
+                replace(lease, generation=lease.generation + 1)
+                if lease.id in wanted
+                else lease
+                for lease in current.leases
+            ),
+            updated_at=max(current.updated_at, now),
+        )
+
+    return mutation
+
+
+async def _handle_resume(call: ServiceCall) -> None:
+    loaded = _loaded_runtime(call.hass)
+    if loaded is None:
+        raise HomeAssistantError("Schedule Creator is not loaded.")
+    try:
+        await async_commit_runtime(
+            call.hass, lease_renewal(set(call.data["entity_id"]))
+        )
+    except MutationClientError as err:
+        raise HomeAssistantError(err.client_message) from err
+    except ValueError:
+        # No slot running on these entities: nothing to resume.
+        return
+
+
 def async_register_services(hass: HomeAssistant) -> None:
     """Register the automation services while the entry is loaded."""
 
@@ -183,6 +262,7 @@ def async_register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN, SERVICE_CANCEL_TIMER, _handle_cancel_timer, _CANCEL_TIMER_SCHEMA
     )
+    hass.services.async_register(DOMAIN, SERVICE_RESUME, _handle_resume, _RESUME_SCHEMA)
 
 
 def async_remove_services(hass: HomeAssistant) -> None:

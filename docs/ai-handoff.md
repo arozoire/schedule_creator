@@ -11,6 +11,15 @@
   tutte le card; sostituisce i vecchi editor della card principale e del Quick
   Timer (stessi tag). Timeline, serpentina e anello ora hanno
   `getConfigElement`. Un campo vuoto toglie l'opzione dalla config.
+- `plan.py` (puro) + `PlanSensor`/`_PlanManager` in `sensor.py`: un sensore
+  per entità target, entity_id fisso `sensor.schedule_creator_plan_<dom>_<obj>`,
+  attributi solo stringhe (formato nel README "ESPHome displays"). Proiezione
+  `project_weeks` (15 giorni da lunedì) in cache per revisione config e
+  settimana; aggiornato su eventi config/runtime, 00:00:05 e stato del target.
+  Attributi esclusi dal recorder.
+- Servizio `resume` (`control.py`): incrementa `generation` del lease attivo
+  della fascia (condizione vera) → nuova operazione TARGET_ACTION col solito
+  journal. Nessuna fascia → nessun effetto.
 - Il proprietario ha deciso: nessuna gestione delle modifiche manuali durante
   una fascia (restano fino al prossimo comando dello schedule).
 

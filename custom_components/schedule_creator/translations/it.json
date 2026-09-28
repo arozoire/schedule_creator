@@ -70,6 +70,16 @@
           "description": "Dispositivo di cui annullare il timer."
         }
       }
+    },
+    "resume": {
+      "name": "Riprendi lo schedule",
+      "description": "Rimanda il comando della fascia in corso alle entità, per esempio dopo una modifica manuale. Senza fascia in corso non fa nulla.",
+      "fields": {
+        "entity_id": {
+          "name": "Entità",
+          "description": "Entità su cui riapplicare la fascia in corso."
+        }
+      }
     }
   }
 }

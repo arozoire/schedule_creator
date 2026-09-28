@@ -1,10 +1,12 @@
 """Test services and entities that let automations control Schedule Creator."""
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from homeassistant import config_entries
 from homeassistant.const import EntityCategory
+from homeassistant.core import callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 
@@ -174,3 +176,101 @@ async def test_entities_stay_out_of_automatic_dashboards(hass, hass_ws_client):
     sensor = registry.async_get("sensor.schedule_creator_next_slot")
     assert switch.entity_category is EntityCategory.CONFIG
     assert sensor.entity_category is EntityCategory.DIAGNOSTIC
+
+
+PLAN = "sensor.schedule_creator_plan_switch_control_test"
+
+
+async def test_plan_sensor_follows_configuration(hass, hass_ws_client, freezer):
+    """One plan per scheduled entity, created and removed with the schedules."""
+    # Wednesday 30 September 2026, 12:00 UTC.
+    freezer.move_to(datetime(2026, 9, 30, 12, tzinfo=UTC))
+    await hass.config.async_update(time_zone="UTC")
+    entry, client, home, _away, schedule = await _populate(hass, hass_ws_client)
+    registry = er.async_get(hass)
+    assert registry.async_get(PLAN).entity_category is EntityCategory.DIAGNOSTIC
+    assert hass.states.get(PLAN).state == "none"
+
+    await hass.services.async_call(
+        DOMAIN, "set_profile", {"profile": home["id"]}, blocking=True
+    )
+    await hass.async_block_till_done()
+    state = hass.states.get(PLAN)
+    assert state.state == "idle"
+    assert state.attributes["week"] == "420-480@turn_on#0//////"
+    assert state.attributes["week_start"] == "2026-09-28"
+    assert state.attributes["schedules"] == "Morning"
+    assert state.attributes["next_start"] == "2026-10-05T07:00:00+00:00"
+
+    revision = entry.runtime_data.storage.config.data.revision
+    await _request(
+        client,
+        {
+            "type": "schedule_creator/schedule/delete",
+            "expected_revision": revision,
+            "schedule_id": schedule["id"],
+        },
+    )
+    await hass.async_block_till_done()
+    assert registry.async_get(PLAN) is None
+
+
+async def test_resume_sends_the_running_slot_again(hass, hass_ws_client, freezer):
+    """Resume repeats the start action of a running slot; otherwise nothing."""
+    now = datetime.now(UTC).replace(second=0, microsecond=0) + timedelta(minutes=1)
+    freezer.move_to(now)
+    await hass.config.async_update(time_zone="Europe/Rome")
+    start = (now - timedelta(minutes=1)).astimezone(ZoneInfo("Europe/Rome"))
+    end = (now + timedelta(minutes=30)).astimezone(ZoneInfo("Europe/Rome"))
+    calls = []
+
+    @callback
+    def switch_service(call):
+        calls.append(call.service)
+        hass.states.async_set(
+            "switch.control_test", "on" if call.service == "turn_on" else "off"
+        )
+
+    entry, client, home, _away, _schedule = await _populate(hass, hass_ws_client)
+    hass.services.async_register("switch", "turn_on", switch_service)
+    hass.services.async_register("switch", "turn_off", switch_service)
+
+    # Nothing is running yet: no command and no error.
+    await hass.services.async_call(
+        DOMAIN, "resume", {"entity_id": "switch.control_test"}, blocking=True
+    )
+    assert calls == []
+
+    config = entry.runtime_data.storage.config.data
+    await _request(
+        client,
+        {
+            "type": "schedule_creator/schedule/update",
+            "expected_revision": config.revision,
+            "schedule_id": config.schedules[0].id,
+            "time_slots": [
+                {
+                    "weekdays": [start.weekday()],
+                    "start": start.strftime("%H:%M"),
+                    "end": end.strftime("%H:%M"),
+                }
+            ],
+        },
+    )
+    await hass.services.async_call(
+        DOMAIN, "set_profile", {"profile": home["id"]}, blocking=True
+    )
+    await hass.async_block_till_done()
+    assert calls == ["turn_on"]
+    assert hass.states.get(PLAN).state == "running"
+
+    # Someone switches it off by hand: the engine leaves it, resume restores.
+    hass.states.async_set("switch.control_test", "off")
+    await hass.async_block_till_done()
+    assert hass.states.get(PLAN).attributes["manual"] == "on"
+    await hass.services.async_call(
+        DOMAIN, "resume", {"entity_id": ["switch.control_test"]}, blocking=True
+    )
+    await hass.async_block_till_done()
+    assert calls == ["turn_on", "turn_on"]
+    assert hass.states.get(PLAN).attributes["manual"] == "off"
