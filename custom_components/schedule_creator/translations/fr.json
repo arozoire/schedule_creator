@@ -70,6 +70,16 @@
           "description": "Appareil dont le minuteur est annulé."
         }
       }
+    },
+    "resume": {
+      "name": "Reprendre le programme",
+      "description": "Renvoie la commande de la plage en cours aux entités, par exemple après une modification manuelle. Sans plage en cours, rien ne se passe.",
+      "fields": {
+        "entity_id": {
+          "name": "Entités",
+          "description": "Entités qui reçoivent de nouveau la plage en cours."
+        }
+      }
     }
   }
 }

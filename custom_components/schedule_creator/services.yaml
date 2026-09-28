@@ -49,3 +49,11 @@ cancel_timer:
       required: true
       selector:
         entity:
+
+resume:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          multiple: true

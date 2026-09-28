@@ -70,6 +70,16 @@
           "description": "Gerät, dessen Timer abgebrochen wird."
         }
       }
+    },
+    "resume": {
+      "name": "Zeitplan fortsetzen",
+      "description": "Sendet den Befehl des laufenden Zeitfensters erneut an die Entitäten, etwa nach einer manuellen Änderung. Ohne laufendes Zeitfenster passiert nichts.",
+      "fields": {
+        "entity_id": {
+          "name": "Entitäten",
+          "description": "Entitäten, die das laufende Zeitfenster erneut erhalten."
+        }
+      }
     }
   }
 }

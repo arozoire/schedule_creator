@@ -4,6 +4,13 @@ After each update restart Home Assistant and reload the dashboard.
 
 ## 0.4.3
 
+- **ESPHome displays**: a plan sensor per scheduled device
+  (`sensor.schedule_creator_plan_<domain>_<object_id>`) with today, the week,
+  the running and next slot and manual changes, all as plain text a display
+  can read. See “ESPHome displays” in the README.
+- **Resume** service: `schedule_creator.resume` sends the running slot again,
+  for example after a manual change.
+
 - **Valves**: at the end of a Quick Timer, or with the “previous state” end
   action, valves now go back to how they were. Home Assistant cannot restore a
   valve through a scene, so the valve services are called directly

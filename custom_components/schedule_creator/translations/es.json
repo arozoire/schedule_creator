@@ -70,6 +70,16 @@
           "description": "Dispositivo cuyo temporizador se cancela."
         }
       }
+    },
+    "resume": {
+      "name": "Reanudar programación",
+      "description": "Vuelve a enviar la orden de la franja en curso a las entidades, por ejemplo tras un cambio manual. Sin franja en curso no hace nada.",
+      "fields": {
+        "entity_id": {
+          "name": "Entidades",
+          "description": "Entidades que reciben de nuevo la franja en curso."
+        }
+      }
     }
   }
 }

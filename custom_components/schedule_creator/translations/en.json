@@ -70,6 +70,16 @@
           "description": "Device whose timer is cancelled."
         }
       }
+    },
+    "resume": {
+      "name": "Resume schedule",
+      "description": "Sends the command of the running slot to the entities again, for example after a manual change. Does nothing when no slot is running.",
+      "fields": {
+        "entity_id": {
+          "name": "Entities",
+          "description": "Entities that get the running slot again."
+        }
+      }
     }
   }
 }

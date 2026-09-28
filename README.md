@@ -151,6 +151,7 @@ Profile Holiday”):
 | `switch.schedule_creator_profile_<name>` | Profile active. Turning an exclusive profile on switches the other exclusive ones off. |
 | `switch.schedule_creator_schedule_<name>` | Schedule enabled. Attributes: profile, devices, `running`. |
 | `sensor.schedule_creator_next_slot` | Start of the next slot of an active profile, with schedule and devices. |
+| `sensor.schedule_creator_plan_<domain>_<object_id>` | Week plan of one scheduled device, for displays: see [ESPHome displays](#esphome-displays). |
 
 Services (profiles and schedules by name or ID):
 
@@ -177,7 +178,64 @@ data:
 action: schedule_creator.cancel_timer
 data:
   entity_id: climate.bedroom
+
+# Put back the running slot after a manual change
+action: schedule_creator.resume
+data:
+  entity_id: climate.bedroom
 ```
+
+A manual change during a slot is left alone until the schedule's next command;
+`resume` sends the running slot again at once.
+
+## ESPHome displays
+
+Every device used by a schedule gets a plan sensor with a stable entity ID,
+`sensor.schedule_creator_plan_<domain>_<object_id>` (for example
+`sensor.schedule_creator_plan_climate_bioclimatica`). It only covers enabled
+schedules of **active** profiles, with dates, exceptions and sunrise/sunset
+already resolved. The state is `running`, `idle` or `none`.
+
+All attributes are plain strings that a microcontroller can split. A slot is
+
+```text
+<start>-<end>@<state>[:<number>]#<k>      e.g. 390-510@heat:21#0
+```
+
+with local minutes from midnight (0–1440), the state it applies (`heat`, `off`,
+`on`, `open`…, or the action name such as `turn_on`; `set` for a temperature
+without mode), the main value (temperature, position, brightness % or fan %)
+and the index of its schedule in `schedules`. A slot over midnight appears on
+both days.
+
+| Attribute | Content |
+| --- | --- |
+| `today` | Today's slots separated by `\|` |
+| `week` | Monday to Sunday of the current week separated by `/` (days may be empty) |
+| `week_start` | Date of that Monday |
+| `schedules`, `profile` | Schedule names (`\|`) and active profiles (` + `) |
+| `current`, `current_blocked` | Running slot, and `on` when its condition blocks it |
+| `after` | What happens at its end: `state[:number]`, `restore` or `none` |
+| `next_start`, `next` | Start (ISO) and token of the next slot |
+| `manual` | `on` when the device no longer shows what the running slot applied |
+| `truncated` | `on` when a day had more than 12 slots (the first 12 are kept) |
+| `updated` | Time of the last computation |
+
+```yaml
+text_sensor:
+  - platform: homeassistant
+    id: bio_today
+    entity_id: sensor.schedule_creator_plan_climate_bioclimatica
+    attribute: today
+  - platform: homeassistant
+    id: bio_week
+    entity_id: sensor.schedule_creator_plan_climate_bioclimatica
+    attribute: week
+# button: homeassistant.action → schedule_creator.resume
+#         data: {entity_id: climate.bioclimatica}
+```
+
+Italian: [docs/display-esphome.md](docs/display-esphome.md).
 
 ## How it works
 
