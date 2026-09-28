@@ -178,27 +178,6 @@ export class ScheduleCreatorQuickTimerCard extends HTMLElement {
   }
 }
 
-export class ScheduleCreatorQuickTimerCardEditor extends HTMLElement {
-  setConfig(config) { this.config = config; if (!this.rendered) this.render(); }
-  set hass(hass) { this._hass = hass; if (!this.rendered) this.render(); }
-  render() {
-    if (!this.config || !this._hass) return;
-    this.rendered = true;
-    setLanguage(this._hass, this.config);
-    const ids = targetEntities(this._hass).sort();
-    this.innerHTML = `<div style="display:grid;gap:12px;padding:12px"><label>${t('Titolo')} <input name="title" value="${qtEsc(this.config.title || '')}" placeholder="Timer"></label><label>${t('Entità')} <select name="entity"><option value="">${t('Scegli nella card')}</option>${ids.map((id) => `<option value="${qtEsc(id)}" ${id === this.config.entity ? 'selected' : ''}>${qtEsc(this._hass.states[id]?.attributes?.friendly_name || id)}</option>`).join('')}</select></label><label>${t('Durate rapide (minuti, separate da virgola)')} <input name="presets" value="${qtEsc((this.config.presets || []).join(', '))}" placeholder="5, 10, 15, 30, 45, 60"></label></div>`;
-    this.querySelectorAll('input,select').forEach((node) => node.addEventListener('change', () => {
-      const config = {...this.config};
-      const value = node.value.trim();
-      if (node.name === 'presets') { const list = value.split(',').map((x) => Number(x.trim())).filter((x) => x >= 1); if (list.length) config.presets = list; else delete config.presets; }
-      else if (value) config[node.name] = value; else delete config[node.name];
-      this.config = config;
-      this.dispatchEvent(new CustomEvent('config-changed', {detail: {config}, bubbles: true, composed: true}));
-    }));
-  }
-}
-
 if (!customElements.get('schedule-creator-quick-timer-card')) customElements.define('schedule-creator-quick-timer-card', ScheduleCreatorQuickTimerCard);
-if (!customElements.get('schedule-creator-quick-timer-card-editor')) customElements.define('schedule-creator-quick-timer-card-editor', ScheduleCreatorQuickTimerCardEditor);
 window.customCards = window.customCards || [];
 if (!window.customCards.some((card) => card.type === 'schedule-creator-quick-timer-card')) window.customCards.push({type: 'schedule-creator-quick-timer-card', name: 'Schedule Creator · Quick Timer', description: 'Quick timer for one device, run by the Schedule Creator backend'});

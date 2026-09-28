@@ -95,6 +95,9 @@ title: Schedule Creator   # optional
 Create profiles, groups and schedules, see what is running now and manage
 backups. Editing requires an administrator; other users get a read-only view.
 
+Every card has a visual editor in the dashboard editor; the YAML below is
+only for reference.
+
 ### Timeline card
 
 ```yaml

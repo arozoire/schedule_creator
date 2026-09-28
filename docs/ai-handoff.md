@@ -1,5 +1,19 @@
 # AI handoff — stato attuale e piano futuro
 
+## Valvole ed editor delle card — 0.4.3 (2026-09-28)
+
+- HA non ha `reproduce_state` per `valve`: `scene.apply` non faceva nulla al
+  ripristino (fine Quick Timer, azione finale "stato precedente").
+  `completions.restore_request` chiama `valve.set_valve_position` (se
+  `supported_features & 4` e `current_position`) o `open_valve`/`close_valve`;
+  gli altri domini restano su `scene.apply`.
+- `frontend/src/card-editors.js`: un editor generico (`ceEditor(fields)`) per
+  tutte le card; sostituisce i vecchi editor della card principale e del Quick
+  Timer (stessi tag). Timeline, serpentina e anello ora hanno
+  `getConfigElement`. Un campo vuoto toglie l'opzione dalla config.
+- Il proprietario ha deciso: nessuna gestione delle modifiche manuali durante
+  una fascia (restano fino al prossimo comando dello schedule).
+
 ## Rifiniture editor — 0.4.2 (2026-09-25)
 
 - Tolti dalla card principale il pulsante "Quick Timer" e l'editor del timer

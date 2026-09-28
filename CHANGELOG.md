@@ -2,6 +2,16 @@
 
 After each update restart Home Assistant and reload the dashboard.
 
+## 0.4.3
+
+- **Valves**: at the end of a Quick Timer, or with the “previous state” end
+  action, valves now go back to how they were. Home Assistant cannot restore a
+  valve through a scene, so the valve services are called directly
+  (position when the valve supports it, otherwise open / close).
+- **Visual editors** for every card: title, language, devices shown and their
+  order, maximum devices and the view of the main card (serpentine, ring),
+  Quick Timer device, durations and default duration. No YAML needed.
+
 ## 0.4.2
 
 - Delete button in the editor of existing schedules, profiles and groups.

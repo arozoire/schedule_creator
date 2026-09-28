@@ -6,6 +6,8 @@ from copy import deepcopy
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 from unittest.mock import AsyncMock, Mock, patch
 
 from homeassistant.exceptions import HomeAssistantError
@@ -25,6 +27,7 @@ from custom_components.schedule_creator.completions import (
     async_prepare_condition_fallbacks,
     async_prepare_quick_timer_restores,
     async_prepare_schedule_end_actions,
+    restore_request,
 )
 from custom_components.schedule_creator.journal import JournalCoordinator
 from custom_components.schedule_creator.leases import async_reconcile_entity_leases
@@ -37,6 +40,7 @@ from custom_components.schedule_creator.models import (
     OperationState,
     QuickTimer,
     QuickTimerState,
+    Snapshot,
 )
 from custom_components.schedule_creator.notifications import (
     async_execute_notifications,
@@ -841,4 +845,27 @@ async def test_restore_previous_end_action_restores_the_start_snapshot(hass) -> 
             "entities": {"light.living_room": {"brightness": None, "state": "off"}}
         },
         blocking=True,
+    )
+
+
+def _captured(state: str, **attributes: object) -> Snapshot:
+    return cast(Snapshot, SimpleNamespace(state=state, attributes=attributes))
+
+
+def test_valve_restore_uses_valve_services() -> None:
+    """HA cannot reproduce valve states, so restores call the valve services."""
+    assert restore_request(
+        "valve.garden", _captured("open", current_position=40, supported_features=7)
+    ) == ("valve", "set_valve_position", {"entity_id": "valve.garden", "position": 40})
+    assert restore_request(
+        "valve.garden", _captured("closed", supported_features=3)
+    ) == ("valve", "close_valve", {"entity_id": "valve.garden"})
+    assert restore_request(
+        "valve.garden", _captured("opening", current_position=10, supported_features=3)
+    ) == ("valve", "open_valve", {"entity_id": "valve.garden"})
+    assert restore_request("valve.garden", _captured("unavailable")) is None
+    assert restore_request("light.lamp", _captured("on", brightness=9)) == (
+        "scene",
+        "apply",
+        {"entities": {"light.lamp": {"brightness": 9, "state": "on"}}},
     )
