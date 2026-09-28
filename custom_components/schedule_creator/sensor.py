@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.const import EntityCategory
-from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import (
     async_track_state_change_event,
@@ -144,7 +144,7 @@ class PlanSensor(SensorEntity):
             self.async_write_ha_state()
 
     @callback
-    def _target_changed(self, _event: Event) -> None:
+    def _target_changed(self, _event: Event[EventStateChangedData]) -> None:
         self.refresh()
 
     async def async_added_to_hass(self) -> None:
