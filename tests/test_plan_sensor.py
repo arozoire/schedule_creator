@@ -54,6 +54,8 @@ def base() -> IntegrationConfig:
 
 
 def _config(base: IntegrationConfig, *slots: TimeSlot, **changes) -> IntegrationConfig:
+    changes.setdefault("inclusion_dates", ())
+    changes.setdefault("exclusion_dates", ())
     schedule = replace(
         base.schedules[0],
         name="Bio",
@@ -62,11 +64,10 @@ def _config(base: IntegrationConfig, *slots: TimeSlot, **changes) -> Integration
         start_action=changes.pop("start_action", HEAT_21),
         end_action=changes.pop("end_action", OFF),
         condition=None,
-        inclusion_dates=(),
-        exclusion_dates=(),
         **changes,
     )
-    return replace(base, schedules=(schedule,))
+    group = replace(base.groups[0], entity_ids=(BIO,))
+    return replace(base, groups=(group,), schedules=(schedule,))
 
 
 def _plan(config, *, now=NOW, runtime=(), state=None, attributes=None, sun=None):

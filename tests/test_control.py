@@ -181,11 +181,15 @@ async def test_entities_stay_out_of_automatic_dashboards(hass, hass_ws_client):
 PLAN = "sensor.schedule_creator_plan_switch_control_test"
 
 
-async def test_plan_sensor_follows_configuration(hass, hass_ws_client, freezer):
+async def test_plan_sensor_follows_configuration(hass, hass_ws_client):
     """One plan per scheduled entity, created and removed with the schedules."""
-    # Wednesday 30 September 2026, 12:00 UTC.
-    freezer.move_to(datetime(2026, 9, 30, 12, tzinfo=UTC))
     await hass.config.async_update(time_zone="UTC")
+    now = datetime.now(UTC)
+    monday = (now - timedelta(days=now.weekday())).replace(
+        hour=7, minute=0, second=0, microsecond=0
+    )
+    running = monday <= now < monday + timedelta(hours=1)
+    upcoming = monday if now < monday else monday + timedelta(days=7)
     entry, client, home, _away, schedule = await _populate(hass, hass_ws_client)
     registry = er.async_get(hass)
     assert registry.async_get(PLAN).entity_category is EntityCategory.DIAGNOSTIC
@@ -196,11 +200,11 @@ async def test_plan_sensor_follows_configuration(hass, hass_ws_client, freezer):
     )
     await hass.async_block_till_done()
     state = hass.states.get(PLAN)
-    assert state.state == "idle"
+    assert state.state == ("running" if running else "idle")
     assert state.attributes["week"] == "420-480@turn_on#0//////"
-    assert state.attributes["week_start"] == "2026-09-28"
+    assert state.attributes["week_start"] == monday.date().isoformat()
     assert state.attributes["schedules"] == "Morning"
-    assert state.attributes["next_start"] == "2026-10-05T07:00:00+00:00"
+    assert state.attributes["next_start"] == upcoming.isoformat()
 
     revision = entry.runtime_data.storage.config.data.revision
     await _request(
