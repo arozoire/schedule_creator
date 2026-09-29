@@ -69,6 +69,24 @@ test('serpentine and ring cards draw active profiles and hand editing to the mai
   } finally { main.remove(); serp.remove(); ring.remove(); dom.window.close(); }
 });
 
+test('devices always driven by the same schedules share one lane', async () => {
+  const dom = load();
+  const both = {...schedule('blinds', 'home', 'cover.left', {weekdays: [0], start: '08:00', end: '09:00'}, {domain: 'cover', action: 'open_cover', data: {}}), target_entity_ids: ['cover.left', 'cover.right']};
+  const state = {revision: 1, runtime_summary: {revision: 1}, quick_timers: [], operational: {occurrences: []}, config: {profiles: [{id: 'home', name: 'A casa', active: true}], groups: [],
+    schedules: [both, schedule('left', 'home', 'cover.solo', {weekdays: [1], start: '08:00', end: '09:00'}, {domain: 'cover', action: 'open_cover', data: {}})]}};
+  const states = {'cover.left': {state: 'closed', attributes: {friendly_name: 'Sinistra'}}, 'cover.right': {state: 'closed', attributes: {friendly_name: 'Destra'}}, 'cover.solo': {state: 'closed', attributes: {friendly_name: 'Bagno'}}};
+  const hass = {user: {is_admin: true}, states, config: {}, connection: {subscribeMessage: () => Promise.resolve(() => {}), sendMessagePromise: () => Promise.resolve(state)}};
+  const ring = dom.window.document.createElement('schedule-creator-ring-card'); ring.setConfig({}); ring.hass = hass; dom.window.document.body.append(ring);
+  await tick();
+  try {
+    assert.deepEqual([...ring.shadowRoot.querySelectorAll('.wk-chip')].map((n) => n.textContent), ['Bagno', 'Destra + Sinistra']);
+    // A running Quick Timer on one of them gives it its own lane again.
+    state.quick_timers = [{id: 't', entity_id: 'cover.left', expires_at: new Date(Date.now() + 600000).toISOString(), action: {domain: 'cover', action: 'close_cover', data: {}}}];
+    ring.render();
+    assert.deepEqual([...ring.shadowRoot.querySelectorAll('.wk-chip')].map((n) => n.textContent), ['Bagno', 'Destra', 'Sinistra']);
+  } finally { ring.remove(); dom.window.close(); }
+});
+
 test('week cards hide the edit button when no editor can open it', async () => {
   const dom = load();
   const state = {revision: 1, runtime_summary: {revision: 1}, quick_timers: [], operational: {occurrences: []}, config: {profiles: [{id: 'home', name: 'A casa', active: true}], groups: [],

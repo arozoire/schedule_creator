@@ -311,6 +311,16 @@ test('day shortcuts, snap and time bar with other schedules as magnets',async()=
  assert.equal(t.root.querySelector('.sc-timebar').dataset.snap,'30');
  t.set('slot_0_start','07:00','input');
  assert.equal(t.root.querySelector('.sc-tb-label').textContent,'07:00–09:00');
+ // Ending at midnight keeps a normal bar whose start handle still moves.
+ t.set('slot_0_end','00:00','input');
+ assert.equal(t.root.querySelector('.sc-tb-label').textContent,'07:00–24:00');
+ const pointer=(type,x)=>{const e=new t.dom.window.MouseEvent(type,{bubbles:true,composed:true,clientX:x,button:0});return e;};
+ t.root.querySelector('.sc-timebar').getBoundingClientRect=()=>({width:1440});
+ const handle=t.root.querySelector('.sc-tb-edit[data-slot-bar="0"] [data-handle="start"]');
+ handle.dispatchEvent(pointer('pointerdown',0));
+ t.root.querySelector('.sc-tb-edit[data-slot-bar="0"]').dispatchEvent(pointer('pointermove',0));
+ assert.equal(t.root.querySelector('[name="slot_0_start"]').value,'07:00');
+ assert.equal(t.root.querySelector('[name="slot_0_end"]').value,'00:00');
  }finally{t.close();}
 });
 test('magnet snap prefers nearby schedule edges over the grid',async()=>{

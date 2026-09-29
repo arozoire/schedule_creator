@@ -8,6 +8,11 @@ After each update restart Home Assistant and reload the dashboard.
   service worker served the card loader from its cache, so each new visit
   showed the previous version until Ctrl+Shift+R. The loader now lives under
   `/api/`, which is always fetched; the old resource URL keeps working.
+- **Slots ending at midnight**: on the time bar a slot ending at 00:00 is shown
+  up to 24:00 and its start can still be dragged (before, both ends jumped to
+  00:00).
+- **Serpentine and ring**: devices always driven by the same schedules share
+  one lane (“Left + Right”); a running Quick Timer gives a device its own lane.
 
 ## 0.4.4
 

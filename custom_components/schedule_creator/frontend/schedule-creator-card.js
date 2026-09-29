@@ -2811,6 +2811,9 @@ const DAY_SHORTCUTS = {all: [0, 1, 2, 3, 4, 5, 6], workdays: [0, 1, 2, 3, 4], we
 const SNAP_OPTIONS = [5, 10, 15, 30];
 const toMinutes = (value) => { const [h, m] = String(value || '0:0').split(':').map(Number); return h * 60 + (m || 0); };
 const toTime = (minutes) => `${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+// A slot ending at 00:00 ends at midnight: on the bar that is 24:00, not 0.
+const endMinutes = (value) => toMinutes(value) || 1440;
+const barTime = (minutes) => (minutes === 1440 ? '24:00' : toTime(minutes));
 const SUN_LABELS = {sunrise: 'Alba', sunset: 'Tramonto'};
 
 // Today's sunrise and sunset in minutes of the HA day, from sun.sun; null
@@ -2848,14 +2851,14 @@ function magnetSnap(minutes, points, threshold, snap) {
 }
 
 function timebar(i, slot, others, snap) {
-  const start = toMinutes(slot.start), end = toMinutes(slot.end);
+  const start = toMinutes(slot.start), end = endMinutes(slot.end);
   const blocks = slotBlocks(others, slot.weekdays);
   const magnets = [...new Set(blocks.flatMap((b) => [b.from, b.to]))].filter((m) => m > 0 && m < 1440);
   const overnight = end <= start;
   const pct = (m) => `${m / 1440 * 100}%`;
   const edit = overnight
     ? `<div class="sc-tb-edit is-static" style="left:${pct(start)};width:${pct(1440 - start)}"></div>${end ? `<div class="sc-tb-edit is-static" style="left:0;width:${pct(end)}"></div>` : ''}`
-    : `<div class="sc-tb-edit${end - start < 300 ? ' is-narrow' : ''}" data-slot-bar="${i}" style="left:${pct(start)};width:${pct(end - start)}"><span class="sc-tb-handle" data-handle="start"></span><span class="sc-tb-label">${toTime(start)}–${toTime(end)}</span><span class="sc-tb-handle" data-handle="end"></span></div>`;
+    : `<div class="sc-tb-edit${end - start < 300 ? ' is-narrow' : ''}" data-slot-bar="${i}" style="left:${pct(start)};width:${pct(end - start)}"><span class="sc-tb-handle" data-handle="start"></span><span class="sc-tb-label">${toTime(start)}–${barTime(end)}</span><span class="sc-tb-handle" data-handle="end"></span></div>`;
   return `<div class="sc-timebar" data-timebar="${i}" data-magnets="${magnets.join(',')}" data-snap="${snap}">${blocks.map((b) => `<div class="sc-tb-bg" title="${escS(`${b.name} ${toTime(b.from)}–${toTime(b.to)}`)}" style="left:${pct(b.from)};width:${pct(b.to - b.from)};--block-color:${b.color}"></div>`).join('')}${magnets.map((m) => `<div class="sc-tb-magnet" data-min="${m}" style="left:${pct(m)}"></div>`).join('')}${edit}</div><div class="sc-tb-ticks" aria-hidden="true">${[0, 6, 12, 18, 24].map((h) => `<span>${String(h).padStart(2, '0')}:00</span>`).join('')}</div><p>${overnight ? t('Fascia a cavallo della mezzanotte: modifica gli orari nei campi qui sotto.') : blocks.length ? t('Trascina la fascia o le maniglie: si aggancia agli inizi/fini degli altri schedule (magnete).') : t('Trascina la fascia o le maniglie per cambiare gli orari.')}</p>`;
 }
 
@@ -3201,7 +3204,7 @@ class ScheduleCreatorCard extends HTMLElement {
       const slotTime = /^slot_(\d+)_(start|end)$/.exec(e.target.getAttribute('name') || '');
       if (slotTime) {
         const form = e.target.form;
-        this.syncTimebar(slotTime[1], toMinutes(form.elements[`slot_${slotTime[1]}_start`].value), toMinutes(form.elements[`slot_${slotTime[1]}_end`].value));
+        this.syncTimebar(slotTime[1], toMinutes(form.elements[`slot_${slotTime[1]}_start`].value), endMinutes(form.elements[`slot_${slotTime[1]}_end`].value));
       }
       const name = e.target.getAttribute('name') || e.target.dataset.mirror;
       this.changedFields?.add(name);
@@ -3490,7 +3493,7 @@ class ScheduleCreatorCard extends HTMLElement {
     const form = this.shadowRoot.querySelector('form[data-editor]');
     const startInput = form.elements[`slot_${i}_start`], endInput = form.elements[`slot_${i}_end`];
     const handle = event.target.closest('[data-handle]')?.dataset.handle || 'move';
-    const s0 = toMinutes(startInput.value), e0 = toMinutes(endInput.value), x0 = event.clientX;
+    const s0 = toMinutes(startInput.value), e0 = endMinutes(endInput.value), x0 = event.clientX;
     const magnets = (track.dataset.magnets || '').split(',').filter(Boolean).map(Number);
     const snap = Number(track.dataset.snap) || 15;
     bar.setPointerCapture?.(event.pointerId);
@@ -3521,7 +3524,7 @@ class ScheduleCreatorCard extends HTMLElement {
     if (!bar || end <= start) return;
     bar.style.left = `${start / 1440 * 100}%`; bar.style.width = `${(end - start) / 1440 * 100}%`;
     bar.classList.toggle('is-narrow', end - start < 300);
-    bar.querySelector('.sc-tb-label').textContent = `${toTime(start)}–${toTime(end)}`;
+    bar.querySelector('.sc-tb-label').textContent = `${toTime(start)}–${barTime(end)}`;
   }
   syncRange(node) {
     const root = node?.closest?.('.sc-range');
@@ -4377,9 +4380,18 @@ class ScheduleCreatorWeekCard extends HTMLElement {
     const name = (id) => hass.states[id]?.attributes?.friendly_name || id;
     let entities = [...new Set([...schedules.flatMap((s) => s.target_entity_ids), ...timers.map((t) => t.entity_id)])].filter((id) => !wanted || wanted.includes(id));
     if (wanted) entities.sort((a, b) => wanted.indexOf(a) - wanted.indexOf(b)); else entities.sort((a, b) => name(a).localeCompare(name(b)));
-    entities = entities.slice(0, Math.max(1, Math.min(8, Number(this.config.max_lanes) || 6)));
+    // Devices always driven by the same schedules share one lane; a running
+    // Quick Timer sets its device apart.
+    const groups = new Map();
+    for (const id of entities) {
+      const ids = schedules.filter((s) => s.target_entity_ids.includes(id)).map((s) => s.id).sort();
+      const key = timers.some((t) => t.entity_id === id) || !ids.length ? id : ids.join('|');
+      groups.set(key, [...(groups.get(key) || []), id]);
+    }
+    const members = [...groups.values()].slice(0, Math.max(1, Math.min(8, Number(this.config.max_lanes) || 6)));
     const clock = (iso) => new Intl.DateTimeFormat(locale(), {timeZone: now.zone, hour: '2-digit', minute: '2-digit'}).format(new Date(iso));
-    const lanes = entities.map((entityId, index) => {
+    const lanes = members.map((entityIds, index) => {
+      const entityId = entityIds[0];
       const base = WK_PALETTE[index % WK_PALETTE.length];
       const colorOf = (schedule) => { const d = schedule.start_action?.data || {}; if (schedule.start_action?.domain !== 'climate') return base; return d.state === 'off' ? '#9aa5ad' : d.temperature != null ? temperatureColor(d.temperature) : base; };
       const live = liveOccurrence(state, schedules, entityId), running = live?.occurrence, paused = !!live?.paused;
@@ -4391,8 +4403,8 @@ class ScheduleCreatorWeekCard extends HTMLElement {
       let status = '';
       if (timer) status = `${t('Timer')} ${t('fino alle {time}', {time: clock(timer.expires_at)})}`;
       else if (running) status = paused ? t('In pausa · condizione') : `${shortAction(schedules.find((s) => s.id === running.schedule_id)?.start_action)} ${t('fino alle {time}', {time: clock(running.end_utc)})}`;
-      const climate = entityId.startsWith('climate.');
-      return {entityId, name: name(entityId), color: base, climate, blocks, status, statusKind: timer ? 'timer' : running ? (paused ? 'paused' : 'running') : '',
+      const climate = entityIds.every((id) => id.startsWith('climate.'));
+      return {entityId, entityIds, name: entityIds.map(name).join(' + '), color: base, climate, blocks, status, statusKind: timer ? 'timer' : running ? (paused ? 'paused' : 'running') : '',
         timer: timer ? {start: now.week, end: Math.min(now.week + Math.max(1, (new Date(timer.expires_at) - Date.now()) / 60000), now.week + WEEK)} : null};
     });
     const pick = lanes.flatMap((l) => l.blocks.map((b) => ({lane: l, block: b}))).find((x) => x.block.key === this.selected);

@@ -9,6 +9,9 @@ export const DAY_SHORTCUTS = {all: [0, 1, 2, 3, 4, 5, 6], workdays: [0, 1, 2, 3,
 export const SNAP_OPTIONS = [5, 10, 15, 30];
 export const toMinutes = (value) => { const [h, m] = String(value || '0:0').split(':').map(Number); return h * 60 + (m || 0); };
 export const toTime = (minutes) => `${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+// A slot ending at 00:00 ends at midnight: on the bar that is 24:00, not 0.
+export const endMinutes = (value) => toMinutes(value) || 1440;
+export const barTime = (minutes) => (minutes === 1440 ? '24:00' : toTime(minutes));
 export const SUN_LABELS = {sunrise: 'Alba', sunset: 'Tramonto'};
 
 // Today's sunrise and sunset in minutes of the HA day, from sun.sun; null
@@ -46,14 +49,14 @@ export function magnetSnap(minutes, points, threshold, snap) {
 }
 
 function timebar(i, slot, others, snap) {
-  const start = toMinutes(slot.start), end = toMinutes(slot.end);
+  const start = toMinutes(slot.start), end = endMinutes(slot.end);
   const blocks = slotBlocks(others, slot.weekdays);
   const magnets = [...new Set(blocks.flatMap((b) => [b.from, b.to]))].filter((m) => m > 0 && m < 1440);
   const overnight = end <= start;
   const pct = (m) => `${m / 1440 * 100}%`;
   const edit = overnight
     ? `<div class="sc-tb-edit is-static" style="left:${pct(start)};width:${pct(1440 - start)}"></div>${end ? `<div class="sc-tb-edit is-static" style="left:0;width:${pct(end)}"></div>` : ''}`
-    : `<div class="sc-tb-edit${end - start < 300 ? ' is-narrow' : ''}" data-slot-bar="${i}" style="left:${pct(start)};width:${pct(end - start)}"><span class="sc-tb-handle" data-handle="start"></span><span class="sc-tb-label">${toTime(start)}–${toTime(end)}</span><span class="sc-tb-handle" data-handle="end"></span></div>`;
+    : `<div class="sc-tb-edit${end - start < 300 ? ' is-narrow' : ''}" data-slot-bar="${i}" style="left:${pct(start)};width:${pct(end - start)}"><span class="sc-tb-handle" data-handle="start"></span><span class="sc-tb-label">${toTime(start)}–${barTime(end)}</span><span class="sc-tb-handle" data-handle="end"></span></div>`;
   return `<div class="sc-timebar" data-timebar="${i}" data-magnets="${magnets.join(',')}" data-snap="${snap}">${blocks.map((b) => `<div class="sc-tb-bg" title="${escS(`${b.name} ${toTime(b.from)}–${toTime(b.to)}`)}" style="left:${pct(b.from)};width:${pct(b.to - b.from)};--block-color:${b.color}"></div>`).join('')}${magnets.map((m) => `<div class="sc-tb-magnet" data-min="${m}" style="left:${pct(m)}"></div>`).join('')}${edit}</div><div class="sc-tb-ticks" aria-hidden="true">${[0, 6, 12, 18, 24].map((h) => `<span>${String(h).padStart(2, '0')}:00</span>`).join('')}</div><p>${overnight ? t('Fascia a cavallo della mezzanotte: modifica gli orari nei campi qui sotto.') : blocks.length ? t('Trascina la fascia o le maniglie: si aggancia agli inizi/fini degli altri schedule (magnete).') : t('Trascina la fascia o le maniglie per cambiare gli orari.')}</p>`;
 }
 
