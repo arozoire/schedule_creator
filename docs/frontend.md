@@ -36,9 +36,16 @@ installata e puo stare nella stessa dashboard.
 
 ## Aggiornamenti senza interventi manuali (0.3.5)
 
-L'URL `/schedule_creator/frontend/schedule-creator-card.js` restituisce un
+L'URL `/api/schedule_creator/frontend/schedule-creator-card.js` restituisce un
 piccolo loader mai memorizzato in cache (`Cache-Control: no-store`) che importa
 `/schedule_creator/static/schedule-creator-card.js?v=<hash del contenuto>`.
+Dalla 0.4.5 il loader sta sotto `/api/`: il service worker del frontend di
+Home Assistant risponde a tutti gli altri file dalla sua cache (e poi la
+aggiorna), quindi a ogni nuova visita tornava la versione precedente della
+card fino a un Ctrl+Maiusc+R. Il vecchio URL
+`/schedule_creator/frontend/schedule-creator-card.js` resta valido e importa
+soltanto il loader sotto `/api/`: anche una sua copia vecchia in cache è
+corretta.
 Quando HACS sostituisce il bundle, l'hash cambia e il browser scarica la nuova
 card al successivo caricamento della pagina, senza modificare risorse o `?v=`.
 La card confronta la propria versione con `integration_version` del backend:
