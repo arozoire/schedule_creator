@@ -20,6 +20,22 @@ export const POSITION_ACTIONS = {
   valve: {open: 'open_valve', close: 'close_valve', stop: 'stop_valve', position: 'set_valve_position'},
 };
 
+// Limits of each climate entity per HVAC mode, learned by the integration:
+// a device may accept 25–55 °C when heating and 5–22 °C when cooling.
+let learnedClimateLimits = {};
+export function setClimateLimits(value) { learnedClimateLimits = value && typeof value === 'object' ? value : {}; }
+
+// Temperature limits for the scheduled mode: the entity's own while it is in
+// that mode, otherwise what was learned; unknown limits stay wide.
+function climateLimits(caps, mode) {
+  const per = caps.states.map((s) => s.state === mode ? {min: s.attributes?.min_temp, max: s.attributes?.max_temp, step: s.attributes?.target_temp_step} : learnedClimateLimits[s.entity_id]?.[mode]);
+  if (!per.length || per.some((l) => !l || !Number.isFinite(Number(l.min)) || !Number.isFinite(Number(l.max)))) {
+    const [min, max] = /F/.test(caps.unit) ? [40, 140] : [5, 60];
+    return {min, max, step: caps.step, known: false};
+  }
+  return {min: Math.max(...per.map((l) => Number(l.min))), max: Math.min(...per.map((l) => Number(l.max))), step: Number(per[0].step) || caps.step, known: true};
+}
+
 function capabilities(hass, ids) {
   const domain = ids[0]?.split('.')[0];
   const states = ids.map((id) => hass.states?.[id]).filter(Boolean);
@@ -157,6 +173,9 @@ export function actionForm(prefix, label, hass, ids, value, optional, draft = {}
   const name = (key) => `${prefix}_${key}`;
   fields.push(choices(name('mode'), domain === 'climate' ? t('Modalità HVAC') : POSITION_ACTIONS[domain] ? t('Comando') : t('Stato'), modes, mode, {primary: true, icons: true}));
   if (domain === 'climate' && !['none', 'off', 'restore'].includes(mode)) {
+    const limits = climateLimits(caps, mode);
+    Object.assign(caps, {min: limits.min, max: limits.max, step: limits.step});
+    if (!limits.known && mode !== 'fan_only') fields.push(`<p class="sc-meta">${escA(t('Limiti di temperatura per «{mode}» non ancora noti: li imparo quando il dispositivo è in questo modo. Intanto {min}–{max} {unit}.', {mode: pretty(mode), min: limits.min, max: limits.max, unit: caps.unit}))}</p>`);
     if (mode !== 'fan_only' && caps.temperature) fields.push(stepperField(name('temperature'), t('Temperatura'), get('temperature'), caps.min, caps.max, caps.step, caps.unit));
     if (mode !== 'fan_only' && caps.range) fields.push(stepperField(name('target_temp_low'), t('Minima'), get('target_temp_low'), caps.min, caps.max, caps.step, caps.unit), stepperField(name('target_temp_high'), t('Massima'), get('target_temp_high'), caps.min, caps.max, caps.step, caps.unit));
     fields.push(choices(name('fan_mode'), t('Ventola'), caps.fan_modes, get('fan_mode')));

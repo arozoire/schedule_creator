@@ -2,6 +2,16 @@
 
 After each update restart Home Assistant and reload the dashboard.
 
+## 0.4.4
+
+- **Thermostat limits per mode**: devices that accept different temperatures
+  by mode (for example a heat pump: 25–55 °C heating the water, 5–22 °C
+  cooling) are no longer stuck on the limits of their current mode. The
+  integration learns the limits of each mode when the device is in it and the
+  editor uses those of the mode being scheduled; a mode never seen yet shows a
+  wide range with a note.
+- New icon and logo.
+
 ## 0.4.3
 
 - **ESPHome displays**: a plan sensor per scheduled device

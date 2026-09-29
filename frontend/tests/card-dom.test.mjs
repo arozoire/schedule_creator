@@ -33,7 +33,7 @@ test('group lists controllable entities and search really hides nonmatches',asyn
  assert.equal(t.root.querySelector('[name="entities"][value="sensor.temperature"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="automation.test"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="update.test"]'),null);
- assert.equal(t.root.querySelector('.sc-version').textContent,'v0.4.3');
+ assert.equal(t.root.querySelector('.sc-version').textContent,'v0.4.4');
  t.set('entity_search','lampada','input');
  const hidden=t.root.querySelector('[value="switch.outside"]').parentElement;
  assert.equal(hidden.hidden,true);
@@ -102,7 +102,7 @@ test('local action failure exposes phase and stack, keeps draft and permits retr
  const details=t.root.querySelector('.sc-error-details textarea').value;
  assert.match(details,/Fase: lettura azione iniziale/);
  assert.match(details,/Traccia:\nError: Method not implemented/);
- assert.match(details,/Schedule Creator: 0.4.3/);
+ assert.match(details,/Schedule Creator: 0.4.4/);
  assert.match(t.root.querySelector('.sc-error').textContent,/La bozza è conservata/);
  t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
  assert.equal(t.writes.length,1);
@@ -156,10 +156,18 @@ test('editors use one persistent dialog, preserve scroll and close on Escape',as
 });
 test('climate schedule sets a desired state at start and turns off at end',async()=>{
  const t=setup();try {await tick();
- t.snapshot.config.groups[0].entity_ids=['climate.room'];t.card.render();t.click('newSchedule');
+ t.snapshot.config.groups[0].entity_ids=['climate.room'];
+ // The device is off: heat limits were learned, cool limits are not known yet.
+ t.snapshot.climate_limits={'climate.room':{heat:{min:25,max:55}}};
+ t.card.render();t.click('newSchedule');
  const temperature=t.root.querySelector('[name="start_temperature"]');
- assert.equal(temperature.min,'7');assert.equal(temperature.max,'30');
+ assert.equal(temperature.min,'25');assert.equal(temperature.max,'55');
  t.pick('start_mode','cool');
+ assert.equal(t.root.querySelector('[name="start_temperature"]').max,'60');
+ assert.match(t.root.textContent,/non ancora noti/);
+ t.hass.states['climate.room'].state='cool';t.card.render();
+ assert.equal(t.root.querySelector('[name="start_temperature"]').min,'7');
+ assert.equal(t.root.querySelector('[name="start_temperature"]').max,'30');
  t.set('start_temperature','24','input');
  t.root.querySelector('[data-command="stepValue"][data-id="start_temperature:1"]').click();
  assert.equal(t.root.querySelector('[name="start_temperature"]').value,'24.5');
@@ -215,7 +223,7 @@ test('name and notification texts are suggested until the user edits them',async
 test('version mismatch explains reload or restart',async()=>{
  const t=setup();try {await tick();
  assert.match(t.root.querySelector('.sc-warning').textContent,/Riavvia Home Assistant/);
- t.card.adapter.state={...structuredClone(t.snapshot),integration_version:'0.4.3'};t.card.render();
+ t.card.adapter.state={...structuredClone(t.snapshot),integration_version:'0.4.4'};t.card.render();
  assert.equal(t.root.querySelector('.sc-warning'),null);
  t.card.adapter.state.integration_version='9.9.0';t.card.render();
  assert.match(t.root.querySelector('.sc-warning').textContent,/Ricarica la pagina/);

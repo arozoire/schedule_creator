@@ -126,6 +126,7 @@ async def test_get_state_empty(
                 "operational": {"occurrences": [], "leases": []},
                 "failures": [],
                 "stats": {},
+                "climate_limits": {},
             },
         }
         for operation in (load, save, delay, service):
@@ -309,6 +310,7 @@ async def test_get_state_populated(hass, hass_ws_client, hass_storage):
         },
         "failures": [],
         "stats": entry.runtime_data.stats.data["schedules"],
+        "climate_limits": entry.runtime_data.climate_limits.data,
     }
     assert (
         storage.config.data,
