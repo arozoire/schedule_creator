@@ -3,7 +3,7 @@
 import { ScheduleCreatorStateAdapter, hassChanged } from './state-adapter.js';
 import { uiEscape, targetEntities } from './forms.js';
 import { messageFor } from './editor.js';
-import { actionForm, readAction, describeAction, describeState } from './action-editor.js';
+import { actionForm, readAction, describeAction, describeState, setClimateLimits } from './action-editor.js';
 import { t, setLanguage } from './i18n.js';
 
 const qtEsc = uiEscape;
@@ -107,6 +107,7 @@ export class ScheduleCreatorQuickTimerCard extends HTMLElement {
     if (!this.config) return;
     setLanguage(this._hass, this.config);
     const hass = this._hass, surface = this.shadowRoot.querySelector('ha-card');
+    setClimateLimits(this.adapter.state?.climate_limits);
     if (!hass) { surface.innerHTML = `<div class="qt-body">${t('Caricamento…')}</div>`; return; }
     const {state, error, busy, writeError} = this.adapter;
     const admin = hass.user?.is_admin === true;

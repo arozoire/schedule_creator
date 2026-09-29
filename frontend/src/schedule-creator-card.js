@@ -3,12 +3,12 @@ import { weeklySegments } from './timeline.js';
 import { clean, messageFor, parseJson, diagnosticFor } from './editor.js';
 import { controllable, targetEntities, notificationForm, readNotification } from './forms.js';
 import { blankCondition, conditionForm, readCondition, slotsForm, readSlots, magnetSnap, toMinutes, toTime, DAY_SHORTCUTS, iconPicker, colorPicker, sunMinutes, boundaryLabel } from './schedule-editor.js';
-import { actionForm, readAction, describeAction, describeState, pretty } from './action-editor.js';
+import { actionForm, readAction, describeAction, describeState, pretty, setClimateLimits } from './action-editor.js';
 import { isWscBackup, convertWscBackup, wscImportPayload } from './wsc-import.js';
 import { t, setLanguage, locale } from './i18n.js';
 
 const STYLE = '__SC_CSS__';
-const CARD_VERSION = '0.4.3';
+const CARD_VERSION = '0.4.4';
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
@@ -206,6 +206,7 @@ class ScheduleCreatorCard extends HTMLElement {
     if (!this.config) return;
     setLanguage(this._hass, this.config);
     if (!this.checkedRequest && this.adapter.state && this.openRequestedSchedule()) return;
+    setClimateLimits(this.adapter.state?.climate_limits);
     const focused = this.shadowRoot.activeElement;
     const hadDetails = this.shadowRoot.querySelector('details');
     const openSections = new Set([...this.shadowRoot.querySelectorAll('details[open]')].map((node)=>node.dataset.section || node.querySelector('summary')?.textContent));

@@ -1,5 +1,16 @@
 # AI handoff — stato attuale e piano futuro
 
+## Limiti climate per modo, logo — 0.4.4 (2026-09-29)
+
+- `climate_limits.py`: Store `schedule_creator.climate_limits`
+  `{entity_id: {hvac_mode: {min, max, step?}}}` appreso dagli stati `climate.*`
+  (esclusi off/unavailable/unknown); esposto in `get_state.climate_limits`.
+- `action-editor.js`: `setClimateLimits()` (chiamato nel render della card
+  principale e del Quick Timer) e `climateLimits(caps, mode)`: limiti
+  dell'entità se è già in quel modo, altrimenti appresi, altrimenti 5–60 °C
+  (40–140 °F) con avviso.
+- Nuovo brand (proposta B, anello a 7 settori con orologio), logo chiaro/scuro.
+
 ## Valvole ed editor delle card — 0.4.3 (2026-09-28)
 
 - HA non ha `reproduce_state` per `valve`: `scene.apply` non faceva nulla al

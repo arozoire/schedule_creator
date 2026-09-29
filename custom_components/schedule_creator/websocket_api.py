@@ -224,6 +224,7 @@ def websocket_get_state(
             },
             "failures": _failures(runtime),
             "stats": public_stats(runtime_data.stats.data),
+            "climate_limits": runtime_data.climate_limits.data,
         }
         connection.send_result(msg["id"], result)
     except (StorageNotLoadedError, OSError):

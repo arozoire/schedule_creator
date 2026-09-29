@@ -509,6 +509,7 @@ export const STRINGS = {
     "Dispositivi mostrati": "Devices shown",
     "Tutti quelli dei profili attivi, in ordine alfabetico.": "All devices of the active profiles, in alphabetical order.",
     "Aggiungi un dispositivo…": "Add a device…",
+    "Limiti di temperatura per «{mode}» non ancora noti: li imparo quando il dispositivo è in questo modo. Intanto {min}–{max} {unit}.": "Temperature limits for “{mode}” are not known yet: they are learned when the device is in this mode. Meanwhile {min}–{max} {unit}.",
   },
   fr: {
     "Diminuisci": "Diminuer",
@@ -1018,6 +1019,7 @@ export const STRINGS = {
     "Dispositivi mostrati": "Appareils affichés",
     "Tutti quelli dei profili attivi, in ordine alfabetico.": "Tous ceux des profils actifs, par ordre alphabétique.",
     "Aggiungi un dispositivo…": "Ajouter un appareil…",
+    "Limiti di temperatura per «{mode}» non ancora noti: li imparo quando il dispositivo è in questo modo. Intanto {min}–{max} {unit}.": "Limites de température pour « {mode} » encore inconnues : elles sont apprises quand l’appareil est dans ce mode. En attendant {min}–{max} {unit}.",
   },
   de: {
     "Diminuisci": "Verringern",
@@ -1527,6 +1529,7 @@ export const STRINGS = {
     "Dispositivi mostrati": "Angezeigte Geräte",
     "Tutti quelli dei profili attivi, in ordine alfabetico.": "Alle Geräte der aktiven Profile, alphabetisch.",
     "Aggiungi un dispositivo…": "Gerät hinzufügen…",
+    "Limiti di temperatura per «{mode}» non ancora noti: li imparo quando il dispositivo è in questo modo. Intanto {min}–{max} {unit}.": "Temperaturgrenzen für „{mode}“ noch unbekannt: Sie werden gelernt, wenn das Gerät in diesem Modus ist. Bis dahin {min}–{max} {unit}.",
   },
   es: {
     "Diminuisci": "Disminuir",
@@ -2036,5 +2039,6 @@ export const STRINGS = {
     "Dispositivi mostrati": "Dispositivos mostrados",
     "Tutti quelli dei profili attivi, in ordine alfabetico.": "Todos los de los perfiles activos, en orden alfabético.",
     "Aggiungi un dispositivo…": "Añadir un dispositivo…",
+    "Limiti di temperatura per «{mode}» non ancora noti: li imparo quando il dispositivo è in questo modo. Intanto {min}–{max} {unit}.": "Límites de temperatura para «{mode}» aún desconocidos: se aprenden cuando el dispositivo está en este modo. Mientras tanto {min}–{max} {unit}.",
   },
 };

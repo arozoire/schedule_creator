@@ -23,6 +23,7 @@ from .boundaries import (
     async_advance_occurrence_states,
     async_advance_quick_timer_states,
 )
+from .climate_limits import ClimateLimitsCoordinator
 from .completions import CompletionCoordinator
 from .condition_runtime import ConditionCoordinator
 from .const import DOMAIN, INTEGRATION_VERSION
@@ -57,6 +58,7 @@ class ScheduleCreatorRuntimeData:
     completions: CompletionCoordinator
     status_notifications: StatusNotificationCoordinator
     stats: StatsCoordinator
+    climate_limits: ClimateLimitsCoordinator
     loaded: bool = True
 
     async def async_shutdown(self) -> None:
@@ -70,6 +72,7 @@ class ScheduleCreatorRuntimeData:
         self.action_execution.shutdown()
         self.status_notifications.shutdown()
         await self.stats.async_shutdown()
+        await self.climate_limits.async_shutdown()
         await self.storage.async_shutdown()
 
 
@@ -140,6 +143,8 @@ async def async_setup_entry(
         recovery_plan = build_recovery_plan(storage.runtime.data, now)
         stats = StatsCoordinator(hass, storage.runtime)
         await stats.async_load()
+        climate_limits = ClimateLimitsCoordinator(hass)
+        await climate_limits.async_load()
         occurrence_boundaries = OccurrenceBoundaryCoordinator(
             hass, storage.runtime, conditions.async_refresh
         )
@@ -162,6 +167,7 @@ async def async_setup_entry(
                 hass, storage.config, storage.runtime
             ),
             stats=stats,
+            climate_limits=climate_limits,
         )
         action_execution.start(now)
         snapshots.start()
@@ -170,6 +176,7 @@ async def async_setup_entry(
         horizon_refresh.start()
         entry.runtime_data.status_notifications.start()
         stats.start()
+        climate_limits.start()
         if not started:
             entry.async_on_unload(
                 async_at_started(hass, lambda _hass: _async_first_run(hass, entry))
