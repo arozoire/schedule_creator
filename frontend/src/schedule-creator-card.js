@@ -2,7 +2,7 @@ import { ScheduleCreatorStateAdapter, watchedEntities, hassChanged } from './sta
 import { weeklySegments } from './timeline.js';
 import { clean, messageFor, parseJson, diagnosticFor } from './editor.js';
 import { controllable, targetEntities, notificationForm, readNotification } from './forms.js';
-import { blankCondition, conditionForm, readCondition, slotsForm, readSlots, magnetSnap, toMinutes, toTime, DAY_SHORTCUTS, iconPicker, colorPicker, sunMinutes, boundaryLabel } from './schedule-editor.js';
+import { blankCondition, conditionForm, readCondition, slotsForm, readSlots, magnetSnap, toMinutes, toTime, endMinutes, barTime, DAY_SHORTCUTS, iconPicker, colorPicker, sunMinutes, boundaryLabel } from './schedule-editor.js';
 import { actionForm, readAction, describeAction, describeState, pretty, setClimateLimits } from './action-editor.js';
 import { isWscBackup, convertWscBackup, wscImportPayload } from './wsc-import.js';
 import { t, setLanguage, locale } from './i18n.js';
@@ -83,7 +83,7 @@ class ScheduleCreatorCard extends HTMLElement {
       const slotTime = /^slot_(\d+)_(start|end)$/.exec(e.target.getAttribute('name') || '');
       if (slotTime) {
         const form = e.target.form;
-        this.syncTimebar(slotTime[1], toMinutes(form.elements[`slot_${slotTime[1]}_start`].value), toMinutes(form.elements[`slot_${slotTime[1]}_end`].value));
+        this.syncTimebar(slotTime[1], toMinutes(form.elements[`slot_${slotTime[1]}_start`].value), endMinutes(form.elements[`slot_${slotTime[1]}_end`].value));
       }
       const name = e.target.getAttribute('name') || e.target.dataset.mirror;
       this.changedFields?.add(name);
@@ -372,7 +372,7 @@ class ScheduleCreatorCard extends HTMLElement {
     const form = this.shadowRoot.querySelector('form[data-editor]');
     const startInput = form.elements[`slot_${i}_start`], endInput = form.elements[`slot_${i}_end`];
     const handle = event.target.closest('[data-handle]')?.dataset.handle || 'move';
-    const s0 = toMinutes(startInput.value), e0 = toMinutes(endInput.value), x0 = event.clientX;
+    const s0 = toMinutes(startInput.value), e0 = endMinutes(endInput.value), x0 = event.clientX;
     const magnets = (track.dataset.magnets || '').split(',').filter(Boolean).map(Number);
     const snap = Number(track.dataset.snap) || 15;
     bar.setPointerCapture?.(event.pointerId);
@@ -403,7 +403,7 @@ class ScheduleCreatorCard extends HTMLElement {
     if (!bar || end <= start) return;
     bar.style.left = `${start / 1440 * 100}%`; bar.style.width = `${(end - start) / 1440 * 100}%`;
     bar.classList.toggle('is-narrow', end - start < 300);
-    bar.querySelector('.sc-tb-label').textContent = `${toTime(start)}–${toTime(end)}`;
+    bar.querySelector('.sc-tb-label').textContent = `${toTime(start)}–${barTime(end)}`;
   }
   syncRange(node) {
     const root = node?.closest?.('.sc-range');

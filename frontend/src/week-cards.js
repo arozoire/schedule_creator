@@ -153,9 +153,18 @@ class ScheduleCreatorWeekCard extends HTMLElement {
     const name = (id) => hass.states[id]?.attributes?.friendly_name || id;
     let entities = [...new Set([...schedules.flatMap((s) => s.target_entity_ids), ...timers.map((t) => t.entity_id)])].filter((id) => !wanted || wanted.includes(id));
     if (wanted) entities.sort((a, b) => wanted.indexOf(a) - wanted.indexOf(b)); else entities.sort((a, b) => name(a).localeCompare(name(b)));
-    entities = entities.slice(0, Math.max(1, Math.min(8, Number(this.config.max_lanes) || 6)));
+    // Devices always driven by the same schedules share one lane; a running
+    // Quick Timer sets its device apart.
+    const groups = new Map();
+    for (const id of entities) {
+      const ids = schedules.filter((s) => s.target_entity_ids.includes(id)).map((s) => s.id).sort();
+      const key = timers.some((t) => t.entity_id === id) || !ids.length ? id : ids.join('|');
+      groups.set(key, [...(groups.get(key) || []), id]);
+    }
+    const members = [...groups.values()].slice(0, Math.max(1, Math.min(8, Number(this.config.max_lanes) || 6)));
     const clock = (iso) => new Intl.DateTimeFormat(locale(), {timeZone: now.zone, hour: '2-digit', minute: '2-digit'}).format(new Date(iso));
-    const lanes = entities.map((entityId, index) => {
+    const lanes = members.map((entityIds, index) => {
+      const entityId = entityIds[0];
       const base = WK_PALETTE[index % WK_PALETTE.length];
       const colorOf = (schedule) => { const d = schedule.start_action?.data || {}; if (schedule.start_action?.domain !== 'climate') return base; return d.state === 'off' ? '#9aa5ad' : d.temperature != null ? temperatureColor(d.temperature) : base; };
       const live = liveOccurrence(state, schedules, entityId), running = live?.occurrence, paused = !!live?.paused;
@@ -167,8 +176,8 @@ class ScheduleCreatorWeekCard extends HTMLElement {
       let status = '';
       if (timer) status = `${t('Timer')} ${t('fino alle {time}', {time: clock(timer.expires_at)})}`;
       else if (running) status = paused ? t('In pausa · condizione') : `${shortAction(schedules.find((s) => s.id === running.schedule_id)?.start_action)} ${t('fino alle {time}', {time: clock(running.end_utc)})}`;
-      const climate = entityId.startsWith('climate.');
-      return {entityId, name: name(entityId), color: base, climate, blocks, status, statusKind: timer ? 'timer' : running ? (paused ? 'paused' : 'running') : '',
+      const climate = entityIds.every((id) => id.startsWith('climate.'));
+      return {entityId, entityIds, name: entityIds.map(name).join(' + '), color: base, climate, blocks, status, statusKind: timer ? 'timer' : running ? (paused ? 'paused' : 'running') : '',
         timer: timer ? {start: now.week, end: Math.min(now.week + Math.max(1, (new Date(timer.expires_at) - Date.now()) / 60000), now.week + WEEK)} : null};
     });
     const pick = lanes.flatMap((l) => l.blocks.map((b) => ({lane: l, block: b}))).find((x) => x.block.key === this.selected);
