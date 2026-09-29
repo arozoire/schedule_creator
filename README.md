@@ -1,5 +1,7 @@
 # Schedule Creator
 
+<img src="custom_components/schedule_creator/brand/icon.png" alt="" width="96" align="right">
+
 Weekly schedules, conditions and quick timers for Home Assistant, run by a native
 integration instead of dashboard helpers. Schedules keep running when no dashboard
 is open, survive restarts and come with five Lovelace cards.
