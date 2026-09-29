@@ -2,6 +2,13 @@
 
 After each update restart Home Assistant and reload the dashboard.
 
+## 0.4.5
+
+- **No more old card after reopening Home Assistant**: the Home Assistant
+  service worker served the card loader from its cache, so each new visit
+  showed the previous version until Ctrl+Shift+R. The loader now lives under
+  `/api/`, which is always fetched; the old resource URL keeps working.
+
 ## 0.4.4
 
 - **Thermostat limits per mode**: devices that accept different temperatures

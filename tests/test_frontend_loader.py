@@ -33,7 +33,14 @@ async def test_loader_imports_bundle_by_content_hash(
         await _create_entry(hass)
         client = await hass_client_no_auth()
 
-        first = await client.get(f"{frontend_loader.LOADER_URL}?hacstag=123")
+        # The old resource URL only forwards, so a stale cached copy is harmless.
+        legacy = await client.get(f"{frontend_loader.LOADER_URL}?hacstag=123")
+        assert legacy.status == 200
+        assert await legacy.text() == frontend_loader.legacy_loader_source()
+        # The service worker never answers /api/ from its cache.
+        assert frontend_loader.API_LOADER_URL.startswith("/api/")
+
+        first = await client.get(f"{frontend_loader.API_LOADER_URL}?hacstag=123")
         assert first.status == 200
         assert first.headers["Cache-Control"] == "no-store"
         assert "javascript" in first.headers["Content-Type"]
@@ -42,7 +49,7 @@ async def test_loader_imports_bundle_by_content_hash(
         assert first_source == frontend_loader.loader_source(fingerprint)
 
         bundle.write_text("console.log('version two');\n", encoding="utf-8")
-        second = await client.get(frontend_loader.LOADER_URL)
+        second = await client.get(frontend_loader.API_LOADER_URL)
         second_source = await second.text()
         assert second_source != first_source
         assert frontend_loader.bundle_fingerprint(bundle) in second_source
