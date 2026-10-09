@@ -277,10 +277,10 @@ def websocket_subscribe_runtime(
             )
 
         unsubscribe_runtime = hass.bus.async_listen(
-            EVENT_RUNTIME_UPDATED, forward, run_immediately=True
+            EVENT_RUNTIME_UPDATED, forward
         )
         unsubscribe_config = hass.bus.async_listen(
-            EVENT_CONFIG_UPDATED, forward_config, run_immediately=True
+            EVENT_CONFIG_UPDATED, forward_config
         )
 
         @callback

@@ -2,6 +2,12 @@
 
 After each update restart Home Assistant and reload the dashboard.
 
+## 0.4.6
+
+- **Home Assistant 2026.10**: the card did not get live updates on 2026.10
+  (an option the integration used to follow changes was removed by Home
+  Assistant). Validation now uses probatio, the engine of Home Assistant 2026.9+.
+
 ## 0.4.5
 
 - **No more old card after reopening Home Assistant**: the Home Assistant
