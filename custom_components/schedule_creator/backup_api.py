@@ -7,7 +7,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any, cast
 
-import voluptuous as vol
+import probatio as vol
 from homeassistant.components.websocket_api.connection import ActiveConnection
 from homeassistant.components.websocket_api.decorators import (
     async_response,
