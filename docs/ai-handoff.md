@@ -6,7 +6,8 @@
 - HA 2026.9 ha sostituito voluptuous con probatio (`import probatio as vol`);
   HA 2026.10 rifiuta `run_immediately` in `bus.async_listen` (0.4.6).
 - `.github/workflows/ha-next.yml`: ogni lunedì mypy + pytest contro l'ultima HA
-  stabile e la beta (`pip --pre`); se fallisce apre una issue (una sola per
+  più recente pubblicata da pytest-homeassistant-custom-component (segue anche
+  le beta); se fallisce apre una issue (una sola per
   versione).
 - `tests/conftest.py`: `fail_on_deprecated_usage` fa fallire i test se HA scrive
   "Detected that custom integration 'schedule_creator' …".
