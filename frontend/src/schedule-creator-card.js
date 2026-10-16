@@ -8,7 +8,7 @@ import { isWscBackup, convertWscBackup, wscImportPayload } from './wsc-import.js
 import { t, setLanguage, locale } from './i18n.js';
 
 const STYLE = '__SC_CSS__';
-const CARD_VERSION = '0.4.6';
+const CARD_VERSION = '0.4.7';
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
@@ -253,7 +253,7 @@ class ScheduleCreatorCard extends HTMLElement {
     const advice = state ? versionAdvice(state.integration_version) : '';
     const failures = state?.failures || [], recentFailures = failures.filter((f) => Date.now() - new Date(f.at) < 86400000);
     const failureBanner = recentFailures.length ? `<div class="status sc-warning" role="status">${recentFailures.length === 1 ? t('Un comando non è riuscito nelle ultime 24 ore: dettagli in “Attività”.') : t('{count} comandi non sono riusciti nelle ultime 24 ore: dettagli in “Attività”.', {count: recentFailures.length})}</div>` : '';
-    const status = `${error ? `<div class="status error" role="alert">${esc(messageFor(error))}</div>` : loading ? `<div class="status">${t('Caricamento…')}</div>` : ''}${advice ? `<div class="status sc-warning" role="status">${esc(advice)}</div>` : ''}${failureBanner}${this.notice && !this.edit ? `<div class="status sc-notice" role="status">${esc(this.notice)}</div>` : ''}`;
+    const status = `${error ? `<div class="status error" role="alert">${esc(messageFor(error))}</div>` : loading ? `<div class="status">${t('Caricamento…')}</div>` : ''}${advice ? `<div class="status sc-warning" role="status">${esc(advice)}</div>` : ''}${this.adapter.polling ? `<div class="status sc-warning" role="status">${t('Aggiornamento non in tempo reale: la card rilegge i dati ogni 30 secondi. Aggiorna Schedule Creator e riavvia Home Assistant.')}</div>` : ''}${failureBanner}${this.notice && !this.edit ? `<div class="status sc-notice" role="status">${esc(this.notice)}</div>` : ''}`;
     const info = this.localError || writeError;
     const errorDetails = this.localError ? this.localErrorDetails : writeError ? diagnosticFor(writeError, {cardVersion:CARD_VERSION,haVersion:this._hass.config?.version}) : null;
     const editable = this._hass?.user?.is_admin === true && writeError?.code !== 'unauthorized';

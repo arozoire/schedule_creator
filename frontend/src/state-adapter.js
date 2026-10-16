@@ -14,6 +14,11 @@ export class ScheduleCreatorStateAdapter {
     this.busy = false;
     this.writeError = null;
     this.conflicted = false;
+    // Without live updates (a Home Assistant change broke the subscription)
+    // the card keeps working by reading the state at this interval.
+    this.polling = false;
+    this.pollMs = 30000;
+    this.pollTimer = null;
   }
 
   connect(hass) {
@@ -39,9 +44,10 @@ export class ScheduleCreatorStateAdapter {
       this.refresh();
     }).catch((error) => {
       if (this.closed || generation !== this.generation) return;
-      this.loading = false;
-      this.error = error;
-      this.onChange();
+      console.warn('Schedule Creator: no live updates, reading the state periodically', error);
+      this.polling = true;
+      this.pollTimer = setInterval(() => this.refresh(), this.pollMs);
+      this.refresh();
     });
   }
 
@@ -128,6 +134,9 @@ export class ScheduleCreatorStateAdapter {
     this.dirty = false;
     this.running = false;
     this.connection = null;
+    this.polling = false;
+    clearInterval(this.pollTimer);
+    this.pollTimer = null;
     if (this.unsubscribe) this.unsubscribe();
     this.unsubscribe = null;
   }

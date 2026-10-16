@@ -15,3 +15,22 @@ def auto_enable_custom_integrations(enable_custom_integrations):
     """Allow Home Assistant to load integrations from custom_components."""
 
     yield
+
+
+@pytest.fixture(autouse=True)
+def fail_on_deprecated_usage(caplog):
+    """Fail when Home Assistant reports a deprecated call from this integration.
+
+    Home Assistant warns ("Detected that custom integration …") long before an
+    API is removed; turning the warning into a failure gives months of notice.
+    """
+
+    yield
+    reports = [
+        record.getMessage()
+        for phase in ("setup", "call")
+        for record in caplog.get_records(phase)
+        if "Detected that custom integration 'schedule_creator'"
+        in record.getMessage()
+    ]
+    assert not reports, "\n".join(reports)
