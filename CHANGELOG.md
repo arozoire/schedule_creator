@@ -8,7 +8,7 @@ After each update restart Home Assistant and reload the dashboard.
   after a Home Assistant update, the cards keep working by reading the data
   every 30 seconds and say so, instead of showing only an error.
 - Development: a weekly check runs the tests against the newest Home Assistant
-  release and beta and opens an issue when something breaks; tests fail when
+  version, betas included, and opens an issue when something breaks; tests fail when
   Home Assistant reports a deprecated call, months before it is removed.
 
 ## 0.4.6

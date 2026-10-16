@@ -1,7 +1,9 @@
 name: Home Assistant next
 
-# Every week, run the Python checks against the newest Home Assistant release
-# and the current beta, so a breaking change shows up before users update.
+# Every week, run the Python checks against the newest Home Assistant that
+# pytest-homeassistant-custom-component ships: it follows the betas too (for
+# example 2026.10.0b0 a week before 2026.10.0), so a breaking change shows up
+# before users update.
 on:
   schedule:
     - cron: "17 5 * * 1"
@@ -14,19 +16,14 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        channel: [stable, beta]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
-      - name: Install the ${{ matrix.channel }} Home Assistant
+      - name: Install the newest Home Assistant
         run: >-
           python -m pip install --disable-pip-version-check
-          ${{ matrix.channel == 'beta' && '--pre' || '' }}
           pytest-homeassistant-custom-component mypy ruff
       - name: Home Assistant version
         id: version
@@ -45,4 +42,4 @@ jobs:
           if gh issue list --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number' | grep -q .; then
             exit 0
           fi
-          gh issue create --title "$TITLE" --body "The weekly check against Home Assistant ${{ steps.version.outputs.ha }} (${{ matrix.channel }}) failed: $RUN"
+          gh issue create --title "$TITLE" --body "The weekly check against Home Assistant ${{ steps.version.outputs.ha }} failed: $RUN"
