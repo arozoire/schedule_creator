@@ -1,5 +1,18 @@
 # AI handoff — stato attuale e piano futuro
 
+
+## Robustezza agli aggiornamenti HA — 0.4.7 (2026-10-16)
+
+- HA 2026.9 ha sostituito voluptuous con probatio (`import probatio as vol`);
+  HA 2026.10 rifiuta `run_immediately` in `bus.async_listen` (0.4.6).
+- `.github/workflows/ha-next.yml`: ogni lunedì mypy + pytest contro l'ultima HA
+  stabile e la beta (`pip --pre`); se fallisce apre una issue (una sola per
+  versione).
+- `tests/conftest.py`: `fail_on_deprecated_usage` fa fallire i test se HA scrive
+  "Detected that custom integration 'schedule_creator' …".
+- `state-adapter.js`: se `subscribe_runtime` fallisce, `polling` = true e
+  `get_state` ogni `pollMs` (30 s); la card principale mostra un avviso.
+
 ## Limiti climate per modo, logo — 0.4.4 (2026-09-29)
 
 - `climate_limits.py`: Store `schedule_creator.climate_limits`

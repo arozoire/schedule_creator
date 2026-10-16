@@ -80,3 +80,25 @@ test('late subscription completion is released after removal', async () => {
   assert.equal(released, 1);
   assert.equal(reads, 0);
 });
+
+test('a failed subscription falls back to periodic reads instead of an error', async () => {
+  let reads = 0;
+  const connection = {
+    subscribeMessage: () => Promise.reject({ code: 'internal_error', message: 'Unable to subscribe' }),
+    sendMessagePromise: () => { reads++; return Promise.resolve({ revision: reads, config: { profiles: [] } }); },
+  };
+  const warn = console.warn; console.warn = () => {};
+  const adapter = new ScheduleCreatorStateAdapter(() => {});
+  adapter.pollMs = 5;
+  try {
+    adapter.connect({ connection });
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    assert.equal(adapter.error, null);
+    assert.equal(adapter.polling, true);
+    assert.ok(adapter.state.revision >= 2, 'state is read again periodically');
+    adapter.disconnect();
+    const after = reads;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(reads, after, 'no reads after disconnect');
+  } finally { console.warn = warn; adapter.disconnect(); }
+});
