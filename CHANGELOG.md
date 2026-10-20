@@ -2,6 +2,11 @@
 
 After each update restart Home Assistant and reload the dashboard.
 
+## 0.5.0
+
+- The columns / rows switch of the main card moved up to the profile line, as
+  two icons, leaving the week toolbar to the group tabs.
+
 ## 0.4.9
 
 - **Select entities** (`select`, `input_select`) can be scheduled: a slot picks
