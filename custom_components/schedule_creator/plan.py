@@ -13,9 +13,8 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from .models import (
     APPLY_STATE_ACTION,
@@ -61,7 +60,7 @@ def plan_entity_ids(config: IntegrationConfig) -> tuple[str, ...]:
     )
 
 
-def week_start(now: datetime, timezone: ZoneInfo) -> date:
+def week_start(now: datetime, timezone: tzinfo) -> date:
     """Local Monday of the week containing ``now``."""
 
     today = now.astimezone(timezone).date()
@@ -71,7 +70,7 @@ def week_start(now: datetime, timezone: ZoneInfo) -> date:
 def project_weeks(
     config: IntegrationConfig,
     monday: date,
-    timezone: ZoneInfo,
+    timezone: tzinfo,
     sun: SunResolver | None,
 ) -> tuple[Occurrence, ...]:
     """Occurrences the engine will run from Monday for ``PROJECTION_DAYS``."""
@@ -81,7 +80,7 @@ def project_weeks(
     return plan_occurrences(config, start, end, timezone, sun)
 
 
-def _local_midnight(day: date, timezone: ZoneInfo) -> datetime:
+def _local_midnight(day: date, timezone: tzinfo) -> datetime:
     return datetime.combine(day, time(), tzinfo=timezone).astimezone(UTC)
 
 
@@ -128,13 +127,13 @@ def action_code(action: TargetAction | None) -> str:
     return f"{state}:{number}" if number else state
 
 
-def _minutes(value: datetime, timezone: ZoneInfo) -> int:
+def _minutes(value: datetime, timezone: tzinfo) -> int:
     local = value.astimezone(timezone)
     return local.hour * 60 + local.minute
 
 
 def _day_part(
-    occurrence: Occurrence, day: date, timezone: ZoneInfo
+    occurrence: Occurrence, day: date, timezone: tzinfo
 ) -> tuple[int, int] | None:
     """Minutes of ``occurrence`` inside the local ``day``, if any."""
 
@@ -224,7 +223,7 @@ def compute_plan(
     leases: Iterable[EntityLease],
     entity_id: str,
     now: datetime,
-    timezone: ZoneInfo,
+    timezone: tzinfo,
     state: str | None = None,
     attributes: Mapping[str, Any] | None = None,
 ) -> tuple[str, dict[str, str]]:

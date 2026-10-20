@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta, tzinfo
 from typing import TYPE_CHECKING
-from zoneinfo import ZoneInfo
 
 from .models import IntegrationConfig, Occurrence, OccurrenceState, Schedule
 from .planner import SunResolver, plan_occurrences
@@ -17,6 +16,15 @@ if TYPE_CHECKING:
 
 # Refreshed daily, so three days always leave at least two days of lookahead.
 PLANNING_HORIZON = timedelta(days=3)
+
+
+async def async_home_time_zone(hass: HomeAssistant) -> tzinfo:
+    """Home Assistant's time zone without reading the tz database in the loop."""
+
+    from homeassistant.util import dt as dt_util
+
+    zone = await dt_util.async_get_time_zone(hass.config.time_zone)
+    return zone or dt_util.get_default_time_zone()
 
 
 def sun_resolver(hass: HomeAssistant) -> SunResolver:
@@ -76,7 +84,7 @@ async def async_reconcile_window(
     config: IntegrationConfig,
     window_start_utc: datetime,
     window_end_utc: datetime,
-    timezone: ZoneInfo,
+    timezone: tzinfo,
     now: datetime,
 ) -> RuntimeStoreData:
     """Project one bounded window and reconcile it into the runtime Store."""
@@ -185,7 +193,7 @@ async def async_replan_window(
     config: IntegrationConfig,
     window_start_utc: datetime,
     window_end_utc: datetime,
-    timezone: ZoneInfo,
+    timezone: tzinfo,
     now: datetime,
     sun: SunResolver | None = None,
 ) -> RuntimeStoreData:
@@ -310,7 +318,7 @@ async def async_replan_window(
 async def async_reconcile_horizon(
     repository: RuntimeRepository,
     config: IntegrationConfig,
-    timezone: ZoneInfo,
+    timezone: tzinfo,
     now: datetime,
     sun: SunResolver | None = None,
 ) -> RuntimeStoreData:

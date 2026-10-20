@@ -6,14 +6,17 @@ import logging
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from typing import TYPE_CHECKING
-from zoneinfo import ZoneInfo
 
 from homeassistant.helpers.event import async_track_time_interval
 
 from .boundaries import async_advance_occurrence_states
 from .const import DOMAIN
 from .leases import async_reconcile_entity_leases
-from .reconciliation import async_reconcile_horizon, sun_resolver
+from .reconciliation import (
+    async_home_time_zone,
+    async_reconcile_horizon,
+    sun_resolver,
+)
 from .retention import async_prune_terminal_occurrences
 
 if TYPE_CHECKING:
@@ -88,7 +91,7 @@ class HorizonRefreshCoordinator:
                 await async_reconcile_horizon(
                     self._storage.runtime,
                     config,
-                    ZoneInfo(self._hass.config.time_zone),
+                    await async_home_time_zone(self._hass),
                     now,
                     sun_resolver(self._hass),
                 )

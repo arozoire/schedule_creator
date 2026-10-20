@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import UTC, date, datetime, time, timedelta
-from zoneinfo import ZoneInfo
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
 
 from .models import (
     ConditionBranch,
@@ -30,7 +29,7 @@ def _utc_boundary(value: datetime, path: str) -> datetime:
     return value.astimezone(UTC)
 
 
-def _valid_instants(local_value: datetime, timezone: ZoneInfo) -> tuple[datetime, ...]:
+def _valid_instants(local_value: datetime, timezone: tzinfo) -> tuple[datetime, ...]:
     """Return distinct UTC instants which round-trip to one naive wall time."""
 
     candidates: list[datetime] = []
@@ -43,7 +42,7 @@ def _valid_instants(local_value: datetime, timezone: ZoneInfo) -> tuple[datetime
 
 
 def _resolve_boundary(
-    local_value: datetime, timezone: ZoneInfo, *, use_latest: bool
+    local_value: datetime, timezone: tzinfo, *, use_latest: bool
 ) -> datetime:
     """Resolve overlap deterministically and move nonexistent wall time forward."""
 
@@ -62,7 +61,7 @@ def _boundary(
     fixed: time,
     event: str | None,
     offset: int | None,
-    timezone: ZoneInfo,
+    timezone: tzinfo,
     sun: SunResolver | None,
     *,
     use_latest: bool,
@@ -83,7 +82,7 @@ def _occurrence(
     schedule: Schedule,
     slot: TimeSlot,
     local_date: date,
-    timezone: ZoneInfo,
+    timezone: tzinfo,
     sun: SunResolver | None = None,
 ) -> Occurrence | None:
     start_utc = _boundary(
@@ -158,7 +157,7 @@ def plan_occurrences(
     config: IntegrationConfig,
     window_start_utc: datetime,
     window_end_utc: datetime,
-    timezone: ZoneInfo,
+    timezone: tzinfo,
     sun: SunResolver | None = None,
 ) -> tuple[Occurrence, ...]:
     """Project occurrences which overlap a half-open UTC planning window.

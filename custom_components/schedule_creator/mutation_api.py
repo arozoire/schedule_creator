@@ -6,7 +6,6 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
-from zoneinfo import ZoneInfo
 
 from homeassistant.components.websocket_api.connection import ActiveConnection
 from homeassistant.config_entries import ConfigEntryState
@@ -15,7 +14,11 @@ from homeassistant.core import HomeAssistant
 from .boundaries import async_advance_occurrence_states
 from .const import DOMAIN
 from .models import IntegrationConfig, ModelValidationError
-from .reconciliation import async_reconcile_horizon, sun_resolver
+from .reconciliation import (
+    async_home_time_zone,
+    async_reconcile_horizon,
+    sun_resolver,
+)
 from .storage import RevisionConflictError, StorageNotLoadedError
 
 if TYPE_CHECKING:
@@ -84,7 +87,7 @@ async def async_commit_config(
             await async_reconcile_horizon(
                 runtime.storage.runtime,
                 updated,
-                ZoneInfo(hass.config.time_zone),
+                await async_home_time_zone(hass),
                 now,
                 sun_resolver(hass),
             )
