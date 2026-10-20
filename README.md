@@ -2,6 +2,8 @@
 
 <img src="custom_components/schedule_creator/brand/icon.png" alt="" width="96" align="right">
 
+<a href="https://www.buymeacoffee.com/arozoire" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="40"></a>
+
 Weekly schedules, conditions and quick timers for Home Assistant, run by a native
 integration instead of dashboard helpers. Schedules keep running when no dashboard
 is open, survive restarts and come with five Lovelace cards.
