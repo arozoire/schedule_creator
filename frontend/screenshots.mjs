@@ -5,7 +5,7 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 
 const port = process.argv[2] || 9333;
 const shots = [
-  ['main', 760, 1400], ['editor', 390, 844], ['action', 390, 844],
+  ['main', 760, 1400], ['rows', 760, 900], ['editor', 390, 844], ['action', 390, 844], ['select', 390, 844], ['week', 760, 940],
   ['conditions', 760, 1000], ['quicktimer', 420, 860], ['timeline', 760, 480],
   ['serpentine', 760, 880], ['ring', 760, 820],
 ];
