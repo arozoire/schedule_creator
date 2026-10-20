@@ -111,6 +111,9 @@ def test_action_tokens() -> None:
     assert action_code(_action("fan", "turn_on", percentage=33)) == "turn_on:33"
     assert action_code(_action("climate", RESTORE_PREVIOUS_ACTION)) == "restore"
     assert action_code(None) == "none"
+    assert action_code(_action("select", "select_option", option="priority")) == (
+        "priority"
+    )
 
 
 def test_week_starts_on_monday_and_splits_overnight_slots(base) -> None:

@@ -2,6 +2,12 @@
 
 After each update restart Home Assistant and reload the dashboard.
 
+## 0.4.9
+
+- **Select entities** (`select`, `input_select`) can be scheduled: a slot picks
+  one of their options, for example start / stop / priority of a heat pump
+  (#65).
+
 ## 0.4.8
 
 - The time zone is taken from Home Assistant's cache instead of being read

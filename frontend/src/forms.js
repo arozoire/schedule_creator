@@ -13,6 +13,7 @@ const commands = {
   fan: {turn_on:'Accendi',turn_off:'Spegni',set_percentage:'Velocità (%)',set_preset_mode:'Preset'},
   cover: {open_cover:'Apri',close_cover:'Chiudi',stop_cover:'Ferma',set_cover_position:'Posizione (%)'},
   valve: {open_valve:'Apri',close_valve:'Chiudi',stop_valve:'Ferma',set_valve_position:'Posizione (%)'},
+  select: {select_option:'Opzione'}, input_select: {select_option:'Opzione'},
 };
 export function controllable(hass, id) {
   const domain = id.split('.')[0];

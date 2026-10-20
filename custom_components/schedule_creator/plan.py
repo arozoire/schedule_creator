@@ -107,6 +107,8 @@ def action_code(action: TargetAction | None) -> str:
     elif action.domain == "climate" and action.action == "set_temperature":
         mode = data.get("hvac_mode")
         state = _word(mode) if isinstance(mode, str) else "set"
+    elif action.action == "select_option" and isinstance(data.get("option"), str):
+        state = _word(data["option"])
     else:
         state = _word(action.action)
     if action.domain == "climate":
