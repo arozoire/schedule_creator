@@ -14,6 +14,7 @@ export const modeLabels = {off:'Spento',on:'Acceso',auto:'Auto',heat_cool:'Caldo
 const modeIcons = {off:'power',on:'power',auto:'autorenew',heat_cool:'sun-snowflake',cool:'snowflake',heat:'fire',dry:'water-percent',fan_only:'fan',open:'arrow-up',close:'arrow-down',stop:'stop',position:'tune-vertical',none:'minus-circle-outline',restore:'history'};
 export const pretty = (value) => (modeLabels[value] ? t(modeLabels[value]) : null) || String(value).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 const round = (value, step) => Math.round(value / step) * step;
+export const SELECT_DOMAINS = new Set(['select', 'input_select']);
 // Covers and valves share open/close/stop/position commands and feature bits.
 export const POSITION_ACTIONS = {
   cover: {open: 'open_cover', close: 'close_cover', stop: 'stop_cover', position: 'set_cover_position'},
@@ -52,6 +53,9 @@ function capabilities(hass, ids) {
     caps.swing_modes = intersect(states, 'swing_modes');
     caps.swing_horizontal_modes = intersect(states, 'swing_horizontal_modes');
     caps.unit = caps.attrs.temperature_unit || hass.config?.unit_system?.temperature || '°C';
+  } else if (SELECT_DOMAINS.has(domain)) {
+    // A select offers its own options; the slot picks one of them.
+    caps.modes = intersect(states, 'options');
   } else if (POSITION_ACTIONS[domain]) {
     caps.modes = [['open', 1], ['close', 2], ['position', 4], ['stop', 8]].filter(([, bit]) => every(states, (s) => features(s) & bit)).map(([mode]) => mode);
     if (!caps.modes.length) caps.modes = ['open', 'close'];
@@ -89,6 +93,7 @@ export function actionToUi(domain, action, caps) {
     }
     return null;
   }
+  if (SELECT_DOMAINS.has(domain)) return action.action === 'select_option' && only('option') && caps.modes.includes(data.option) ? {mode: data.option} : null;
   if (POSITION_ACTIONS[domain]) {
     const mode = Object.keys(POSITION_ACTIONS[domain]).find((key) => POSITION_ACTIONS[domain][key] === action.action);
     return mode && only('position') ? {mode, position: data.position} : null;
@@ -115,6 +120,7 @@ function defaults(caps, optional) {
     const mode = caps.modes.includes(current) && current !== 'off' ? current : caps.modes.find((m) => m !== 'off') || caps.modes[0];
     return {mode, temperature: a.temperature ?? round((caps.min + caps.max) / 2, caps.step), target_temp_low: a.target_temp_low ?? caps.min, target_temp_high: a.target_temp_high ?? caps.max, fan_mode: a.fan_mode, preset_mode: a.preset_mode, swing_mode: a.swing_mode, swing_horizontal_mode: a.swing_horizontal_mode};
   }
+  if (SELECT_DOMAINS.has(caps.domain)) return {mode: caps.modes.includes(current) ? current : caps.modes[0]};
   if (POSITION_ACTIONS[caps.domain]) return {mode: caps.modes.includes('position') ? 'position' : caps.modes[0], position: a.current_position ?? 50};
   return {mode: 'on', brightness_pct: 100, percentage: a.percentage ?? 50};
 }
@@ -171,7 +177,7 @@ export function actionForm(prefix, label, hass, ids, value, optional, draft = {}
   const mode = modes.includes(get('mode')) ? get('mode') : modes[0];
   const fields = [], more = [];
   const name = (key) => `${prefix}_${key}`;
-  fields.push(choices(name('mode'), domain === 'climate' ? t('Modalità HVAC') : POSITION_ACTIONS[domain] ? t('Comando') : t('Stato'), modes, mode, {primary: true, icons: true}));
+  fields.push(choices(name('mode'), domain === 'climate' ? t('Modalità HVAC') : POSITION_ACTIONS[domain] ? t('Comando') : SELECT_DOMAINS.has(domain) ? t('Opzione') : t('Stato'), modes, mode, {primary: true, icons: true}));
   if (domain === 'climate' && !['none', 'off', 'restore'].includes(mode)) {
     const limits = climateLimits(caps, mode);
     Object.assign(caps, {min: limits.min, max: limits.max, step: limits.step});
@@ -227,6 +233,8 @@ export function readAction(form, prefix, domain) {
       if (mode !== 'fan_only') { put('temperature', num('temperature')); put('target_temp_low', num('target_temp_low')); put('target_temp_high', num('target_temp_high')); }
       for (const key of ['fan_mode', 'preset_mode', 'swing_mode', 'swing_horizontal_mode']) put(key, val(key));
     }
+  } else if (SELECT_DOMAINS.has(domain)) {
+    action = 'select_option'; data.option = mode;
   } else if (POSITION_ACTIONS[domain]) {
     action = POSITION_ACTIONS[domain][mode];
     if (mode === 'position') put('position', num('position'));
@@ -257,7 +265,7 @@ export function describeAction(action) {
     if (d.fan_mode) parts.push(t('ventola {mode}', {mode: pretty(d.fan_mode).toLowerCase()}));
     return parts.join(' ');
   }
-  const base = {turn_on: t('Accendi'), turn_off: t('Spegni'), open_cover: t('Apri'), close_cover: t('Chiudi'), stop_cover: t('Ferma'), set_cover_position: t('Posizione {value}%', {value: d.position}), open_valve: t('Apri'), close_valve: t('Chiudi'), stop_valve: t('Ferma'), set_valve_position: t('Posizione {value}%', {value: d.position}), set_hvac_mode: pretty(d.hvac_mode), set_temperature: `${d.temperature ?? ''}°`, set_percentage: t('Velocità {value}%', {value: d.percentage})}[action.action] || pretty(action.action);
+  const base = {turn_on: t('Accendi'), turn_off: t('Spegni'), open_cover: t('Apri'), close_cover: t('Chiudi'), stop_cover: t('Ferma'), set_cover_position: t('Posizione {value}%', {value: d.position}), open_valve: t('Apri'), close_valve: t('Chiudi'), stop_valve: t('Ferma'), set_valve_position: t('Posizione {value}%', {value: d.position}), set_hvac_mode: pretty(d.hvac_mode), set_temperature: `${d.temperature ?? ''}°`, set_percentage: t('Velocità {value}%', {value: d.percentage}), select_option: d.option == null ? '' : pretty(d.option)}[action.action] || pretty(action.action);
   const extra = d.brightness_pct != null ? ` ${d.brightness_pct}%` : d.percentage != null && action.action === 'turn_on' ? ` ${d.percentage}%` : '';
   return base + extra;
 }

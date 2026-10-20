@@ -511,6 +511,7 @@ export const STRINGS = {
     "Aggiungi un dispositivo…": "Add a device…",
     "Limiti di temperatura per «{mode}» non ancora noti: li imparo quando il dispositivo è in questo modo. Intanto {min}–{max} {unit}.": "Temperature limits for “{mode}” are not known yet: they are learned when the device is in this mode. Meanwhile {min}–{max} {unit}.",
     "Aggiornamento non in tempo reale: la card rilegge i dati ogni 30 secondi. Aggiorna Schedule Creator e riavvia Home Assistant.": "No live updates: the card reads the data every 30 seconds. Update Schedule Creator and restart Home Assistant.",
+    "Opzione": "Option",
   },
   fr: {
     "Diminuisci": "Diminuer",
@@ -1022,6 +1023,7 @@ export const STRINGS = {
     "Aggiungi un dispositivo…": "Ajouter un appareil…",
     "Limiti di temperatura per «{mode}» non ancora noti: li imparo quando il dispositivo è in questo modo. Intanto {min}–{max} {unit}.": "Limites de température pour « {mode} » encore inconnues : elles sont apprises quand l’appareil est dans ce mode. En attendant {min}–{max} {unit}.",
     "Aggiornamento non in tempo reale: la card rilegge i dati ogni 30 secondi. Aggiorna Schedule Creator e riavvia Home Assistant.": "Pas de mise à jour en temps réel : la carte relit les données toutes les 30 secondes. Mettez à jour Schedule Creator et redémarrez Home Assistant.",
+    "Opzione": "Option",
   },
   de: {
     "Diminuisci": "Verringern",
@@ -1533,6 +1535,7 @@ export const STRINGS = {
     "Aggiungi un dispositivo…": "Gerät hinzufügen…",
     "Limiti di temperatura per «{mode}» non ancora noti: li imparo quando il dispositivo è in questo modo. Intanto {min}–{max} {unit}.": "Temperaturgrenzen für „{mode}“ noch unbekannt: Sie werden gelernt, wenn das Gerät in diesem Modus ist. Bis dahin {min}–{max} {unit}.",
     "Aggiornamento non in tempo reale: la card rilegge i dati ogni 30 secondi. Aggiorna Schedule Creator e riavvia Home Assistant.": "Keine Live-Aktualisierung: Die Karte liest die Daten alle 30 Sekunden neu. Schedule Creator aktualisieren und Home Assistant neu starten.",
+    "Opzione": "Option",
   },
   es: {
     "Diminuisci": "Disminuir",
@@ -2044,5 +2047,6 @@ export const STRINGS = {
     "Aggiungi un dispositivo…": "Añadir un dispositivo…",
     "Limiti di temperatura per «{mode}» non ancora noti: li imparo quando il dispositivo è in questo modo. Intanto {min}–{max} {unit}.": "Límites de temperatura para «{mode}» aún desconocidos: se aprenden cuando el dispositivo está en este modo. Mientras tanto {min}–{max} {unit}.",
     "Aggiornamento non in tempo reale: la card rilegge i dati ogni 30 secondi. Aggiorna Schedule Creator e riavvia Home Assistant.": "Sin actualización en tiempo real: la tarjeta vuelve a leer los datos cada 30 segundos. Actualiza Schedule Creator y reinicia Home Assistant.",
+    "Opzione": "Opción",
   },
 };

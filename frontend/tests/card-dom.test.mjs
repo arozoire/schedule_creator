@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { JSDOM, VirtualConsole } from 'jsdom';
 const bundle = readFileSync(new URL('../../custom_components/schedule_creator/frontend/schedule-creator-card.js',import.meta.url),'utf8');
 const tick=()=>new Promise((r)=>setImmediate(r));
-const services={cover:{open_cover:{},close_cover:{},set_cover_position:{}},switch:{turn_on:{},turn_off:{}},light:{turn_on:{},turn_off:{}},climate:{set_temperature:{},set_hvac_mode:{},set_fan_mode:{}},fan:{turn_on:{},turn_off:{},set_percentage:{},set_preset_mode:{}},automation:{trigger:{}},update:{install:{}}};
+const services={cover:{open_cover:{},close_cover:{},set_cover_position:{}},switch:{turn_on:{},turn_off:{}},light:{turn_on:{},turn_off:{}},climate:{set_temperature:{},set_hvac_mode:{},set_fan_mode:{}},fan:{turn_on:{},turn_off:{},set_percentage:{},set_preset_mode:{}},select:{select_option:{}},automation:{trigger:{}},update:{install:{}}};
 function setup() {
   const dom=new JSDOM('<body></body>',{url:'http://ha.local/lovelace/casa',runScripts:'dangerously',virtualConsole:new VirtualConsole()});
   dom.window.structuredClone=structuredClone;
@@ -16,6 +16,7 @@ function setup() {
     ['climate.room',{hvac_modes:['heat','cool','off'],fan_modes:['low','high'],supported_features:9,min_temp:7,max_temp:30}],
     ['fan.room',{supported_features:9,preset_modes:['eco']}],
     ['cover.blind',{friendly_name:'Tenda',supported_features:15,current_position:20}],
+    ['select.heat_pump_mode',{friendly_name:'Modo pompa',options:['start','stop','priority']}],
   ].map(([id,attributes])=>[id,{entity_id:id,attributes,state:'off'}]));
   const snapshot={revision:3,config:{profiles:[{id:'p',name:'Home',active:true}],groups:[{id:'g',profile_id:'p',name:'Room',entity_ids:['switch.a']}],schedules:[]},runtime_summary:{revision:6},quick_timers:[],operational:{}};
   const writes=[];
@@ -33,7 +34,7 @@ test('group lists controllable entities and search really hides nonmatches',asyn
  assert.equal(t.root.querySelector('[name="entities"][value="sensor.temperature"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="automation.test"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="update.test"]'),null);
- assert.equal(t.root.querySelector('.sc-version').textContent,'v0.4.8');
+ assert.equal(t.root.querySelector('.sc-version').textContent,'v0.4.9');
  t.set('entity_search','lampada','input');
  const hidden=t.root.querySelector('[value="switch.outside"]').parentElement;
  assert.equal(hidden.hidden,true);
@@ -102,7 +103,7 @@ test('local action failure exposes phase and stack, keeps draft and permits retr
  const details=t.root.querySelector('.sc-error-details textarea').value;
  assert.match(details,/Fase: lettura azione iniziale/);
  assert.match(details,/Traccia:\nError: Method not implemented/);
- assert.match(details,/Schedule Creator: 0.4.8/);
+ assert.match(details,/Schedule Creator: 0.4.9/);
  assert.match(t.root.querySelector('.sc-error').textContent,/La bozza è conservata/);
  t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
  assert.equal(t.writes.length,1);
@@ -203,6 +204,15 @@ test('cover schedule uses a percentage slider',async()=>{
  assert.deepEqual(t.writes[0].end_action,{domain:'cover',action:'close_cover',data:{}});
  }finally{t.close();}
 });
+test('select entities schedule one of their options',async()=>{
+ const t=setup();try {await tick();
+ t.snapshot.config.groups[0].entity_ids=['select.heat_pump_mode'];t.card.render();t.click('newSchedule');
+ assert.deepEqual([...t.root.querySelectorAll('[name="start_mode"]')].map((n)=>n.value),['start','stop','priority']);
+ t.pick('start_mode','priority');t.pick('end_mode','stop');t.submit();await tick();
+ assert.deepEqual(t.writes[0].start_action,{domain:'select',action:'select_option',data:{option:'priority'}});
+ assert.deepEqual(t.writes[0].end_action,{domain:'select',action:'select_option',data:{option:'stop'}});
+ }finally{t.close();}
+});
 test('name and notification texts are suggested until the user edits them',async()=>{
  const t=setup();try {await tick();t.click('newSchedule');
  const name=()=>t.root.querySelector('[name="name"]').value;
@@ -223,7 +233,7 @@ test('name and notification texts are suggested until the user edits them',async
 test('version mismatch explains reload or restart',async()=>{
  const t=setup();try {await tick();
  assert.match(t.root.querySelector('.sc-warning').textContent,/Riavvia Home Assistant/);
- t.card.adapter.state={...structuredClone(t.snapshot),integration_version:'0.4.8'};t.card.render();
+ t.card.adapter.state={...structuredClone(t.snapshot),integration_version:'0.4.9'};t.card.render();
  assert.equal(t.root.querySelector('.sc-warning'),null);
  t.card.adapter.state.integration_version='9.9.0';t.card.render();
  assert.match(t.root.querySelector('.sc-warning').textContent,/Ricarica la pagina/);
