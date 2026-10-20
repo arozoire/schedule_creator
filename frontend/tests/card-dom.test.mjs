@@ -204,6 +204,20 @@ test('cover schedule uses a percentage slider',async()=>{
  assert.deepEqual(t.writes[0].end_action,{domain:'cover',action:'close_cover',data:{}});
  }finally{t.close();}
 });
+test('the week turns into rows and back, and a row bar opens its schedule',async()=>{
+ const t=setup();try {await tick();
+ const s={id:'m',profile_id:'p',group_id:'g',name:'Mattina',enabled:true,target_entity_ids:['switch.a'],time_slots:[{weekdays:[0,2],start:'06:00',end:'09:00'}],start_action:{domain:'switch',action:'turn_on',data:{}},end_action:null,condition:null,override_policy:'cooperative',inclusion_dates:[],exclusion_dates:[],start_notification:null,end_notification:null};
+ t.card.adapter.state={...structuredClone(t.snapshot),config:{...structuredClone(t.snapshot.config),schedules:[s]}};t.card.render();
+ assert.ok(t.root.querySelector('.sc-timeline'));
+ t.root.querySelector('[data-command="setLayout"][data-id="rows"]').click();
+ assert.equal(t.root.querySelector('.sc-timeline'),null);
+ const rows=t.root.querySelectorAll('.wr-row');
+ assert.equal(rows.length,7);
+ assert.equal(rows[0].querySelectorAll('.wr-block').length,1);assert.equal(rows[1].querySelectorAll('.wr-block').length,0);
+ rows[2].querySelector('.wr-block').click();
+ assert.equal(t.root.querySelector('[name="name"]').value,'Mattina');
+ }finally{t.close();}
+});
 test('select entities schedule one of their options',async()=>{
  const t=setup();try {await tick();
  t.snapshot.config.groups[0].entity_ids=['select.heat_pump_mode'];t.card.render();t.click('newSchedule');

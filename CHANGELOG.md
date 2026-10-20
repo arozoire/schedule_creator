@@ -7,6 +7,11 @@ After each update restart Home Assistant and reload the dashboard.
 - **Select entities** (`select`, `input_select`) can be scheduled: a slot picks
   one of their options, for example start / stop / priority of a heat pump
   (#65).
+- **The week as rows**: the main card switches between columns and rows
+  (one row per weekday, one bar per schedule slot), the timeline card between
+  one day per device and the whole week per schedule (#63). The switch is
+  remembered on each browser; the initial view is a card option (`layout:
+  rows`, `view: week`) in the visual editor.
 
 ## 0.4.8
 

@@ -50,3 +50,36 @@ test('timeline card shows one row per entity across all active profiles', async 
     assert.equal(root.querySelector('.tl-now'), null);
   } finally { card.remove(); dom.window.close(); }
 });
+
+test('the week view shows one row per weekday with the schedules of active profiles', async () => {
+  const dom = new JSDOM('<body></body>', {runScripts: 'dangerously', virtualConsole: new VirtualConsole(), url: 'http://localhost/'});
+  dom.window.structuredClone = structuredClone;
+  dom.window.eval(bundle);
+  const work = [0, 1, 2, 3, 4];
+  const state = {revision: 1, runtime_summary: {revision: 1}, quick_timers: [], operational: {occurrences: []}, config: {
+    profiles: [{id: 'home', name: 'A casa', active: true}, {id: 'away', name: 'Fuori', active: false}], groups: [],
+    schedules: [
+      schedule('Mattina', 'home', 'climate.room', {weekdays: work, start: '06:30', end: '08:30'}, {domain: 'climate', action: 'apply_state', data: {state: 'heat', temperature: 21}}),
+      schedule('Tapparelle', 'home', 'cover.blind', {weekdays: work, start: '07:00', end: '07:30'}, {domain: 'cover', action: 'open_cover', data: {}}),
+      schedule('Fuori', 'away', 'switch.garden', {weekdays: work, start: '08:00', end: '09:00'}, {domain: 'switch', action: 'turn_on', data: {}}),
+    ]}};
+  const hass = {user: {is_admin: true}, states: {}, config: {}, connection: {subscribeMessage: () => Promise.resolve(() => {}), sendMessagePromise: () => Promise.resolve(state)}};
+  const card = dom.window.document.createElement('schedule-creator-timeline-card');
+  card.setConfig({view: 'week'}); card.hass = hass; dom.window.document.body.append(card);
+  await tick();
+  try {
+    const root = card.shadowRoot;
+    assert.equal(root.querySelectorAll('.wr-row').length, 7);
+    const monday = root.querySelectorAll('.wr-row')[0];
+    assert.deepEqual([...monday.querySelectorAll('.wr-block')].map((b) => b.getAttribute('title').split(' · ')[0]), ['Mattina', 'Tapparelle']);
+    // The two overlap, so they sit in two lanes; the weekend rows are empty.
+    assert.notEqual(monday.querySelectorAll('.wr-block')[0].style.top, monday.querySelectorAll('.wr-block')[1].style.top);
+    assert.equal(root.querySelectorAll('.wr-row')[6].querySelectorAll('.wr-block').length, 0);
+    assert.deepEqual([...root.querySelectorAll('.tl-legend')].map((n) => n.textContent), ['Mattina', 'Tapparelle']);
+    // The switch goes back to the day view and is remembered by the browser.
+    root.querySelector('button[data-view="day"]').click();
+    assert.equal(root.querySelectorAll('.wr-row').length, 0);
+    assert.ok(root.querySelector('.tl-days'));
+    assert.equal(dom.window.localStorage.getItem('schedule-creator.timeline-view'), 'day');
+  } finally { card.remove(); dom.window.close(); }
+});

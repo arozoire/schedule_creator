@@ -1,0 +1,19 @@
+/* The week as rows, shared by the main card and the timeline card. */
+.wr { display: grid; gap: 6px; }
+.wr-ticks, .wr-row { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px; align-items: center; }
+.wr-ticks > div { display: flex; justify-content: space-between; font-size: .64rem; color: var(--secondary-text-color, #647180); font-variant-numeric: tabular-nums; }
+.wr-day { font-size: .78rem; font-weight: 700; color: var(--secondary-text-color, #647180); }
+.wr-day small { display: block; font-size: .64rem; font-weight: 600; }
+.wr-row.is-today .wr-day { color: var(--primary-color, #00897b); }
+.wr-track { position: relative; border-radius: 9px; background: var(--secondary-background-color, #f4f6f8); overflow: hidden; }
+.wr-row.is-today .wr-track { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--primary-color, #00897b) 35%, transparent); }
+.wr .wr-block { position: absolute; height: 18px; min-height: 0; min-width: 0; margin: 0; line-height: 1; box-sizing: border-box; display: flex; align-items: center; padding: 0 0 0 6px; border: 0; border-radius: 6px; background: var(--block-color); color: #fff; font: inherit; font-size: .66rem; font-weight: 700; text-align: left; white-space: nowrap; overflow: hidden; }
+.wr-block span { overflow: hidden; text-overflow: ellipsis; }
+button.wr-block { cursor: pointer; }
+.wr-block.is-off { opacity: .5; }
+.wr-block.is-running { box-shadow: inset 0 0 0 2px var(--success-color, #1f9d55); }
+.wr-block.is-paused { background: transparent; border: 2px dashed var(--warning-color, #f0a500); color: color-mix(in srgb, var(--warning-color, #f0a500) 65%, #000); }
+.wr-now { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--error-color, #d6453d); }
+.wr-switch { display: inline-flex; padding: 2px; border-radius: 999px; background: var(--secondary-background-color, #f4f6f8); }
+.wr-switch button { min-height: 0; margin: 0; border: 0; border-radius: 999px; padding: 5px 12px; background: none; color: var(--secondary-text-color, #647180); font: inherit; font-size: .75rem; cursor: pointer; }
+.wr-switch button[aria-pressed="true"] { background: var(--primary-color, #00897b); color: var(--text-primary-color, #fff); font-weight: 700; }
