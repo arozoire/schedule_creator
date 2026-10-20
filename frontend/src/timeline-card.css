@@ -29,3 +29,6 @@ ha-card { display: block; padding: 20px; border-radius: var(--ha-card-border-rad
 .tl-muted { margin: 0; font-size: .82rem; color: var(--tl-muted); }
 .tl-error { margin: 0; color: var(--error-color, #b3261e); }
 @media (max-width: 480px) { .tl-row { grid-template-columns: 1fr; gap: 4px; } .tl-axis > span { display: none; } }
+.tl-legends { display: flex; flex-wrap: wrap; gap: 6px; }
+.tl-legend { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--tl-surface); font-size: .72rem; color: var(--tl-muted); }
+.tl-legend i { width: 9px; height: 9px; border-radius: 3px; }

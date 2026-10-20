@@ -6,6 +6,8 @@ import { messageFor } from './editor.js';
 import { describeAction, describeState } from './action-editor.js';
 import { temperatureColor } from './schedule-creator-card.js';
 import { t, setLanguage, locale } from './i18n.js';
+import { weeklySegments } from './timeline.js';
+import { weekRowsHtml, readView, saveView } from './week-rows.js';
 
 const tlEsc = uiEscape;
 const TL_STYLE = '__SC_TL_CSS__';
@@ -65,6 +67,8 @@ export class ScheduleCreatorTimelineCard extends HTMLElement {
     this.shadowRoot.addEventListener('click', (e) => {
       const b = e.target.closest('button[data-day]');
       if (b) { this.day = Number(b.dataset.day); this.render(); }
+      const v = e.target.closest('button[data-view]');
+      if (v) { this.view = v.dataset.view; saveView('schedule-creator.timeline-view', this.view); this.render(); }
     });
   }
   static getStubConfig() { return {}; }
@@ -96,6 +100,18 @@ export class ScheduleCreatorTimelineCard extends HTMLElement {
     const entities = [...new Set([...schedules.flatMap((s) => s.target_entity_ids), ...timers.map((timer) => timer.entity_id)])].filter((id) => !wanted || wanted.includes(id));
     if (wanted) entities.sort((a, b) => wanted.indexOf(a) - wanted.indexOf(b)); else entities.sort((a, b) => (hass.states[a]?.attributes?.friendly_name || a).localeCompare(hass.states[b]?.attributes?.friendly_name || b));
     const colorOf = (schedule) => { const d = schedule.start_action?.data || {}; return schedule.start_action?.domain === 'climate' && d.temperature != null && d.state !== 'off' ? temperatureColor(d.temperature) : TL_PALETTE[(config.schedules || []).indexOf(schedule) % TL_PALETTE.length]; };
+    // Week view: the schedules of the active profiles, one row per weekday.
+    const view = this.view ?? readView('schedule-creator.timeline-view', this.config.view === 'week' ? 'week' : 'day');
+    const switcher = `<div class="wr-switch" role="group" aria-label="${t('Vista')}">${[['day', t('Giorno')], ['week', t('Settimana')]].map(([v, l]) => `<button type="button" data-view="${v}" aria-pressed="${view === v}">${l}</button>`).join('')}</div>`;
+    if (view === 'week') {
+      const shown = schedules.filter((s) => s.enabled && (!wanted || s.target_entity_ids.some((id) => wanted.includes(id))));
+      const occurrences = state.operational?.occurrences || [];
+      const live = (schedule) => { const o = occurrences.find((x) => x.schedule_id === schedule.id && x.state !== 'pending'); return !o ? '' : o.condition_branch === 'false' || o.state === 'suspended' ? 'is-paused' : 'is-running'; };
+      const legend = shown.map((s) => `<span class="tl-legend"><i style="background:${colorOf(s)}"></i>${tlEsc(s.name)}</span>`).join('');
+      surface.innerHTML = `<div class="tl-body"><div class="tl-head"><div><span class="tl-eyebrow">${active.length ? `${t('Profili attivi')} · ${tlEsc(active.map((p) => p.name).join(', '))}` : t('Nessun profilo attivo')}</span><strong class="tl-title">${tlEsc(this.config.title || t('Settimana'))}</strong></div>${switcher}</div>
+        ${shown.length ? `<div class="tl-legends">${legend}</div>${weekRowsHtml(weeklySegments(shown), {today: now.weekday, minutes: now.minutes, color: colorOf, live, block: () => ['span', ''], escape: tlEsc})}` : `<p class="tl-muted">${t('Nessuna entità programmata nei profili attivi.')}</p>`}</div>`;
+      return;
+    }
     const clock = (iso) => new Intl.DateTimeFormat(locale(), {timeZone: now.zone, hour: '2-digit', minute: '2-digit'}).format(new Date(iso));
     const dates = TL_DAYS.map((label, i) => {
       const d = new Date(Date.now() + (i - now.weekday) * 86400000);
@@ -120,7 +136,7 @@ export class ScheduleCreatorTimelineCard extends HTMLElement {
       const timerBar = timer && today ? (() => { const left = now.minutes, width = Math.max(1, Math.min(1440 - left, (new Date(timer.expires_at) - Date.now()) / 60000)); return `<span class="tl-block tl-timer" style="left:${left / 14.4}%;width:${width / 14.4}%" title="Quick Timer"></span>`; })() : '';
       return `<div class="tl-row"><div class="tl-name"><strong>${tlEsc(st?.attributes?.friendly_name || entityId)}</strong><span class="${kind}">${tlEsc(status)}</span></div><div class="tl-track" aria-label="${tlEsc(st?.attributes?.friendly_name || entityId)}">${bars}${timerBar}${today ? `<span class="tl-now" style="left:${now.minutes / 14.4}%"></span>` : ''}</div></div>`;
     }).join('');
-    surface.innerHTML = `<div class="tl-body"><div class="tl-head"><div><span class="tl-eyebrow">${active.length ? `${t('Profili attivi')} · ${tlEsc(active.map((p) => p.name).join(', '))}` : t('Nessun profilo attivo')}</span><strong class="tl-title">${tlEsc(this.config.title || (today ? t('Oggi') : t(['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'][day])))}</strong></div></div>
+    surface.innerHTML = `<div class="tl-body"><div class="tl-head"><div><span class="tl-eyebrow">${active.length ? `${t('Profili attivi')} · ${tlEsc(active.map((p) => p.name).join(', '))}` : t('Nessun profilo attivo')}</span><strong class="tl-title">${tlEsc(this.config.title || (today ? t('Oggi') : t(['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'][day])))}</strong></div>${switcher}</div>
       <div class="tl-days" role="group" aria-label="${t('Giorno')}">${dates}</div>
       ${entities.length ? `<div class="tl-grid"><div class="tl-row tl-axis"><span></span><div class="tl-ticks"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div></div>${rows}</div>` : `<p class="tl-muted">${t('Nessuna entità programmata nei profili attivi.')}</p>`}</div>`;
   }

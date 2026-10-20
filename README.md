@@ -106,10 +106,13 @@ only for reference.
 type: custom:schedule-creator-timeline-card
 title: Today                               # optional
 entities: [climate.bedroom, cover.bedroom] # optional filter and order
+view: week                                 # optional: start on the week view
 ```
 
 One 24 h row per device for the selected weekday, combining the schedules of
 **all active profiles**, with the current status next to each row. Read-only.
+The **Day | Week** switch shows instead the whole week, one row per weekday with
+a bar for each schedule slot.
 
 ### Serpentine and ring cards
 

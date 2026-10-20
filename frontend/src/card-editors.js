@@ -17,6 +17,8 @@ const CE_FIELDS = {
   presets: () => ({key: 'presets', kind: 'presets'}),
   default_minutes: () => ({key: 'default_minutes', kind: 'number', label: 'Durata predefinita (minuti)', min: 1, max: 1440}),
   max_lanes: () => ({key: 'max_lanes', kind: 'number', label: 'Dispositivi al massimo', min: 1, max: 8, placeholder: '6'}),
+  layout: () => ({key: 'layout', kind: 'choice', label: 'Vista iniziale', options: [['', 'Colonne'], ['rows', 'Righe']]}),
+  view: () => ({key: 'view', kind: 'choice', label: 'Vista iniziale', options: [['', 'Giorno'], ['week', 'Settimana']]}),
   edit_path: () => ({key: 'edit_path', kind: 'text', label: 'Vista con la card principale', placeholder: '/lovelace/schedules', hint: 'Il pulsante Modifica apre lo schedule in questa vista.'}),
 };
 
@@ -34,6 +36,7 @@ class ScheduleCreatorCardEditorBase extends HTMLElement {
     const hint = f.hint ? `<small class="ce-hint">${t(f.hint)}</small>` : '';
     if (f.kind === 'text') return `<label>${t(f.label)}<input name="${f.key}" value="${E(value || '')}" placeholder="${E(f.placeholder || '')}">${hint}</label>`;
     if (f.kind === 'number') return `<label>${t(f.label)}<input name="${f.key}" type="number" min="${f.min}" max="${f.max}" value="${E(value ?? '')}" placeholder="${E(f.placeholder || '')}"></label>`;
+    if (f.kind === 'choice') return `<label>${t(f.label)}<select name="${f.key}">${f.options.map(([v, l]) => `<option value="${v}" ${(value || '') === v ? 'selected' : ''}>${t(l)}</option>`).join('')}</select><small class="ce-hint">${t('L’interruttore nella card la cambia su questo browser.')}</small></label>`;
     if (f.kind === 'presets') return `<label>${t('Durate rapide (minuti, separate da virgola)')}<input name="presets" value="${E((value || []).join(', '))}" placeholder="5, 10, 15, 30, 45, 60"></label>`;
     if (f.kind === 'language') return `<label>${t('Lingua')}<select name="language"><option value="">${t('Come l’utente di Home Assistant')}</option>${CE_LANGUAGES.map(([code, label]) => `<option value="${code}" ${code === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label>`;
     if (f.kind === 'entity') return `<label>${t('Entità')}<select name="entity"><option value="">${t('Scegli nella card')}</option>${[...(value ? [value] : []), ...ceOptions(hass, value ? [value] : [])].map((id) => `<option value="${E(id)}" ${id === value ? 'selected' : ''}>${E(ceName(hass, id))}</option>`).join('')}</select></label>`;
@@ -64,9 +67,9 @@ class ScheduleCreatorCardEditorBase extends HTMLElement {
 }
 
 const ceEditor = (fields) => class extends ScheduleCreatorCardEditorBase { static fields = fields; };
-export const ScheduleCreatorCardEditor = ceEditor([CE_FIELDS.title('Titolo della card'), CE_FIELDS.language()]);
+export const ScheduleCreatorCardEditor = ceEditor([CE_FIELDS.title('Titolo della card'), CE_FIELDS.layout(), CE_FIELDS.language()]);
 export const ScheduleCreatorQuickTimerCardEditor = ceEditor([CE_FIELDS.entity(), CE_FIELDS.title('Titolo'), CE_FIELDS.name(), CE_FIELDS.presets(), CE_FIELDS.default_minutes(), CE_FIELDS.language()]);
-export const ScheduleCreatorTimelineCardEditor = ceEditor([CE_FIELDS.title('Titolo'), CE_FIELDS.entities(), CE_FIELDS.language()]);
+export const ScheduleCreatorTimelineCardEditor = ceEditor([CE_FIELDS.title('Titolo'), CE_FIELDS.view(), CE_FIELDS.entities(), CE_FIELDS.language()]);
 export const ScheduleCreatorWeekCardEditor = ceEditor([CE_FIELDS.title('Titolo'), CE_FIELDS.entities(), CE_FIELDS.max_lanes(), CE_FIELDS.edit_path(), CE_FIELDS.language()]);
 
 for (const [tag, cls] of [
