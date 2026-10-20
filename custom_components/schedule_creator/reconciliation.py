@@ -19,6 +19,15 @@ if TYPE_CHECKING:
 PLANNING_HORIZON = timedelta(days=3)
 
 
+async def async_home_time_zone(hass: HomeAssistant) -> ZoneInfo:
+    """Home Assistant's time zone without reading the tz database in the loop."""
+
+    from homeassistant.util import dt as dt_util
+
+    zone = await dt_util.async_get_time_zone(hass.config.time_zone)
+    return zone or dt_util.get_default_time_zone()
+
+
 def sun_resolver(hass: HomeAssistant) -> SunResolver:
     """Sunrise and sunset at the Home Assistant location, for sun-based slots."""
 

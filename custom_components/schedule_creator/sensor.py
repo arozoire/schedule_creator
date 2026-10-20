@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Any
-from zoneinfo import ZoneInfo
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.const import EntityCategory
@@ -14,6 +13,7 @@ from homeassistant.helpers.event import (
     async_track_state_change_event,
     async_track_time_change,
 )
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, EVENT_CONFIG_UPDATED, EVENT_RUNTIME_UPDATED
 from .models import Occurrence, OccurrenceState
@@ -176,7 +176,8 @@ class _PlanManager:
         config = None if runtime is None else runtime.storage.config.data
         if runtime is None or config is None:
             return None
-        zone = ZoneInfo(self.hass.config.time_zone)
+        # Cached by Home Assistant: no tz database read in the event loop.
+        zone = dt_util.get_default_time_zone()
         now = datetime.now(UTC)
         monday = week_start(now, zone)
         # One projection per configuration revision and week for all sensors.

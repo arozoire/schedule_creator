@@ -2,6 +2,11 @@
 
 After each update restart Home Assistant and reload the dashboard.
 
+## 0.4.8
+
+- The time zone is taken from Home Assistant's cache instead of being read
+  from disk in the event loop (HACS review).
+
 ## 0.4.7
 
 - **Sturdier across Home Assistant updates**: if live updates stop working

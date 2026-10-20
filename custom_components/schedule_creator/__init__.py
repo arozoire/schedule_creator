@@ -3,7 +3,6 @@
 import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from zoneinfo import ZoneInfo
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -31,7 +30,11 @@ from .control import async_register_services, async_remove_services
 from .frontend_loader import async_register_frontend
 from .horizon import HorizonRefreshCoordinator
 from .journal import RecoveryInstruction, build_recovery_plan
-from .reconciliation import async_reconcile_horizon, sun_resolver
+from .reconciliation import (
+    async_home_time_zone,
+    async_reconcile_horizon,
+    sun_resolver,
+)
 from .retention import async_prune_terminal_occurrences
 from .snapshots import SnapshotCoordinator
 from .stats import StatsCoordinator
@@ -116,7 +119,7 @@ async def async_setup_entry(
         await async_reconcile_horizon(
             storage.runtime,
             config,
-            ZoneInfo(hass.config.time_zone),
+            await async_home_time_zone(hass),
             now,
             sun_resolver(hass),
         )
