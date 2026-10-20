@@ -29,7 +29,11 @@ can live side by side; schedules can be imported from the old card's backup
 - **Desired-state actions** – climate mode, temperature, fan and swing in one
   step; brightness, cover position and fan speed as percentage sliders; an
   optional action at the end of the slot, or "previous state" to put the
-  device back as it was when the slot started.
+  device back as it was when the slot started. `select` / `input_select`
+  entities pick one of their options. Thermostat limits follow the mode being
+  scheduled (for example 25–55 °C heating water, 5–22 °C cooling).
+- **The week as columns or rows** – one switch turns the week around: a column
+  per day, or a row per day with a bar for each schedule slot.
 - **Conditions** – pick an entity first, then only the comparisons that fit it
   (numbers with units, on/off, options). Hysteresis plus *become true after* and
   *become false after* delays stop devices from flapping.
@@ -46,14 +50,17 @@ can live side by side; schedules can be imported from the old card's backup
 - **Backup, restore and RESET** from the card.
 - **Automation friendly** – switches for profiles and schedules, a next-slot
   sensor and services to switch profiles or start timers from automations.
+- **ESPHome displays** – a plan sensor per device with today, the week and the
+  running slot as plain text a microcontroller can read.
+- **Visual card editors** – every option of every card without YAML.
 - **Import from weekly-schedule-card** – load its backup file, review what
   each schedule becomes and add it as a new, inactive profile.
 
 ## Screenshots
 
-| Schedule editor (phone) | Start action | Conditions |
-| --- | --- | --- |
-| ![Slot editor with time bar and day shortcuts](docs/images/editor.png) | ![Climate start action with mode buttons and temperature stepper](docs/images/action.png) | ![Lux condition with hysteresis and delays](docs/images/conditions.png) |
+| Schedule editor (phone) | Start action | Select entity | Conditions |
+| --- | --- | --- | --- |
+| ![Slot editor with time bar and day shortcuts](docs/images/editor.png) | ![Climate start action with mode buttons and temperature stepper](docs/images/action.png) | ![A select entity: the slot picks one of its options](docs/images/select.png) | ![Lux condition with hysteresis and delays](docs/images/conditions.png) |
 
 | Timeline card | Quick Timer card |
 | --- | --- |
@@ -92,10 +99,17 @@ All five cards ship in the same file and share the same backend data.
 ```yaml
 type: custom:schedule-creator-card
 title: Schedule Creator   # optional
+layout: rows              # optional: start with the week as rows
 ```
 
 Create profiles, groups and schedules, see what is running now and manage
 backups. Editing requires an administrator; other users get a read-only view.
+
+The two icons at the right of the profile line switch the week between
+**columns** (one per day) and **rows** (one per day, a bar for each slot;
+overlapping slots stack). The choice is remembered on each browser.
+
+![The week as rows: one row per day, a bar for each slot](docs/images/rows.png)
 
 Every card has a visual editor in the dashboard editor; the YAML below is
 only for reference.
@@ -113,6 +127,8 @@ One 24 h row per device for the selected weekday, combining the schedules of
 **all active profiles**, with the current status next to each row. Read-only.
 The **Day | Week** switch shows instead the whole week, one row per weekday with
 a bar for each schedule slot.
+
+![Timeline card, week view: the schedules of the active profiles](docs/images/week.png)
 
 ### Serpentine and ring cards
 
