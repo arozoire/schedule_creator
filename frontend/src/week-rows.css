@@ -17,3 +17,6 @@ button.wr-block { cursor: pointer; }
 .wr-switch { display: inline-flex; padding: 2px; border-radius: 999px; background: var(--secondary-background-color, #f4f6f8); }
 .wr-switch button { min-height: 0; margin: 0; border: 0; border-radius: 999px; padding: 5px 12px; background: none; color: var(--secondary-text-color, #647180); font: inherit; font-size: .75rem; cursor: pointer; }
 .wr-switch button[aria-pressed="true"] { background: var(--primary-color, #00897b); color: var(--text-primary-color, #fff); font-weight: 700; }
+.wr-icons { margin-left: auto; }
+.wr-icons button { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 28px; padding: 0; }
+.wr-icons ha-icon { --mdc-icon-size: 18px; }
