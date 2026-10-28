@@ -34,7 +34,7 @@ test('group lists controllable entities and search really hides nonmatches',asyn
  assert.equal(t.root.querySelector('[name="entities"][value="sensor.temperature"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="automation.test"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="update.test"]'),null);
- assert.equal(t.root.querySelector('.sc-version').textContent,'v0.5.0');
+ assert.equal(t.root.querySelector('.sc-version').textContent,'v0.5.1');
  t.set('entity_search','lampada','input');
  const hidden=t.root.querySelector('[value="switch.outside"]').parentElement;
  assert.equal(hidden.hidden,true);
@@ -103,7 +103,7 @@ test('local action failure exposes phase and stack, keeps draft and permits retr
  const details=t.root.querySelector('.sc-error-details textarea').value;
  assert.match(details,/Fase: lettura azione iniziale/);
  assert.match(details,/Traccia:\nError: Method not implemented/);
- assert.match(details,/Schedule Creator: 0.5.0/);
+ assert.match(details,/Schedule Creator: 0.5.1/);
  assert.match(t.root.querySelector('.sc-error').textContent,/La bozza è conservata/);
  t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
  assert.equal(t.writes.length,1);
@@ -218,6 +218,17 @@ test('the week turns into rows and back, and a row bar opens its schedule',async
  assert.equal(t.root.querySelector('[name="name"]').value,'Mattina');
  }finally{t.close();}
 });
+test('a new schedule goes to the profile and group on screen, not the first stored',async()=>{
+ const t=setup();try {await tick();
+ // Stored order differs from display order (by "order"): Beta first, Alfa shown first.
+ t.snapshot.config.profiles=[{id:'b',name:'Beta',active:false,order:1},{id:'a',name:'Alfa',active:true,order:0}];
+ t.snapshot.config.groups=[{id:'gb',profile_id:'b',name:'Gruppo Beta',entity_ids:['switch.a'],order:0},{id:'ga',profile_id:'a',name:'Gruppo Alfa',entity_ids:['switch.a'],order:0}];
+ t.card.render();
+ assert.match(t.root.querySelector('.profile-chip.viewed').textContent,/Alfa/);
+ t.click('newSchedule');t.submit();await tick();
+ assert.equal(t.writes[0].profile_id,'a');assert.equal(t.writes[0].group_id,'ga');
+ }finally{t.close();}
+});
 test('select entities schedule one of their options',async()=>{
  const t=setup();try {await tick();
  t.snapshot.config.groups[0].entity_ids=['select.heat_pump_mode'];t.card.render();t.click('newSchedule');
@@ -247,7 +258,7 @@ test('name and notification texts are suggested until the user edits them',async
 test('version mismatch explains reload or restart',async()=>{
  const t=setup();try {await tick();
  assert.match(t.root.querySelector('.sc-warning').textContent,/Riavvia Home Assistant/);
- t.card.adapter.state={...structuredClone(t.snapshot),integration_version:'0.5.0'};t.card.render();
+ t.card.adapter.state={...structuredClone(t.snapshot),integration_version:'0.5.1'};t.card.render();
  assert.equal(t.root.querySelector('.sc-warning'),null);
  t.card.adapter.state.integration_version='9.9.0';t.card.render();
  assert.match(t.root.querySelector('.sc-warning').textContent,/Ricarica la pagina/);
