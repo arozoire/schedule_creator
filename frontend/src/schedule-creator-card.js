@@ -9,7 +9,7 @@ import { isWscBackup, convertWscBackup, wscImportPayload } from './wsc-import.js
 import { t, setLanguage, locale } from './i18n.js';
 
 const STYLE = '__SC_CSS__';
-const CARD_VERSION = '0.5.0';
+const CARD_VERSION = '0.5.1';
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
@@ -164,6 +164,14 @@ class ScheduleCreatorCard extends HTMLElement {
     this.openEditor('editSchedule', id);
     return true;
   }
+  // Profile and group shown: the selected ones, else the first in display order.
+  viewed(config) {
+    const profiles = [...(config.profiles || [])].sort(byOrder);
+    const profile = profiles.find((p) => p.id === this.selectedProfile) || profiles[0];
+    const groups = (config.groups || []).filter((g) => g.profile_id === profile?.id).sort(byOrder);
+    const group = groups.find((g) => g.id === this.selectedGroup) || groups[0];
+    return {profiles, profile, groups, group};
+  }
   closeEditor() {
     this.edit=null; this.draft=null; this.localError=null; this.localErrorDetails=null;
     this.render();
@@ -222,10 +230,7 @@ class ScheduleCreatorCard extends HTMLElement {
     const pageX=window.scrollX, pageY=window.scrollY;
     const { state, error, loading, busy, writeError } = this.adapter;
     const config = state?.config || {};
-    const profiles = [...(config.profiles || [])].sort(byOrder);
-    const profile = profiles.find((p) => p.id === this.selectedProfile) || profiles[0];
-    const groups = (config.groups || []).filter((g) => g.profile_id === profile?.id).sort(byOrder);
-    const group = groups.find((g) => g.id === this.selectedGroup) || groups[0];
+    const {profiles, profile, groups, group} = this.viewed(config);
     const schedules = (config.schedules || []).filter((s) => s.profile_id === profile?.id && (!group || s.group_id === group.id));
     const chips = profiles.map((p) => `<button type="button" class="profile-chip ${p.id === profile?.id ? 'viewed' : ''} ${p.active ? 'active-op' : ''}" style="--pchip-color:${tint(p.color)}" aria-pressed="${p.id === profile?.id}" data-profile="${esc(p.id)}">${p.icon ? `<ha-icon icon="${esc(p.icon)}" aria-hidden="true"></ha-icon>` : ''}${esc(p.name)}</button>`).join('');
     const tabs = groups.map((g) => `<button type="button" class="tab ${g.id === group?.id ? 'active' : ''}" aria-pressed="${g.id === group?.id}" data-group="${esc(g.id)}" style="--tab-color:${tint(g.color)}">${g.icon ? `<ha-icon icon="${esc(g.icon)}" aria-hidden="true"></ha-icon>` : ''}${esc(g.name)}</button>`).join('');
@@ -674,8 +679,8 @@ class ScheduleCreatorCard extends HTMLElement {
       this.adapter.writeError=null;
       const kind = command.replace(/^(new|edit)/,'').toLowerCase();
       const config = this.adapter.state.config;
-      const profile = config.profiles.find((p)=>p.id===this.selectedProfile)||config.profiles[0];
-      const group = config.groups.find((g)=>g.id===this.selectedGroup)||config.groups.find((g)=>g.profile_id===profile?.id);
+      // The profile and group on screen, chosen exactly as the view chooses them.
+      const {profile, group} = this.viewed(config);
       this.edit = [kind,id||null];
       this.editRecord = id ? structuredClone(config[`${kind}s`].find((x)=>x.id===id)) : null;
       this.auto = {}; this.restoreData = null; this.importData = null; this.notice = null;

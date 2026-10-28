@@ -2,6 +2,13 @@
 
 After each update restart Home Assistant and reload the dashboard.
 
+## 0.5.1
+
+- **New schedule in the wrong group**: before choosing a profile or group by
+  hand, “+ Schedule” could open a group of another profile. The view sorts
+  profiles and groups by their order, the editor took the first stored one;
+  both now use the same choice.
+
 ## 0.5.0
 
 - The columns / rows switch of the main card moved up to the profile line, as
