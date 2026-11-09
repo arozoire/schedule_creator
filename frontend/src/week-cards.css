@@ -1,6 +1,6 @@
-:host { display: block; font-family: var(--primary-font-family, Arial, sans-serif); color: var(--primary-text-color, #202a35); --wk-accent: var(--primary-color, #00897b); --wk-muted: var(--secondary-text-color, #647180); --wk-surface: var(--secondary-background-color, #f3f4f2); --wk-track: color-mix(in srgb, var(--primary-text-color, #202a35) 6%, var(--card-background-color, #fff)); --wk-paused: var(--warning-color, #b7791f); --wk-running: var(--success-color, #1f9d55); --wk-now: var(--error-color, #d6453d); }
+:host { display: block; font-family: var(--primary-font-family, Arial, sans-serif); color: var(--primary-text-color, #202a35); --wk-accent: var(--primary-color, #00897b); --wk-muted: var(--secondary-text-color, #647180); --wk-surface: color-mix(in srgb, var(--primary-text-color, #202a35) 6%, transparent); --wk-track: color-mix(in srgb, var(--primary-text-color, #202a35) 6%, transparent); --wk-paused: var(--warning-color, #b7791f); --wk-running: var(--success-color, #1f9d55); --wk-now: var(--error-color, #d6453d); }
 * { box-sizing: border-box; }
-ha-card { display: block; padding: 20px; border-radius: var(--ha-card-border-radius, 20px); background: var(--card-background-color, #fff); }
+ha-card { display: block; padding: 20px; border-radius: var(--ha-card-border-radius, 20px); background: var(--ha-card-background, var(--card-background-color, #fff)); }
 .wk-body { display: grid; gap: 14px; }
 .wk-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
 .wk-eyebrow { display: block; font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--wk-accent); }
@@ -57,3 +57,5 @@ ha-card { display: block; padding: 20px; border-radius: var(--ha-card-border-rad
 .wk-key .is-now { width: 2px; height: 12px; background: var(--wk-now); }
 .wk-muted { margin: 0; font-size: .82rem; color: var(--wk-muted); }
 .wk-error { margin: 0; color: var(--error-color, #b3261e); }
+/* Content is drawn in .sc-root so what themes or card-mod add to ha-card survives re-renders. */
+.sc-root { display: contents; }

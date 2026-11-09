@@ -63,7 +63,7 @@ export class ScheduleCreatorTimelineCard extends HTMLElement {
     super(); this.attachShadow({mode: 'open'});
     this.adapter = new ScheduleCreatorStateAdapter(() => this.render());
     this.day = null;
-    this.shadowRoot.innerHTML = `<style>${TL_STYLE}</style><ha-card></ha-card>`;
+    this.shadowRoot.innerHTML = `<style>${TL_STYLE}</style><ha-card><div class="sc-root"></div></ha-card>`;
     this.shadowRoot.addEventListener('click', (e) => {
       const b = e.target.closest('button[data-day]');
       if (b) { this.day = Number(b.dataset.day); this.render(); }
@@ -86,7 +86,7 @@ export class ScheduleCreatorTimelineCard extends HTMLElement {
   render() {
     if (!this.config) return;
     setLanguage(this._hass, this.config);
-    const surface = this.shadowRoot.querySelector('ha-card'), hass = this._hass;
+    const surface = this.shadowRoot.querySelector('.sc-root'), hass = this._hass;
     const {state, error} = this.adapter;
     if (!hass || (!state && !error)) { surface.innerHTML = `<div class="tl-body"><p class="tl-muted">${t('Caricamento…')}</p></div>`; return; }
     if (!state) { surface.innerHTML = `<div class="tl-body"><p class="tl-error">${tlEsc(messageFor(error))}</p></div>`; return; }

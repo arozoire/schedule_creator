@@ -20,7 +20,7 @@ export class ScheduleCreatorQuickTimerCard extends HTMLElement {
     super(); this.attachShadow({mode: 'open'});
     this.adapter = new ScheduleCreatorStateAdapter(() => this.render());
     this.draft = {}; this.minutes = null; this.mode = 'duration'; this.error = null;
-    this.shadowRoot.innerHTML = `<style>${QT_STYLE}</style><ha-card></ha-card>`;
+    this.shadowRoot.innerHTML = `<style>${QT_STYLE}</style><ha-card><div class="sc-root"></div></ha-card>`;
     this.shadowRoot.addEventListener('click', (e) => this.click(e));
     this.shadowRoot.addEventListener('input', (e) => this.input(e));
     this.shadowRoot.addEventListener('change', (e) => {
@@ -106,7 +106,7 @@ export class ScheduleCreatorQuickTimerCard extends HTMLElement {
   render() {
     if (!this.config) return;
     setLanguage(this._hass, this.config);
-    const hass = this._hass, surface = this.shadowRoot.querySelector('ha-card');
+    const hass = this._hass, surface = this.shadowRoot.querySelector('.sc-root');
     setClimateLimits(this.adapter.state?.climate_limits);
     if (!hass) { surface.innerHTML = `<div class="qt-body">${t('Caricamento…')}</div>`; return; }
     const {state, error, busy, writeError} = this.adapter;

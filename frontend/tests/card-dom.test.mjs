@@ -34,7 +34,7 @@ test('group lists controllable entities and search really hides nonmatches',asyn
  assert.equal(t.root.querySelector('[name="entities"][value="sensor.temperature"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="automation.test"]'),null);
  assert.equal(t.root.querySelector('[name="entities"][value="update.test"]'),null);
- assert.equal(t.root.querySelector('.sc-version').textContent,'v0.5.1');
+ assert.equal(t.root.querySelector('.sc-version').textContent,'v0.5.2');
  t.set('entity_search','lampada','input');
  const hidden=t.root.querySelector('[value="switch.outside"]').parentElement;
  assert.equal(hidden.hidden,true);
@@ -103,7 +103,7 @@ test('local action failure exposes phase and stack, keeps draft and permits retr
  const details=t.root.querySelector('.sc-error-details textarea').value;
  assert.match(details,/Fase: lettura azione iniziale/);
  assert.match(details,/Traccia:\nError: Method not implemented/);
- assert.match(details,/Schedule Creator: 0.5.1/);
+ assert.match(details,/Schedule Creator: 0.5.2/);
  assert.match(t.root.querySelector('.sc-error').textContent,/La bozza è conservata/);
  t.root.querySelector('form').dispatchEvent(new t.dom.window.Event('submit',{bubbles:true,cancelable:true}));await tick();
  assert.equal(t.writes.length,1);
@@ -229,6 +229,15 @@ test('a new schedule goes to the profile and group on screen, not the first stor
  assert.equal(t.writes[0].profile_id,'a');assert.equal(t.writes[0].group_id,'ga');
  }finally{t.close();}
 });
+test('what card-mod puts in ha-card survives a re-render, and the theme card background is used',async()=>{
+ const t=setup();try {await tick();
+ const card=t.root.querySelector('ha-card');const mod=t.dom.window.document.createElement('card-mod');card.append(mod);
+ t.card.render();
+ assert.equal(mod.isConnected,true);assert.equal(t.root.querySelector('ha-card'),card);
+ assert.ok(t.root.querySelector('.sc-root').children.length>0);
+ assert.match(t.root.querySelector('style').textContent,/var\(--ha-card-background, var\(--card-background-color/);
+ }finally{t.close();}
+});
 test('select entities schedule one of their options',async()=>{
  const t=setup();try {await tick();
  t.snapshot.config.groups[0].entity_ids=['select.heat_pump_mode'];t.card.render();t.click('newSchedule');
@@ -258,7 +267,7 @@ test('name and notification texts are suggested until the user edits them',async
 test('version mismatch explains reload or restart',async()=>{
  const t=setup();try {await tick();
  assert.match(t.root.querySelector('.sc-warning').textContent,/Riavvia Home Assistant/);
- t.card.adapter.state={...structuredClone(t.snapshot),integration_version:'0.5.1'};t.card.render();
+ t.card.adapter.state={...structuredClone(t.snapshot),integration_version:'0.5.2'};t.card.render();
  assert.equal(t.root.querySelector('.sc-warning'),null);
  t.card.adapter.state.integration_version='9.9.0';t.card.render();
  assert.match(t.root.querySelector('.sc-warning').textContent,/Ricarica la pagina/);

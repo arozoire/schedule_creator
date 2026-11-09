@@ -9,7 +9,7 @@ import { isWscBackup, convertWscBackup, wscImportPayload } from './wsc-import.js
 import { t, setLanguage, locale } from './i18n.js';
 
 const STYLE = '__SC_CSS__';
-const CARD_VERSION = '0.5.1';
+const CARD_VERSION = '0.5.2';
 const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[char]);
 const tint = (value) => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value || '') ? value : '#03a9f4';
@@ -64,7 +64,7 @@ class ScheduleCreatorCard extends HTMLElement {
     this.selectedProfile = null; this.selectedGroup = null;
     this.edit = null; this.draft = null; this.localError = null;
     this.localErrorDetails = null;
-    this.shadowRoot.innerHTML = `<style>${STYLE}</style><ha-card></ha-card><dialog class="sc-dialog" aria-labelledby="sc-editor-title"></dialog>`;
+    this.shadowRoot.innerHTML = `<style>${STYLE}</style><ha-card><div class="sc-root"></div></ha-card><dialog class="sc-dialog" aria-labelledby="sc-editor-title"></dialog>`;
     this.dialog = this.shadowRoot.querySelector('dialog');
     this.dialog.addEventListener('cancel', event=>{event.preventDefault(); if(!this.adapter.busy) this.closeEditor();});
     this.shadowRoot.addEventListener('click', (e) => this.click(e));
@@ -273,7 +273,7 @@ class ScheduleCreatorCard extends HTMLElement {
       ${editable ? `<details class="sc-maintenance" data-section="maintenance"><summary>${t('Manutenzione · backup, import e RESET')}</summary><p class="sc-meta">${t('Il backup salva profili, gruppi e schedule in un file JSON. Il ripristino li sostituisce e lascia i profili disattivati. L’import dalla weekly-schedule-card li aggiunge in un nuovo profilo disattivato. RESET cancella tutti i dati di Schedule Creator.')}</p><div class="sc-controls">${button('exportBackup',t('Salva backup'))}${button('newRestore',t('Ripristina backup'))}${button('newImport',t('Importa da Weekly Schedule Card'))}${button('newReset','RESET…')}</div></details>` : ''}
       <details class="sc-operational" data-section="operational"><summary>${t('Attività · {slots} fasce in corso · {timers} timer', {slots: state.operational?.occurrences?.length ?? 0, timers: state.quick_timers?.length ?? 0})}${failures.length ? ` · ${t('{count} errori', {count: failures.length})}` : ''}</summary>${failures.length ? `<div class="sc-failures"><strong>${t('Comandi non riusciti')}</strong><ul>${failures.map((f) => `<li>${esc(this.failureText(f))}</li>`).join('')}</ul></div>` : ''}${(state.operational?.occurrences || []).map((x) => `<p>${esc(config.schedules?.find((s) => s.id === x.schedule_id)?.name || x.schedule_id)}: ${esc(x.state)}, ${t('condizione')} ${esc(x.condition_branch)}, ${t('termine')} ${esc(x.end_utc)}</p>`).join('') || `<p>${t('Nessuna fascia attiva.')}</p>`}${(state.operational?.leases || []).map((x) => `<p>${esc(x.entity_id)}: ${esc(x.state)} (${esc(x.controller_type)})</p>`).join('')}${(state.quick_timers || []).map((x) => `<p>${t('Timer')} ${esc(this._hass.states[x.entity_id]?.attributes?.friendly_name || x.entity_id)}: <span data-expiry="${esc(x.expires_at)}"></span> ${editable ? button('cancelTimer',t('Annulla timer'),x.id) : ''}</p>`).join('')}</details>` : '';
     const errorMarkup = `${info ? `<p class="sc-error" role="alert">${esc(typeof info === 'string' ? info : messageFor(info))}</p>` : ''}${errorDetails ? `<details class="sc-error-details" data-section="error-details"><summary>${t('Dettagli errore')}</summary><p>${t('Seleziona e copia questo testo per segnalare il problema.')}</p><textarea readonly aria-label="${t('Dettagli errore da copiare')}" rows="10">${esc(errorDetails)}</textarea></details>` : ''}`;
-    const surface=this.shadowRoot.querySelector('ha-card');
+    const surface=this.shadowRoot.querySelector('.sc-root');
     surface.style.setProperty('--pchip-color',tint(profile?.color));
     const running = occurrences.length;
     const header = `<div class="sc-head"><span class="sc-logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"></rect><path d="M8 2v4M16 2v4M3 10h18M8 15h3"></path></svg></span><div class="sc-head-copy"><span class="card-title">${esc(this.config.title || 'Schedule Creator')}</span><span class="sc-sub">${now.weekday >= 0 ? t(FULL_DAYS[now.weekday]) : ''} · ${now.label}${state ? ` · ${running ? (running === 1 ? t('1 fascia in corso') : t('{count} fasce in corso', {count: running})) : t('nessuna fascia in corso')}` : ''}</span></div><span class="sc-version">v${CARD_VERSION}</span>${state && editable ? `<div class="sc-head-actions">${group ? button('newSchedule',`＋ ${t('Schedule')}`) : ''}</div>` : ''}</div>`;

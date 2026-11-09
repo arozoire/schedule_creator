@@ -5,7 +5,7 @@
 .wr-day { font-size: .78rem; font-weight: 700; color: var(--secondary-text-color, #647180); }
 .wr-day small { display: block; font-size: .64rem; font-weight: 600; }
 .wr-row.is-today .wr-day { color: var(--primary-color, #00897b); }
-.wr-track { position: relative; border-radius: 9px; background: var(--secondary-background-color, #f4f6f8); overflow: hidden; }
+.wr-track { position: relative; border-radius: 9px; background: color-mix(in srgb, var(--primary-text-color, #202a35) 6%, transparent); overflow: hidden; }
 .wr-row.is-today .wr-track { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--primary-color, #00897b) 35%, transparent); }
 .wr .wr-block { position: absolute; height: 18px; min-height: 0; min-width: 0; margin: 0; line-height: 1; box-sizing: border-box; display: flex; align-items: center; padding: 0 0 0 6px; border: 0; border-radius: 6px; background: var(--block-color); color: #fff; font: inherit; font-size: .66rem; font-weight: 700; text-align: left; white-space: nowrap; overflow: hidden; }
 .wr-block span { overflow: hidden; text-overflow: ellipsis; }
@@ -14,9 +14,11 @@ button.wr-block { cursor: pointer; }
 .wr-block.is-running { box-shadow: inset 0 0 0 2px var(--success-color, #1f9d55); }
 .wr-block.is-paused { background: transparent; border: 2px dashed var(--warning-color, #f0a500); color: color-mix(in srgb, var(--warning-color, #f0a500) 65%, #000); }
 .wr-now { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--error-color, #d6453d); }
-.wr-switch { display: inline-flex; padding: 2px; border-radius: 999px; background: var(--secondary-background-color, #f4f6f8); }
+.wr-switch { display: inline-flex; padding: 2px; border-radius: 999px; background: color-mix(in srgb, var(--primary-text-color, #202a35) 6%, transparent); }
 .wr-switch button { min-height: 0; margin: 0; border: 0; border-radius: 999px; padding: 5px 12px; background: none; color: var(--secondary-text-color, #647180); font: inherit; font-size: .75rem; cursor: pointer; }
 .wr-switch button[aria-pressed="true"] { background: var(--primary-color, #00897b); color: var(--text-primary-color, #fff); font-weight: 700; }
 .wr-icons { margin-left: auto; }
 .wr-icons button { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 28px; padding: 0; }
 .wr-icons ha-icon { --mdc-icon-size: 18px; }
+/* Content is drawn in .sc-root so what themes or card-mod add to ha-card survives re-renders. */
+.sc-root { display: contents; }

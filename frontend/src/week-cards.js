@@ -106,7 +106,7 @@ class ScheduleCreatorWeekCard extends HTMLElement {
     super(); this.attachShadow({mode: 'open'});
     this.adapter = new ScheduleCreatorStateAdapter(() => this.render());
     this.selected = null;
-    this.shadowRoot.innerHTML = `<style>${WK_STYLE}</style><ha-card></ha-card>`;
+    this.shadowRoot.innerHTML = `<style>${WK_STYLE}</style><ha-card><div class="sc-root"></div></ha-card>`;
     const pick = (e) => {
       const block = e.target.closest?.('[data-block]');
       if (block) { this.selected = this.selected === block.dataset.block ? null : block.dataset.block; this.render(); this.shadowRoot.querySelector(`[data-block="${this.selected}"]`)?.focus?.({preventScroll: true}); return; }
@@ -207,7 +207,7 @@ class ScheduleCreatorWeekCard extends HTMLElement {
   render() {
     if (!this.config) return;
     setLanguage(this._hass, this.config);
-    const surface = this.shadowRoot.querySelector('ha-card');
+    const surface = this.shadowRoot.querySelector('.sc-root');
     const {state, error} = this.adapter;
     if (!this._hass || (!state && !error)) { surface.innerHTML = `<div class="wk-body"><p class="wk-muted">${t('Caricamento…')}</p></div>`; return; }
     if (!state) { surface.innerHTML = `<div class="wk-body"><p class="wk-error">${wkEsc(messageFor(error))}</p></div>`; return; }
