@@ -87,6 +87,20 @@ test('devices always driven by the same schedules share one lane', async () => {
   } finally { ring.remove(); dom.window.close(); }
 });
 
+test('week cards keep card-mod content across renders', async () => {
+  const dom = load();
+  const state = {revision: 1, runtime_summary: {revision: 1}, quick_timers: [], operational: {occurrences: []}, config: {profiles: [{id: 'home', name: 'A casa', active: true}], groups: [], schedules: []}};
+  const hass = {user: {is_admin: true}, states: {}, config: {}, connection: {subscribeMessage: () => Promise.resolve(() => {}), sendMessagePromise: () => Promise.resolve(state)}};
+  const ring = dom.window.document.createElement('schedule-creator-ring-card'); ring.setConfig({}); ring.hass = hass; dom.window.document.body.append(ring);
+  await tick();
+  try {
+    const mod = dom.window.document.createElement('card-mod');
+    ring.shadowRoot.querySelector('ha-card').append(mod);
+    ring.render();
+    assert.equal(mod.isConnected, true);
+  } finally { ring.remove(); dom.window.close(); }
+});
+
 test('week cards hide the edit button when no editor can open it', async () => {
   const dom = load();
   const state = {revision: 1, runtime_summary: {revision: 1}, quick_timers: [], operational: {occurrences: []}, config: {profiles: [{id: 'home', name: 'A casa', active: true}], groups: [],

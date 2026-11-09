@@ -3,7 +3,7 @@
 /* Quick Timer card: reuses the action editor styles of the main card. */
 .qt-body.sc-editor { margin: 0; padding: 0; border: 0; background: transparent; gap: 14px; }
 .qt-head { display: flex; align-items: center; gap: 12px; }
-.qt-icon { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--sc-accent); background: color-mix(in srgb, var(--sc-accent) 12%, var(--card-background-color, #fff)); flex-shrink: 0; }
+.qt-icon { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--sc-accent); background: color-mix(in srgb, var(--sc-accent) 12%, transparent); flex-shrink: 0; }
 .qt-icon svg { width: 22px; height: 22px; }
 .qt-title { display: grid; gap: 2px; flex-grow: 1; min-width: 0; }
 .qt-title strong { font-size: 1.05rem; }
@@ -24,7 +24,7 @@
 .sc-editor .qt-minutes-box { flex-shrink: 0; }
 .sc-editor .qt-minutes-box input { width: 64px; text-align: center; font-weight: 700; }
 .sc-editor .qt-start { min-height: 50px; border-radius: 14px; border: 0; background: var(--sc-accent); color: var(--text-primary-color, #fff); font-size: 1rem; font-weight: 800; }
-.qt-active { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 16px; background: color-mix(in srgb, var(--sc-accent) 12%, var(--card-background-color, #fff)); }
+.qt-active { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 16px; background: color-mix(in srgb, var(--sc-accent) 12%, transparent); }
 .qt-active-copy { display: grid; gap: 4px; flex-grow: 1; }
 .qt-countdown { font-size: 1.8rem; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: var(--sc-accent); }
 .qt-cancel { color: var(--error-color, #b3261e); }

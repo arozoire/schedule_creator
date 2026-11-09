@@ -2,6 +2,13 @@
 
 After each update restart Home Assistant and reload the dashboard.
 
+## 0.5.2
+
+- **Themes and card-mod** (#73, thanks @macfly92): the cards use the theme's
+  card background (`--ha-card-background`, like native cards) and translucent
+  inner surfaces, so glass / blur themes work; the content is drawn inside its
+  own container, so styles added to `ha-card` by card-mod survive updates.
+
 ## 0.5.1
 
 - **New schedule in the wrong group**: before choosing a profile or group by
