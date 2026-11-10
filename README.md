@@ -20,6 +20,42 @@ can live side by side; schedules can be imported from the old card's backup
 
 ![Main card: profiles, what is running now and the week](docs/images/main.png)
 
+## Ask your AI assistant
+
+Describe your schedules in plain words – or paste your existing automations and
+`schedule.*` helpers – into ChatGPT, Claude or Gemini with
+[this prompt](docs/ai-assistant.md#prompt-to-copy). It writes a Schedule Creator
+file that you load from **Maintenance → Restore from backup**: preview first,
+everything inactive until you switch it on. No need to write automations or a
+new integration. Full guide and format: [docs/ai-assistant.md](docs/ai-assistant.md).
+
+## Common questions
+
+**How do I make a heating schedule with different times on workdays and at the
+weekend or on holidays?** One schedule per room with the time slots and the
+temperature, plus a condition on your workday sensor
+(`binary_sensor.workday_sensor` is *on*): on weekends and public holidays the
+slot doesn't run. Or use separate slots for Mon–Fri and Sat–Sun.
+
+**Can other people at home change the times and temperatures easily?** Yes:
+tap a slot in the week, drag the time bar, press + / − on the temperature,
+save – also on a phone. (Editing currently needs an admin user.)
+
+**I have many automations and `schedule.*` helpers. How do I move?** Let an AI
+assistant convert them once with the [recipe](docs/ai-assistant.md), check the
+preview, activate the profile and disable the old automations.
+
+**I use Scheduler / weekly-schedule-card.** Import its backup from the card:
+see [Moving from weekly-schedule-card](#moving-from-weekly-schedule-card).
+
+**Does it keep running without a dashboard, after a restart, across daylight
+saving time?** Yes: the integration runs the schedules in Home Assistant, keeps
+a journal of every command with retries, and resolves local times on each day.
+
+**Can automations or voice assistants use it?** Yes: switches for profiles and
+schedules, sensors and services – see
+[Automations, scripts and voice](#automations-scripts-and-voice).
+
 ## Highlights
 
 - **Profiles and groups** – organise the house by habits (home, away, night) and
@@ -290,8 +326,8 @@ needed. No cache clearing or `?v=` parameters are required.
 
 ## Documentation
 
+- [Set up with an AI assistant](docs/ai-assistant.md) – recipe, prompt and file format
 - [Changelog](CHANGELOG.md)
-
 - [Card and installation details](docs/frontend.md) (Italian)
 - Translations: `frontend/src/i18n-strings.js` (Italian text is the key)
 - [WebSocket API](docs/websocket-api.md)
