@@ -1,0 +1,111 @@
+{
+  "format": "schedule_creator.backup",
+  "format_version": 1,
+  "integration_version": "0.5.2",
+  "exported_at": "2026-11-10T00:00:00Z",
+  "config": {
+    "schema_version": 1,
+    "profiles": [
+      {
+        "schema_version": 1,
+        "id": "cb8e0bce-9209-5962-a598-240210788b87",
+        "revision": 1,
+        "name": "Home",
+        "profile_type": "exclusive",
+        "active": false,
+        "icon": "mdi:home",
+        "color": "#00897b",
+        "order": 0,
+        "created_at": "2026-11-10T00:00:00Z",
+        "updated_at": "2026-11-10T00:00:00Z"
+      }
+    ],
+    "groups": [
+      {
+        "schema_version": 1,
+        "id": "65c45ba5-9b30-5b94-8df6-c406aa93ecab",
+        "revision": 1,
+        "profile_id": "cb8e0bce-9209-5962-a598-240210788b87",
+        "name": "Office",
+        "entity_ids": [
+          "climate.office"
+        ],
+        "icon": "mdi:desk",
+        "color": "#536dfe",
+        "order": 0,
+        "created_at": "2026-11-10T00:00:00Z",
+        "updated_at": "2026-11-10T00:00:00Z"
+      }
+    ],
+    "schedules": [
+      {
+        "schema_version": 1,
+        "id": "d9c0596d-9791-54ba-9d85-5b4176b699da",
+        "revision": 1,
+        "profile_id": "cb8e0bce-9209-5962-a598-240210788b87",
+        "group_id": "65c45ba5-9b30-5b94-8df6-c406aa93ecab",
+        "name": "Office · workdays",
+        "enabled": true,
+        "target_entity_ids": [
+          "climate.office"
+        ],
+        "time_slots": [
+          {
+            "schema_version": 1,
+            "id": "285b0d19-b434-5610-b941-a94c0c8e9156",
+            "weekdays": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ],
+            "start": "08:30:00",
+            "end": "18:00:00"
+          }
+        ],
+        "start_action": {
+          "schema_version": 1,
+          "id": "f5d723f4-e404-57ab-91e2-fb1adc3f422f",
+          "domain": "climate",
+          "action": "apply_state",
+          "data": {
+            "state": "heat",
+            "temperature": 22
+          }
+        },
+        "end_action": {
+          "schema_version": 1,
+          "id": "d0b9b7b0-a7dd-5f89-83e1-a777ac0eb3d5",
+          "domain": "climate",
+          "action": "apply_state",
+          "data": {
+            "state": "heat",
+            "temperature": 17
+          }
+        },
+        "condition": {
+          "schema_version": 1,
+          "id": "f4e3394e-b35b-529f-83ab-871d9226e3a3",
+          "operator": "state_equals",
+          "entity_id": "binary_sensor.workday_sensor",
+          "value": "on",
+          "lower": null,
+          "upper": null,
+          "children": [],
+          "minimum_duration_seconds": null,
+          "hysteresis": null
+        },
+        "override_policy": "cooperative",
+        "start_notification": null,
+        "end_notification": null,
+        "inclusion_dates": [],
+        "exclusion_dates": [],
+        "created_at": "2026-11-10T00:00:00Z",
+        "updated_at": "2026-11-10T00:00:00Z"
+      }
+    ]
+  }
+}
