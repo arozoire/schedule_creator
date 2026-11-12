@@ -115,7 +115,7 @@ test('the card previews a weekly-schedule-card backup and sends one import', asy
     assert.equal(writes.length, 0);
     await card.readBackupFile({files: [{name: 'wsc.json', text: async () => JSON.stringify(backup())}]});
     const text = root.querySelector('dialog').textContent;
-    assert.match(text, /Importa da Weekly Schedule Card/);
+    assert.match(text, /Importa schedule/);
     assert.match(text, /«Home \(WSC\)»/);
     assert.match(text, /era attivo nella weekly-schedule-card/);
     assert.match(text, /valve\.garden/); // missing in this HA
