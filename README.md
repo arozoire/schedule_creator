@@ -25,8 +25,8 @@ can live side by side; schedules can be imported from the old card's backup
 Describe your schedules in plain words – or paste your existing automations and
 `schedule.*` helpers – into ChatGPT, Claude or Gemini with
 [this prompt](docs/ai-assistant.md#prompt-to-copy). It writes a Schedule Creator
-file that you load from **Maintenance → Restore from backup**: preview first,
-everything inactive until you switch it on. No need to write automations or a
+import file that you load from **Maintenance → Import schedules**: preview
+first, added in a new profile that stays inactive until you switch it on. No need to write automations or a
 new integration. Full guide and format: [docs/ai-assistant.md](docs/ai-assistant.md).
 
 ## Common questions
@@ -91,8 +91,9 @@ schedules, sensors and services – see
 - **ESPHome displays** – a plan sensor per device with today, the week and the
   running slot as plain text a microcontroller can read.
 - **Visual card editors** – every option of every card without YAML.
-- **Import from weekly-schedule-card** – load its backup file, review what
-  each schedule becomes and add it as a new, inactive profile.
+- **Import schedules** – load a simple import file (for example written by an
+  AI assistant) or a weekly-schedule-card backup, review what each schedule
+  becomes and add it as a new, inactive profile.
 
 ## Screenshots
 

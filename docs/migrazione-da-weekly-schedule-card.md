@@ -31,8 +31,8 @@ Questo file è la tua rete di sicurezza: dallo stesso menu potrai ripristinarlo.
 
 ## 3. Importa
 
-1. Nella card di Schedule Creator apri **Manutenzione → Importa da Weekly
-   Schedule Card** e scegli il file di backup.
+1. Nella card di Schedule Creator apri **Manutenzione → Importa schedule** e
+   scegli il file di backup.
 2. Leggi l'anteprima. Ogni schedule è segnato come:
    - **Pronto** – convertito così com'era;
    - **Da controllare** – convertito, con una nota (per esempio “giorni

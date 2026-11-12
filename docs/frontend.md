@@ -83,9 +83,20 @@ francese, tedesco e spagnolo (altre lingue → inglese). Ogni card accetta
 e la configurazione dell'integrazione sono tradotte. I testi sono in
 `frontend/src/i18n-strings.js`, con il testo italiano come chiave.
 
+### Import da file 0.6.0
+
+**Manutenzione → Importa schedule** accetta anche un file
+`schedule_creator.import` (formato semplice senza ID, revisioni e date, per
+esempio scritto da un assistente IA: vedi [ai-assistant.md](ai-assistant.md)).
+Home Assistant lo completa e lo controlla (`schedule_creator/import/file/preview`,
+nessun salvataggio), la card mostra l'anteprima o il campo sbagliato
+(`profiles[0].groups[0].schedules[0].time_slots[0].start: …`), poi
+`schedule_creator/import/file` lo aggiunge in un profilo **disattivato**. Un nome
+già usato riceve un numero, «(2)».
+
 ### Import dalla weekly-schedule-card 0.3.12
 
-**Manutenzione → Importa da Weekly Schedule Card** (anche scegliendo il file in
+**Manutenzione → Importa schedule** (anche scegliendo il file in
 *Ripristina backup*). Serve il file di **Gruppi → Manutenzione → Salva
 configurazione** della WSC (`schema: weekly-schedule-card/backup`, `version: 1`).
 

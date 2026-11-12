@@ -413,6 +413,28 @@ schedule in un'unica scrittura; non sostituisce nulla.
 La conversione dal file della WSC avviene nella card (`frontend/src/wsc-import.js`),
 che mostra l'anteprima prima di inviare il comando.
 
+### File di import (0.6.0)
+
+Un file `{"format": "schedule_creator.import", "format_version": 1, "profiles": [...]}`
+(formato in [ai-assistant.md](ai-assistant.md)) viene completato e controllato
+dal server:
+
+- `schedule_creator/import/file/preview` (solo admin) `{"file": {...}}` non salva
+  nulla e risponde `{"profiles": [...]}` con l'albero completato (stessa forma di
+  `import/merge`), oppure `invalid_import` con il punto preciso:
+  `profiles[0].groups[0].schedules[0].time_slots[0].start: is required ("HH:MM")`.
+- `schedule_creator/import/file` (solo admin) `{"expected_revision", "file"}`
+  aggiunge come `import/merge` (`source: "schedule_creator.import"`), stessa
+  risposta.
+- Completamento: `profile_type` predefinito `exclusive`; `target_entity_ids`
+  predefinito = entità del gruppo; il gruppo riceve anche le entità dei suoi
+  schedule; `domain` dell'azione dalle entità, `data` predefinito `{}`; giorni
+  anche come `"mon"`…`"sun"`, `"workdays"`, `"weekend"`, `"daily"`; con
+  `start_sun`/`end_sun` l'orario è facoltativo (07:00 / 19:00 + offset, solo per
+  la vista); `id`, `revision`, `schema_version`, `created_at`, `updated_at`,
+  `order`, `active`, `profile_id`, `group_id` vengono ignorati; un nome di
+  profilo già usato riceve « (2)», « (3)»…
+
 ## Fasce in corso, pulizia ed errori (0.3.13)
 
 - `get_state.failures`: ultimi 20 comandi `failed_final`

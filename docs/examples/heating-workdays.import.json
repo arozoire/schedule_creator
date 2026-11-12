@@ -1,0 +1,26 @@
+{
+  "format": "schedule_creator.import",
+  "format_version": 1,
+  "profiles": [
+    {
+      "name": "Home",
+      "groups": [
+        {
+          "name": "Office",
+          "entity_ids": ["climate.office"],
+          "schedules": [
+            {
+              "name": "Office · workdays",
+              "time_slots": [
+                {"weekdays": [0, 1, 2, 3, 4], "start": "08:30", "end": "18:00"}
+              ],
+              "start_action": {"action": "apply_state", "data": {"state": "heat", "temperature": 22}},
+              "end_action": {"action": "apply_state", "data": {"state": "heat", "temperature": 17}},
+              "condition": {"operator": "state_equals", "entity_id": "binary_sensor.workday_sensor", "value": "on"}
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

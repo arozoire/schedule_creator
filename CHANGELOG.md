@@ -2,6 +2,17 @@
 
 After each update restart Home Assistant and reload the dashboard.
 
+## 0.6.0
+
+- **Import schedules from a simple file** (Maintenance → Import schedules): a
+  `schedule_creator.import` file lists profiles, groups and schedules without
+  ids, revisions or dates, so an AI assistant can write it from your words or
+  your automations ([guide](docs/ai-assistant.md)). Home Assistant fills in the
+  rest, shows a preview, names the exact field of any mistake and adds
+  everything in a new **inactive** profile: nothing existing is replaced.
+- The *Import from Weekly Schedule Card* button is now *Import schedules* and
+  takes both kinds of file.
+
 ## 0.5.2
 
 - **Themes and card-mod** (#73, thanks @macfly92): the cards use the theme's

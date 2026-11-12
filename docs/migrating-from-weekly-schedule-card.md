@@ -29,8 +29,8 @@ This file is your safety net: the same menu can restore it later.
 
 ## 3. Import
 
-1. In the Schedule Creator card open **Maintenance → Import from Weekly
-   Schedule Card** and choose the backup file.
+1. In the Schedule Creator card open **Maintenance → Import schedules** and
+   choose the backup file.
 2. Read the preview. Every schedule is marked:
    - **Ready** – converted as it was;
    - **To check** – converted, with a note (for example “workdays” became
