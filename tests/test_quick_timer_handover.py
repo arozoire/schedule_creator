@@ -1,9 +1,10 @@
-"""A Quick Timer that outlives its slot hands over to the schedule running then.
+"""The slot that started last wins, also against a running Quick Timer.
 
 Owner's example, in minutes: schedule 1 at 22 °C (10:00–12:00, end action
 18 °C), schedule 2 at 20 °C (12:00–18:00), Quick Timer 24 °C started at 11:35
-for one hour. At 12:35 schedule 2 must send 20 °C; the timer must not put back
-22 °C (its snapshot) and schedule 1's end action must never be sent.
+for one hour. At 12:00 schedule 2 starts after the timer and takes over (20 °C);
+at 12:35 the timer ends without putting back 22 °C (its snapshot), and
+schedule 1's end action is never sent.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -25,7 +26,7 @@ def _heat(temperature):
 async def test_quick_timer_hands_over_to_the_next_schedule(
     hass, hass_ws_client, freezer
 ):
-    """Timer inside slot 1, ending inside slot 2: slot 2 wins, nothing else."""
+    """Timer inside slot 1, ending inside slot 2: 22, 24, 20 and nothing else."""
     zone = ZoneInfo("Europe/Rome")
     now = datetime.now(UTC).replace(second=0, microsecond=0) + timedelta(minutes=1)
 
@@ -142,10 +143,10 @@ async def test_quick_timer_hands_over_to_the_next_schedule(
     await hass.async_block_till_done()
     assert calls == [22, 24]
 
-    await move(3)  # 12:00 slot 1 ends, slot 2 starts: the timer keeps the device
-    assert calls == [22, 24]
+    await move(3)  # 12:00 slot 2 starts after the timer: it wins (20, not 18)
+    assert calls == [22, 24, 20]
 
-    await move(4, seconds=5)  # 12:35 the timer ends: slot 2 takes over
+    await move(4, seconds=5)  # 12:35 the timer ends: no restore of 22
     assert calls == [22, 24, 20]
     assert hass.states.get(ENTITY).attributes["temperature"] == 20
 
