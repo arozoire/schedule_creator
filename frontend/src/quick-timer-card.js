@@ -3,7 +3,7 @@
 import { ScheduleCreatorStateAdapter, hassChanged } from './state-adapter.js';
 import { uiEscape, targetEntities } from './forms.js';
 import { messageFor } from './editor.js';
-import { actionForm, readAction, describeAction, describeState, setClimateLimits } from './action-editor.js';
+import { actionForm, readAction, describeAction, describeState, describeResume, setClimateLimits } from './action-editor.js';
 import { t, setLanguage } from './i18n.js';
 
 const qtEsc = uiEscape;
@@ -121,7 +121,7 @@ export class ScheduleCreatorQuickTimerCard extends HTMLElement {
       const ids = targetEntities(hass).sort();
       body = `<label class="qt-label">${t('Scegli l’entità')}<input type="search" name="qt_search" placeholder="${t('Cerca per nome o ID')}" autocomplete="off"></label><div class="qt-entities" role="radiogroup">${ids.map((id) => `<label data-entity-label="${qtEsc(`${id} ${hass.states[id]?.attributes?.friendly_name || ''}`.toLowerCase())}"><input type="radio" name="qt_entity" value="${qtEsc(id)}"><span><strong>${qtEsc(hass.states[id]?.attributes?.friendly_name || id)}</strong><small>${qtEsc(id)}</small></span></label>`).join('')}</div>`;
     } else if (active.length) {
-      body = active.map((timer) => `<div class="qt-active"><div class="qt-active-copy"><span class="qt-countdown" data-expiry="${qtEsc(timer.expires_at)}">${qtDuration((new Date(timer.expires_at) - Date.now()) / 1000)}</span><span class="qt-muted">${qtEsc(describeAction(timer.action))}</span><span class="qt-previous">${t('Alla scadenza torna a')} <strong>${qtEsc(timer.previous ? describeState(timer.previous, entity.split('.')[0]) : t('lo stato precedente'))}</strong></span></div>${admin ? `<button type="button" class="qt-cancel" data-cancel="${qtEsc(timer.id)}">${t('Annulla')}</button>` : ''}</div>`).join('');
+      body = active.map((timer) => `<div class="qt-active"><div class="qt-active-copy"><span class="qt-countdown" data-expiry="${qtEsc(timer.expires_at)}">${qtDuration((new Date(timer.expires_at) - Date.now()) / 1000)}</span><span class="qt-muted">${qtEsc(describeAction(timer.action))}</span><span class="qt-previous">${t('Alla scadenza torna a')} <strong>${qtEsc(describeResume(timer))}</strong></span></div>${admin ? `<button type="button" class="qt-cancel" data-cancel="${qtEsc(timer.id)}">${t('Annulla')}</button>` : ''}</div>`).join('');
     } else if (!admin) {
       body = `<p class="qt-muted">${t('Nessun timer attivo. Serve un amministratore per avviarne uno.')}</p>`;
     } else {

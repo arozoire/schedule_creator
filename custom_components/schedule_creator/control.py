@@ -31,6 +31,7 @@ from .profile_api import profile_activation
 from .quick_timer_api import (
     RuntimeApiMutation,
     async_commit_runtime,
+    end_timers,
     quick_timer_cancellation,
     quick_timer_creation,
 )
@@ -207,19 +208,28 @@ def resumable_lease_ids(
 
 
 def lease_renewal(entity_ids: set[str]) -> RuntimeApiMutation:
-    """Send the start action of the running slot again to these entities.
+    """Give these entities back to their schedules now.
 
-    A new lease generation is a new target action for the same slot, so the
-    command goes through the usual journal, retries and failure reporting.
+    Running Quick Timers on them end (as if their time had run out, so the
+    schedule of the moment takes over); a slot that already owns an entity
+    sends its start action again. A new lease generation is a new target
+    action for the same slot, so the command goes through the usual journal,
+    retries and failure reporting.
     """
 
     def mutation(current: RuntimeStoreData, now: datetime) -> RuntimeStoreData:
+        timers = {
+            timer.id
+            for timer in current.quick_timers
+            if timer.entity_id in entity_ids and timer.state is QuickTimerState.ACTIVE
+        }
         wanted = resumable_lease_ids(current, entity_ids, now)
-        if not wanted:
+        if not wanted and not timers:
             raise ValueError("nothing to resume")
         return replace(
             current,
             revision=current.revision + 1,
+            quick_timers=end_timers(current, timers, now),
             leases=tuple(
                 replace(lease, generation=lease.generation + 1)
                 if lease.id in wanted

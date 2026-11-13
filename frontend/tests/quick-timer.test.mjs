@@ -87,3 +87,16 @@ test('an active timer tells which state it restores', async () => {
     assert.match(t.root.querySelector('.qt-previous').textContent, /torna a Acceso · 50%/);
   } finally { t.close(); }
 });
+
+test('an active timer shows what the schedules will give back at its end', async () => {
+  const timer = {id: 'tm', entity_id: 'climate.room', state: 'active', expires_at: new Date(Date.now() + 60000).toISOString(), action: {domain: 'climate', action: 'apply_state', data: {state: 'heat', temperature: 25}}, previous: {state: 'heat', attributes: {temperature: 29}},
+    resume: {kind: 'schedule', schedule_name: 'Mandata notte', action: {domain: 'climate', action: 'apply_state', data: {state: 'heat', temperature: 32}}}};
+  const t = setup({entity: 'climate.room'}, {timers: [timer]});
+  try {
+    await tick();
+    const text = t.root.querySelector('.qt-previous').textContent;
+    assert.match(text, /32/);
+    assert.match(text, /Mandata notte/);
+    assert.doesNotMatch(text, /29/);
+  } finally { t.close(); }
+});

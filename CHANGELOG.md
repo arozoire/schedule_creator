@@ -12,6 +12,16 @@ After each update restart Home Assistant and reload the dashboard.
   everything in a new **inactive** profile: nothing existing is replaced.
 - The *Import from Weekly Schedule Card* button is now *Import schedules* and
   takes both kinds of file.
+- **Quick Timers win until they end.** Before, a slot starting during a timer
+  took the device over. Now the timer keeps it; at its end the device takes
+  the slot running then, otherwise what the schedules left (e.g. the end
+  action of a slot that ended during the timer, no longer the state from
+  before the timer), otherwise its previous state. The cards show this
+  “afterwards” state while the timer runs.
+- **One Quick Timer per device**: a second one is refused until the first ends
+  or is cancelled.
+- **Cancelling** a timer is the timer running out now, and
+  `schedule_creator.resume` also ends a running timer on the entities.
 
 ## 0.5.2
 

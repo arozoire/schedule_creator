@@ -43,9 +43,7 @@ def _candidate(
         controller_type=controller_type,
         occurrence_id=None,
         effective_start=effective_start,
-        comparison_key=comparison_key(
-            effective_start, controller_type, controller_id
-        ),
+        comparison_key=comparison_key(effective_start, controller_type, controller_id),
     )
 
 
@@ -64,8 +62,8 @@ def _runtime(*, occurrence: Occurrence, timer: QuickTimer) -> RuntimeStoreData:
     )
 
 
-def test_newer_effective_start_wins_before_controller_rank() -> None:
-    """Recency is the primary overlap rule."""
+def test_quick_timer_wins_over_schedules_started_later() -> None:
+    """A Quick Timer owns its entity until it ends."""
     older_timer = _candidate(
         "quick:older", ControllerType.QUICK_TIMER, NOW - timedelta(minutes=2)
     )
@@ -75,8 +73,23 @@ def test_newer_effective_start_wins_before_controller_rank() -> None:
 
     decision = arbitrate_candidates((older_timer, newer_schedule))[0]
 
-    assert decision.winner is newer_schedule
-    assert decision.losers == (older_timer,)
+    assert decision.winner is older_timer
+    assert decision.losers == (newer_schedule,)
+
+
+def test_newer_effective_start_wins_among_schedules() -> None:
+    """Recency is the overlap rule between schedules, before their rank."""
+    older = _candidate(
+        "conditional", ControllerType.CONDITIONAL_SCHEDULE, NOW - timedelta(minutes=2)
+    )
+    newer = _candidate(
+        "normal", ControllerType.NORMAL_SCHEDULE, NOW - timedelta(minutes=1)
+    )
+
+    decision = arbitrate_candidates((older, newer))[0]
+
+    assert decision.winner is newer
+    assert decision.losers == (older,)
 
 
 def test_controller_rank_breaks_equal_start_ties() -> None:
@@ -162,9 +175,9 @@ def test_plan_excludes_conditional_occurrence_until_true() -> None:
         snapshot_id=None,
     )
 
-    assert build_arbitration_plan(
-        _runtime(occurrence=occurrence, timer=timer), NOW
-    ) == ()
+    assert (
+        build_arbitration_plan(_runtime(occurrence=occurrence, timer=timer), NOW) == ()
+    )
 
 
 def test_duplicate_controller_entity_candidate_is_rejected() -> None:

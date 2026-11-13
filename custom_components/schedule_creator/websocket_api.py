@@ -22,12 +22,19 @@ from .const import (
 from .file_import import FILE_IMPORT_COMMANDS
 from .group_api import GROUP_COMMANDS
 from .import_api import IMPORT_COMMANDS
-from .models import LeaseState, OccurrenceState, OperationState, QuickTimerState
+from .models import (
+    LeaseState,
+    OccurrenceState,
+    OperationState,
+    QuickTimer,
+    QuickTimerState,
+)
 from .profile_api import PROFILE_COMMANDS
 from .quick_timer_api import QUICK_TIMER_COMMANDS
 from .schedule_api import SCHEDULE_COMMANDS
 from .stats import public_stats
 from .storage import RuntimeStoreData, StorageNotLoadedError
+from .timer_resume import timer_resume
 
 if TYPE_CHECKING:
     from . import ScheduleCreatorConfigEntry
@@ -104,6 +111,25 @@ _PREVIOUS_ATTRIBUTES = (
     "preset_mode",
     "temperature",
 )
+
+
+def _resume(runtime: RuntimeStoreData, timer: QuickTimer) -> dict[str, Any]:
+    """What the entity takes back when the timer runs out, as planned now."""
+
+    plan = timer_resume(runtime, timer, timer.expires_at)
+    return {
+        "kind": plan.kind.value,
+        "schedule_name": (
+            None if plan.occurrence is None else plan.occurrence.frozen_schedule.name
+        ),
+        "action": (
+            None
+            if plan.action is None
+            else {
+                key: plan.action.to_dict()[key] for key in ("domain", "action", "data")
+            }
+        ),
+    }
 
 
 def _previous_state(runtime: Any, timer: Any) -> dict[str, Any] | None:
@@ -196,6 +222,7 @@ def websocket_get_state(
                         for key in ("domain", "action", "data")
                     },
                     "previous": _previous_state(runtime, timer),
+                    "resume": _resume(runtime, timer),
                 }
                 for timer in runtime.quick_timers
                 if timer.state is QuickTimerState.ACTIVE
@@ -277,12 +304,8 @@ def websocket_subscribe_runtime(
                 msg["id"], {"config_revision": event.data["revision"]}
             )
 
-        unsubscribe_runtime = hass.bus.async_listen(
-            EVENT_RUNTIME_UPDATED, forward
-        )
-        unsubscribe_config = hass.bus.async_listen(
-            EVENT_CONFIG_UPDATED, forward_config
-        )
+        unsubscribe_runtime = hass.bus.async_listen(EVENT_RUNTIME_UPDATED, forward)
+        unsubscribe_config = hass.bus.async_listen(EVENT_CONFIG_UPDATED, forward_config)
 
         @callback
         def unsubscribe() -> None:

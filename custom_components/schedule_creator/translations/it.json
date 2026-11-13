@@ -41,7 +41,7 @@
     },
     "start_timer": {
       "name": "Avvia Quick Timer",
-      "description": "Comanda un dispositivo per un certo tempo; alla fine torna allo stato precedente.",
+      "description": "Comanda un dispositivo per un certo tempo; gli schedule non lo interrompono. Alla fine il dispositivo prende lo schedule in corso, altrimenti quello che gli schedule hanno lasciato, altrimenti lo stato precedente. Un solo timer per dispositivo.",
       "fields": {
         "entity_id": {
           "name": "Entità",
@@ -63,7 +63,7 @@
     },
     "cancel_timer": {
       "name": "Annulla Quick Timer",
-      "description": "Ferma il Quick Timer in corso di un dispositivo e ripristina lo stato precedente.",
+      "description": "Termina subito il Quick Timer in corso di un dispositivo, esattamente come se il tempo fosse scaduto.",
       "fields": {
         "entity_id": {
           "name": "Entità",
@@ -73,7 +73,7 @@
     },
     "resume": {
       "name": "Riprendi lo schedule",
-      "description": "Rimanda il comando della fascia in corso alle entità, per esempio dopo una modifica manuale. Senza fascia in corso non fa nulla.",
+      "description": "Restituisce subito le entità ai loro schedule: un Quick Timer in corso su di esse termina e la fascia in corso rimanda il suo comando (per esempio dopo una modifica manuale). Non fa nulla se non c'è né l'uno né l'altra.",
       "fields": {
         "entity_id": {
           "name": "Entità",

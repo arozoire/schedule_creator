@@ -41,7 +41,7 @@
     },
     "start_timer": {
       "name": "Iniciar Quick Timer",
-      "description": "Controla un dispositivo durante un tiempo; al final vuelve a su estado anterior.",
+      "description": "Controla un dispositivo durante un tiempo; los horarios no lo interrumpen. Al final el dispositivo toma el horario en curso, si no lo que dejaron los horarios, si no su estado anterior. Un solo temporizador por dispositivo.",
       "fields": {
         "entity_id": {
           "name": "Entidad",
@@ -63,7 +63,7 @@
     },
     "cancel_timer": {
       "name": "Cancelar Quick Timer",
-      "description": "Detiene el Quick Timer en curso de un dispositivo y restaura su estado anterior.",
+      "description": "Termina ahora el Quick Timer en curso de un dispositivo, exactamente como si su tiempo se hubiera acabado.",
       "fields": {
         "entity_id": {
           "name": "Entidad",
@@ -73,7 +73,7 @@
     },
     "resume": {
       "name": "Reanudar programación",
-      "description": "Vuelve a enviar la orden de la franja en curso a las entidades, por ejemplo tras un cambio manual. Sin franja en curso no hace nada.",
+      "description": "Devuelve ahora las entidades a sus horarios: un Quick Timer en curso sobre ellas termina y la franja en curso vuelve a enviar su orden (por ejemplo tras un cambio manual). No hace nada si no hay ni lo uno ni lo otro.",
       "fields": {
         "entity_id": {
           "name": "Entidades",

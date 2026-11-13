@@ -78,6 +78,14 @@ def quick_timer_creation(
     def mutation(current: RuntimeStoreData, now: datetime) -> RuntimeStoreData:
         if isinstance(duration_seconds, bool) or not 1 <= duration_seconds <= 604800:
             raise ValueError("invalid duration")
+        if any(
+            item.entity_id == entity_id and item.state is QuickTimerState.ACTIVE
+            for item in current.quick_timers
+        ):
+            raise MutationClientError(
+                "timer_active",
+                f"{entity_id} already has a Quick Timer: cancel it first.",
+            )
         timer = QuickTimer(
             id=timer_id,
             controller_id=f"quick:{timer_id}",
@@ -99,8 +107,25 @@ def quick_timer_creation(
     return mutation
 
 
+def end_timers(
+    current: RuntimeStoreData, timer_ids: set[str], now: datetime
+) -> tuple[QuickTimer, ...]:
+    """Timers with these ids end now, exactly as if their time had run out."""
+
+    return tuple(
+        replace(
+            item,
+            state=QuickTimerState.CANCELLED,
+            expires_at=max(now, item.starts_at + timedelta(milliseconds=1)),
+        )
+        if item.id in timer_ids
+        else item
+        for item in current.quick_timers
+    )
+
+
 def quick_timer_cancellation(timer_id: str) -> RuntimeApiMutation:
-    """Cancel an active Quick Timer; its restore follows as usual."""
+    """Cancel an active Quick Timer: it ends now, like a timer that expires."""
 
     def mutation(current: RuntimeStoreData, now: datetime) -> RuntimeStoreData:
         timer = _timer(current, timer_id)
@@ -111,12 +136,7 @@ def quick_timer_cancellation(timer_id: str) -> RuntimeApiMutation:
         return replace(
             current,
             revision=current.revision + 1,
-            quick_timers=tuple(
-                replace(item, state=QuickTimerState.CANCELLED)
-                if item.id == timer.id
-                else item
-                for item in current.quick_timers
-            ),
+            quick_timers=end_timers(current, {timer.id}, now),
             updated_at=max(current.updated_at, now),
         )
 
