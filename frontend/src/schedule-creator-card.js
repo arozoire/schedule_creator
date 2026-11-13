@@ -4,7 +4,7 @@ import { weekRowsHtml, readView, saveView } from './week-rows.js';
 import { clean, messageFor, parseJson, diagnosticFor } from './editor.js';
 import { controllable, targetEntities, notificationForm, readNotification } from './forms.js';
 import { blankCondition, conditionForm, readCondition, slotsForm, readSlots, magnetSnap, toMinutes, toTime, endMinutes, barTime, DAY_SHORTCUTS, iconPicker, colorPicker, sunMinutes, boundaryLabel } from './schedule-editor.js';
-import { actionForm, readAction, describeAction, describeState, pretty, setClimateLimits } from './action-editor.js';
+import { actionForm, readAction, describeAction, describeState, describeResume, pretty, setClimateLimits } from './action-editor.js';
 import { isWscBackup, convertWscBackup, wscImportPayload } from './wsc-import.js';
 import { t, setLanguage, locale } from './i18n.js';
 
@@ -345,7 +345,7 @@ class ScheduleCreatorCard extends HTMLElement {
       const detail = paused ? t('La condizione non è soddisfatta') : waiting ? t('Un altro schedule o timer ha la priorità') : `${t('Fino alle {time}', {time: clock(item.end_utc)})}${schedule.condition ? ` · ${t('condizione vera')}` : ''}`;
       return `<button type="button" class="sc-now-tile ${kind}" data-command="editSchedule" data-id="${esc(schedule.id)}"><span class="sc-now-label">${label} · ${esc(schedule.target_entity_ids.map(friendly).join(', '))}</span><strong>${esc(describeAction(schedule.start_action) || schedule.name)}</strong><span class="sc-now-detail">${esc(detail)}</span></button>`;
     });
-    const timerTiles = timers.map((timer) => `<div class="sc-now-tile is-timer"><span class="sc-now-label">${t('Timer')} · ${esc(friendly(timer.entity_id))}</span><strong>${esc(describeAction(timer.action))}</strong><span class="sc-now-detail">${t('Resta')} <span data-expiry="${esc(timer.expires_at)}"></span>${timer.previous ? ` · ${t('poi')} ${esc(describeState(timer.previous, timer.entity_id.split('.')[0]))}` : ''}</span></div>`);
+    const timerTiles = timers.map((timer) => `<div class="sc-now-tile is-timer"><span class="sc-now-label">${t('Timer')} · ${esc(friendly(timer.entity_id))}</span><strong>${esc(describeAction(timer.action))}</strong><span class="sc-now-detail">${t('Resta')} <span data-expiry="${esc(timer.expires_at)}"></span> · ${t('poi')} ${esc(describeResume(timer))}</span></div>`);
     const all = [...tiles, ...timerTiles].filter(Boolean);
     return all.length ? `<div class="sc-now">${all.join('')}</div>` : `<p class="sc-now-empty">${t('Nessuna fascia in corso adesso.')}</p>`;
   }

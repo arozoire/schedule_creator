@@ -30,6 +30,7 @@ export const messageFor = (error) => {
   profile_in_use: t('Profilo in uso: rimuovi prima i gruppi e gli schedule collegati.'),
   group_in_use: t('Gruppo in uso: rimuovi prima gli schedule collegati.'),
   invalid_state: t('Il timer non è più attivo.'),
+  timer_active: t('Questo dispositivo ha già un Quick Timer: annullalo prima di avviarne un altro.'),
   not_loaded: t('Integrazione non caricata: controlla Dispositivi e servizi.'),
   storage_unavailable: t('Archivio non disponibile: controlla i log di Home Assistant.'),
   })[error?.code] || (operation ? t('Operazione {operation} non riuscita ({code}). Controlla i log di Home Assistant.', {operation, code: error?.code || error?.message || t('errore sconosciuto')}) : error?.message || t('Operazione non riuscita. Controlla i log di Home Assistant.'));

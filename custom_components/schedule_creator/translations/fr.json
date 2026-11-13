@@ -41,7 +41,7 @@
     },
     "start_timer": {
       "name": "Démarrer un Quick Timer",
-      "description": "Commande un appareil pendant un certain temps ; son état précédent est restauré à la fin.",
+      "description": "Commande un appareil pendant un temps donné ; les plannings ne l'interrompent pas. À la fin, l'appareil prend le planning en cours, sinon ce que les plannings ont laissé, sinon son état précédent. Un seul minuteur par appareil.",
       "fields": {
         "entity_id": {
           "name": "Entité",
@@ -63,7 +63,7 @@
     },
     "cancel_timer": {
       "name": "Annuler le Quick Timer",
-      "description": "Arrête le Quick Timer en cours d’un appareil et restaure son état précédent.",
+      "description": "Termine maintenant le Quick Timer en cours d'un appareil, exactement comme si son temps était écoulé.",
       "fields": {
         "entity_id": {
           "name": "Entité",
@@ -73,7 +73,7 @@
     },
     "resume": {
       "name": "Reprendre le programme",
-      "description": "Renvoie la commande de la plage en cours aux entités, par exemple après une modification manuelle. Sans plage en cours, rien ne se passe.",
+      "description": "Rend maintenant les entités à leurs plannings : un Quick Timer en cours sur elles se termine et la plage en cours renvoie sa commande (par exemple après une modification manuelle). Ne fait rien s'il n'y a ni l'un ni l'autre.",
       "fields": {
         "entity_id": {
           "name": "Entités",

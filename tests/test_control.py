@@ -7,7 +7,7 @@ import pytest
 from homeassistant import config_entries
 from homeassistant.const import EntityCategory
 from homeassistant.core import callback
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 
 from custom_components.schedule_creator.const import DOMAIN
@@ -156,12 +156,23 @@ async def test_quick_timer_services(hass, hass_ws_client):
         ("switch.control_test", QuickTimerState.ACTIVE)
     ]
     assert timers[0].action.action == "turn_on"
+    # One timer per device: a second one is refused while the first runs.
+    with pytest.raises(HomeAssistantError, match="already has a Quick Timer"):
+        await hass.services.async_call(
+            DOMAIN,
+            "start_timer",
+            {"entity_id": "switch.control_test", "duration": timedelta(minutes=1)},
+            blocking=True,
+        )
+    assert len(entry.runtime_data.storage.runtime.data.quick_timers) == 1
 
     await hass.services.async_call(
         DOMAIN, "cancel_timer", {"entity_id": "switch.control_test"}, blocking=True
     )
     timers = entry.runtime_data.storage.runtime.data.quick_timers
     assert timers[0].state is QuickTimerState.CANCELLED
+    # Cancelling is the timer running out now.
+    assert timers[0].expires_at <= datetime.now(UTC)
     with pytest.raises(ServiceValidationError):
         await hass.services.async_call(
             DOMAIN, "cancel_timer", {"entity_id": "switch.control_test"}, blocking=True

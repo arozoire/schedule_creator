@@ -78,8 +78,9 @@ schedules, sensors and services – see
 - **Live status** – "now" tiles, today's column with a now line, running and
   paused slots, temperature-coloured climate blocks, optional persistent
   notification for the whole slot.
-- **Quick timers** – "cool to 23° for 30 minutes": the previous state is
-  restored when the timer ends.
+- **Quick timers** – "cool to 23° for 30 minutes": schedules do not interrupt
+  it; at the end the device takes the schedule running then (or what the
+  schedules left), otherwise its previous state.
 - **Safe by design** – every command goes through a durable journal with
   retries and a timeout; nothing is replayed blindly after a restart, and
   failed commands are shown in the card.
@@ -198,7 +199,9 @@ presets: [5, 15, 30, 60]  # optional, minutes
 
 Choose what the device should do during the timer and for how long (presets,
 slider or "until" a time). While a timer runs the card shows a countdown and a
-cancel button; when it ends the previous state is restored.
+cancel button, and what the device goes back to at the end (updated as
+schedules come and go). One timer per device; cancelling is the timer running
+out now.
 
 ## Automations, scripts and voice
 
@@ -246,7 +249,8 @@ data:
 ```
 
 A manual change during a slot is left alone until the schedule's next command;
-`resume` sends the running slot again at once.
+`resume` sends the running slot again at once (and ends a Quick Timer on the
+entity).
 
 ## ESPHome displays
 
@@ -299,9 +303,13 @@ Italian: [docs/display-esphome.md](docs/display-esphome.md).
 
 ## How it works
 
-- **Priority** – when two slots control the same entity the one that started last
-  wins; on a tie a quick timer beats a conditional schedule, which beats a plain
-  one. Only schedules of active profiles run.
+- **Priority** – a quick timer owns its device until it ends, even when slots
+  start or end meanwhile. At its end the device takes the slot running then;
+  otherwise what the schedules left (for example the end action of a slot that
+  ended during the timer); otherwise the state from before the timer. Between
+  slots of the same device the one that started last wins; on a tie a
+  conditional schedule beats a plain one. A manual change stays until the next
+  command of a schedule, or until the end of a running timer. Only schedules of active profiles run.
 - **Conditions** – while a condition is false the end action runs (if any);
   when it becomes true again the start action is applied. Example for sun
   blinds: lux > 500, hysteresis 100, become true after 10 min, become false after

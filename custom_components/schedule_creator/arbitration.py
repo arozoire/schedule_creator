@@ -88,9 +88,7 @@ def arbitration_candidates(
             and occurrence.condition_branch is not ConditionBranch.TRUE
         ):
             continue
-        key = comparison_key(
-            occurrence.start_utc, controller_type, occurrence.id
-        )
+        key = comparison_key(occurrence.start_utc, controller_type, occurrence.id)
         for entity_id in occurrence.frozen_schedule.target_entity_ids:
             candidates.append(
                 ArbitrationCandidate(
@@ -145,10 +143,16 @@ def arbitrate_candidates(
 
     decisions: list[ArbitrationDecision] = []
     for entity_id in sorted(by_entity):
+        # A Quick Timer owns its entity until it ends; among the others the
+        # slot that started last wins. Persisted comparison keys stay as they
+        # were, so leases are not renewed (and commands not resent) on update.
         ordered = tuple(
             sorted(
                 by_entity[entity_id],
-                key=lambda item: item.comparison_key,
+                key=lambda item: (
+                    item.controller_type is ControllerType.QUICK_TIMER,
+                    item.comparison_key,
+                ),
                 reverse=True,
             )
         )

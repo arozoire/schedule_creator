@@ -36,6 +36,8 @@ _LOGGER = logging.getLogger(__name__)
 ACTION_RETRY_INTERVAL = timedelta(seconds=30)
 MAX_ACTION_ATTEMPTS = 3
 UNKNOWN_SENT_OUTCOME = "sent_outcome_unknown"
+# A Quick Timer handing its entity back (see timer_resume): owned by the timer.
+TIMER_END_PHASE = "timer_end"
 # A device that never answers must not hold the lifecycle lock forever: the
 # call is treated as failed and retried like any other service error.
 SERVICE_CALL_TIMEOUT = 20.0
@@ -279,13 +281,15 @@ def _sendable_target_action(
     runtime: RuntimeStoreData, operation: PendingOperation
 ) -> bool:
     phase = operation.payload.get("phase")
-    if phase not in {"schedule_end", "condition_fallback"}:
+    if phase not in {"schedule_end", "condition_fallback", TIMER_END_PHASE}:
         return _current_lease(runtime, operation)
     if any(
         lease.entity_id == operation.entity_id and lease.state is LeaseState.ACTIVE
         for lease in runtime.leases
     ):
         return False
+    if phase == TIMER_END_PHASE:
+        return True
     return any(
         occurrence.id == operation.occurrence_id
         and (
@@ -372,7 +376,7 @@ async def async_execute_target_actions(
                 error_code=(
                     "controller_replaced"
                     if operation.payload.get("phase")
-                    in {"schedule_end", "condition_fallback"}
+                    in {"schedule_end", "condition_fallback", TIMER_END_PHASE}
                     else "lease_replaced"
                 ),
             )

@@ -41,7 +41,7 @@
     },
     "start_timer": {
       "name": "Start Quick Timer",
-      "description": "Command a device for a while; its previous state is restored at the end.",
+      "description": "Command a device for a while; schedules do not interrupt it. At the end the device takes the schedule running then, otherwise what the schedules left, otherwise its previous state. One timer per device.",
       "fields": {
         "entity_id": {
           "name": "Entity",
@@ -63,7 +63,7 @@
     },
     "cancel_timer": {
       "name": "Cancel Quick Timer",
-      "description": "Stop the running Quick Timer of a device and restore its previous state.",
+      "description": "End the running Quick Timer of a device now, exactly as if its time had run out.",
       "fields": {
         "entity_id": {
           "name": "Entity",
@@ -73,7 +73,7 @@
     },
     "resume": {
       "name": "Resume schedule",
-      "description": "Sends the command of the running slot to the entities again, for example after a manual change. Does nothing when no slot is running.",
+      "description": "Give the entities back to their schedules now: a running Quick Timer on them ends, and the running slot sends its command again (for example after a manual change). Does nothing when there is neither.",
       "fields": {
         "entity_id": {
           "name": "Entities",

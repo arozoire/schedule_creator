@@ -12,6 +12,7 @@ from homeassistant.exceptions import HomeAssistantError
 from .actions import (
     ACTION_RETRY_INTERVAL,
     MAX_ACTION_ATTEMPTS,
+    TIMER_END_PHASE,
     async_call_service,
     async_execute_target_actions,
 )
@@ -26,12 +27,14 @@ from .models import (
     OperationKind,
     OperationState,
     PendingOperation,
+    QuickTimer,
     QuickTimerState,
     Snapshot,
     TargetAction,
 )
 from .notifications import async_execute_notifications, async_prepare_notifications
 from .storage import RuntimeRepository, RuntimeStoreData
+from .timer_resume import ResumeKind, timer_resume
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -102,33 +105,13 @@ async def async_prepare_quick_timer_restores(
             return None
         persisted_at = max(runtime.updated_at, prepared_at)
         operations = tuple(
-            PendingOperation(
-                id=_restore_id(timer.controller_id),
-                sequence=runtime.operation_counter + offset,
-                occurrence_id=timer.controller_id,
-                entity_id=timer.entity_id,
-                kind=OperationKind.RESTORE,
-                state=(
-                    OperationState.SUPERSEDED
-                    if timer.entity_id in active_entities
-                    else OperationState.PREPARED
-                ),
-                payload={
-                    "snapshot_id": snapshot.id,
-                    "domain": snapshot.domain,
-                    "state": snapshot.state,
-                    "attributes": snapshot.attributes,
-                    "checksum": snapshot.checksum,
-                },
-                attempt_count=0,
-                created_at=persisted_at,
-                updated_at=persisted_at,
-                next_retry_at=None,
-                error_code=(
-                    "controller_replaced"
-                    if timer.entity_id in active_entities
-                    else None
-                ),
+            _timer_end_operation(
+                runtime,
+                timer,
+                snapshot,
+                runtime.operation_counter + offset,
+                persisted_at,
+                timer.entity_id in active_entities,
             )
             for offset, (timer, snapshot) in enumerate(candidates, start=1)
         )
@@ -141,6 +124,79 @@ async def async_prepare_quick_timer_restores(
         )
 
     return await repository.async_update_if_changed(mutation)
+
+
+def _timer_end_operation(
+    runtime: RuntimeStoreData,
+    timer: QuickTimer,
+    snapshot: Snapshot,
+    sequence: int,
+    persisted_at: datetime,
+    owned: bool,
+) -> PendingOperation:
+    """The one operation that hands the entity back when its timer ends.
+
+    A schedule that owns the entity again sends its own start action, so the
+    operation is superseded; otherwise it applies what the entity would have
+    without the timer (see ``timer_resume``), or restores the snapshot.
+    """
+
+    plan = timer_resume(runtime, timer, persisted_at)
+    if owned or plan.kind is ResumeKind.SCHEDULE:
+        return _timer_restore(timer, snapshot, sequence, persisted_at, superseded=True)
+    if plan.action is not None:
+        return PendingOperation(
+            id=_restore_id(timer.controller_id),
+            sequence=sequence,
+            occurrence_id=timer.controller_id,
+            entity_id=timer.entity_id,
+            kind=OperationKind.TARGET_ACTION,
+            state=OperationState.PREPARED,
+            payload={
+                "phase": TIMER_END_PHASE,
+                "resume": plan.kind.value,
+                "action_id": plan.action.id,
+                "domain": plan.action.domain,
+                "action": plan.action.action,
+                "data": plan.action.data,
+            },
+            attempt_count=0,
+            created_at=persisted_at,
+            updated_at=persisted_at,
+            next_retry_at=None,
+            error_code=None,
+        )
+    return _timer_restore(timer, snapshot, sequence, persisted_at, superseded=False)
+
+
+def _timer_restore(
+    timer: QuickTimer,
+    snapshot: Snapshot,
+    sequence: int,
+    persisted_at: datetime,
+    *,
+    superseded: bool,
+) -> PendingOperation:
+    return PendingOperation(
+        id=_restore_id(timer.controller_id),
+        sequence=sequence,
+        occurrence_id=timer.controller_id,
+        entity_id=timer.entity_id,
+        kind=OperationKind.RESTORE,
+        state=OperationState.SUPERSEDED if superseded else OperationState.PREPARED,
+        payload={
+            "snapshot_id": snapshot.id,
+            "domain": snapshot.domain,
+            "state": snapshot.state,
+            "attributes": snapshot.attributes,
+            "checksum": snapshot.checksum,
+        },
+        attempt_count=0,
+        created_at=persisted_at,
+        updated_at=persisted_at,
+        next_retry_at=None,
+        error_code="controller_replaced" if superseded else None,
+    )
 
 
 async def async_prepare_schedule_end_actions(
@@ -157,7 +213,7 @@ async def async_prepare_schedule_end_actions(
             for operation in runtime.pending_operations
             if operation.kind is OperationKind.TARGET_ACTION
             and operation.state is OperationState.SUCCEEDED
-            and operation.payload.get("phase") != "completion"
+            and operation.payload.get("phase") not in {"completion", TIMER_END_PHASE}
         }
         active_entities = {
             lease.entity_id
@@ -282,7 +338,7 @@ async def async_prepare_condition_fallbacks(
                 operation.kind is OperationKind.TARGET_ACTION
                 and operation.state is OperationState.SUCCEEDED
                 and operation.payload.get("phase")
-                not in {"schedule_end", "condition_fallback"}
+                not in {"schedule_end", "condition_fallback", TIMER_END_PHASE}
             ):
                 key = operation.occurrence_id, operation.entity_id
                 previous = successful.get(key)

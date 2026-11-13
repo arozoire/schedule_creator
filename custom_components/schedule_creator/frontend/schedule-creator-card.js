@@ -57,6 +57,7 @@ const STRINGS = {
     "Profilo in uso: rimuovi prima i gruppi e gli schedule collegati.": "Profile in use: remove its groups and schedules first.",
     "Gruppo in uso: rimuovi prima gli schedule collegati.": "Group in use: remove its schedules first.",
     "Il timer non è più attivo.": "The timer is no longer active.",
+    "Questo dispositivo ha già un Quick Timer: annullalo prima di avviarne un altro.": "This device already has a Quick Timer: cancel it before starting another one.",
     "Integrazione non caricata: controlla Dispositivi e servizi.": "Integration not loaded: check Devices & services.",
     "Archivio non disponibile: controlla i log di Home Assistant.": "Storage unavailable: check the Home Assistant logs.",
     "Operazione {operation} non riuscita ({code}). Controlla i log di Home Assistant.": "Operation {operation} failed ({code}). Check the Home Assistant logs.",
@@ -577,6 +578,7 @@ const STRINGS = {
     "Profilo in uso: rimuovi prima i gruppi e gli schedule collegati.": "Profil utilisé : supprimez d’abord ses groupes et plannings.",
     "Gruppo in uso: rimuovi prima gli schedule collegati.": "Groupe utilisé : supprimez d’abord ses plannings.",
     "Il timer non è più attivo.": "Le minuteur n’est plus actif.",
+    "Questo dispositivo ha già un Quick Timer: annullalo prima di avviarne un altro.": "Cet appareil a déjà un Quick Timer : annulez-le avant d’en démarrer un autre.",
     "Integrazione non caricata: controlla Dispositivi e servizi.": "Intégration non chargée : vérifiez Appareils et services.",
     "Archivio non disponibile: controlla i log di Home Assistant.": "Stockage indisponible : consultez les journaux de Home Assistant.",
     "Operazione {operation} non riuscita ({code}). Controlla i log di Home Assistant.": "L’opération {operation} a échoué ({code}). Consultez les journaux de Home Assistant.",
@@ -1097,6 +1099,7 @@ const STRINGS = {
     "Profilo in uso: rimuovi prima i gruppi e gli schedule collegati.": "Profil in Verwendung: entferne zuerst seine Gruppen und Zeitpläne.",
     "Gruppo in uso: rimuovi prima gli schedule collegati.": "Gruppe in Verwendung: entferne zuerst ihre Zeitpläne.",
     "Il timer non è più attivo.": "Der Timer ist nicht mehr aktiv.",
+    "Questo dispositivo ha già un Quick Timer: annullalo prima di avviarne un altro.": "Dieses Gerät hat bereits einen Quick Timer: Brechen Sie ihn ab, bevor Sie einen weiteren starten.",
     "Integrazione non caricata: controlla Dispositivi e servizi.": "Integration nicht geladen: prüfe Geräte & Dienste.",
     "Archivio non disponibile: controlla i log di Home Assistant.": "Speicher nicht verfügbar: prüfe die Protokolle von Home Assistant.",
     "Operazione {operation} non riuscita ({code}). Controlla i log di Home Assistant.": "Vorgang {operation} fehlgeschlagen ({code}). Prüfe die Protokolle von Home Assistant.",
@@ -1617,6 +1620,7 @@ const STRINGS = {
     "Profilo in uso: rimuovi prima i gruppi e gli schedule collegati.": "Perfil en uso: elimina primero sus grupos y programaciones.",
     "Gruppo in uso: rimuovi prima gli schedule collegati.": "Grupo en uso: elimina primero sus programaciones.",
     "Il timer non è più attivo.": "El temporizador ya no está activo.",
+    "Questo dispositivo ha già un Quick Timer: annullalo prima di avviarne un altro.": "Este dispositivo ya tiene un Quick Timer: cancélalo antes de iniciar otro.",
     "Integrazione non caricata: controlla Dispositivi e servizi.": "Integración no cargada: revisa Dispositivos y servicios.",
     "Archivio non disponibile: controlla i log di Home Assistant.": "Almacenamiento no disponible: revisa los registros de Home Assistant.",
     "Operazione {operation} non riuscita ({code}). Controlla i log di Home Assistant.": "La operación {operation} falló ({code}). Revisa los registros de Home Assistant.",
@@ -2303,6 +2307,7 @@ const messageFor = (error) => {
   profile_in_use: t('Profilo in uso: rimuovi prima i gruppi e gli schedule collegati.'),
   group_in_use: t('Gruppo in uso: rimuovi prima gli schedule collegati.'),
   invalid_state: t('Il timer non è più attivo.'),
+  timer_active: t('Questo dispositivo ha già un Quick Timer: annullalo prima di avviarne un altro.'),
   not_loaded: t('Integrazione non caricata: controlla Dispositivi e servizi.'),
   storage_unavailable: t('Archivio non disponibile: controlla i log di Home Assistant.'),
   })[error?.code] || (operation ? t('Operazione {operation} non riuscita ({code}). Controlla i log di Home Assistant.', {operation, code: error?.code || error?.message || t('errore sconosciuto')}) : error?.message || t('Operazione non riuscita. Controlla i log di Home Assistant.'));
@@ -2510,6 +2515,12 @@ function stepperField(name, label, value, min, max, step, unit = '') {
   return `<div class="sc-field sc-stepper"><span class="sc-field-label" id="${name}-label">${escA(label)}</span><div class="sc-stepper-row"><button type="button" class="sc-step" data-command="stepValue" data-id="${name}:-1" aria-label="${t('Diminuisci')}">−</button><span class="sc-stepper-value"><input type="number" name="${name}" aria-labelledby="${name}-label" min="${min}" max="${max}" step="${step}" value="${v}" inputmode="decimal"><span>${escA(unit)}</span></span><button type="button" class="sc-step" data-command="stepValue" data-id="${name}:1" aria-label="${t('Aumenta')}">+</button></div><div class="sc-range-labels" aria-hidden="true"><span>${min}</span><span>${max}</span></div></div>`;
 }
 
+// What a Quick Timer hands its device back to, as Home Assistant plans it now.
+function describeResume(timer) {
+  const resume = timer.resume;
+  if (resume?.action) return `${describeAction(resume.action)}${resume.schedule_name ? ` (${resume.schedule_name})` : ''}`;
+  return timer.previous ? describeState(timer.previous, timer.entity_id.split('.')[0]) : t('lo stato precedente');
+}
 function describeState(state, domain) {
   if (!state) return '';
   const a = state.attributes || {};
@@ -3561,7 +3572,7 @@ class ScheduleCreatorCard extends HTMLElement {
       const detail = paused ? t('La condizione non è soddisfatta') : waiting ? t('Un altro schedule o timer ha la priorità') : `${t('Fino alle {time}', {time: clock(item.end_utc)})}${schedule.condition ? ` · ${t('condizione vera')}` : ''}`;
       return `<button type="button" class="sc-now-tile ${kind}" data-command="editSchedule" data-id="${esc(schedule.id)}"><span class="sc-now-label">${label} · ${esc(schedule.target_entity_ids.map(friendly).join(', '))}</span><strong>${esc(describeAction(schedule.start_action) || schedule.name)}</strong><span class="sc-now-detail">${esc(detail)}</span></button>`;
     });
-    const timerTiles = timers.map((timer) => `<div class="sc-now-tile is-timer"><span class="sc-now-label">${t('Timer')} · ${esc(friendly(timer.entity_id))}</span><strong>${esc(describeAction(timer.action))}</strong><span class="sc-now-detail">${t('Resta')} <span data-expiry="${esc(timer.expires_at)}"></span>${timer.previous ? ` · ${t('poi')} ${esc(describeState(timer.previous, timer.entity_id.split('.')[0]))}` : ''}</span></div>`);
+    const timerTiles = timers.map((timer) => `<div class="sc-now-tile is-timer"><span class="sc-now-label">${t('Timer')} · ${esc(friendly(timer.entity_id))}</span><strong>${esc(describeAction(timer.action))}</strong><span class="sc-now-detail">${t('Resta')} <span data-expiry="${esc(timer.expires_at)}"></span> · ${t('poi')} ${esc(describeResume(timer))}</span></div>`);
     const all = [...tiles, ...timerTiles].filter(Boolean);
     return all.length ? `<div class="sc-now">${all.join('')}</div>` : `<p class="sc-now-empty">${t('Nessuna fascia in corso adesso.')}</p>`;
   }
@@ -4145,7 +4156,7 @@ class ScheduleCreatorQuickTimerCard extends HTMLElement {
       const ids = targetEntities(hass).sort();
       body = `<label class="qt-label">${t('Scegli l’entità')}<input type="search" name="qt_search" placeholder="${t('Cerca per nome o ID')}" autocomplete="off"></label><div class="qt-entities" role="radiogroup">${ids.map((id) => `<label data-entity-label="${qtEsc(`${id} ${hass.states[id]?.attributes?.friendly_name || ''}`.toLowerCase())}"><input type="radio" name="qt_entity" value="${qtEsc(id)}"><span><strong>${qtEsc(hass.states[id]?.attributes?.friendly_name || id)}</strong><small>${qtEsc(id)}</small></span></label>`).join('')}</div>`;
     } else if (active.length) {
-      body = active.map((timer) => `<div class="qt-active"><div class="qt-active-copy"><span class="qt-countdown" data-expiry="${qtEsc(timer.expires_at)}">${qtDuration((new Date(timer.expires_at) - Date.now()) / 1000)}</span><span class="qt-muted">${qtEsc(describeAction(timer.action))}</span><span class="qt-previous">${t('Alla scadenza torna a')} <strong>${qtEsc(timer.previous ? describeState(timer.previous, entity.split('.')[0]) : t('lo stato precedente'))}</strong></span></div>${admin ? `<button type="button" class="qt-cancel" data-cancel="${qtEsc(timer.id)}">${t('Annulla')}</button>` : ''}</div>`).join('');
+      body = active.map((timer) => `<div class="qt-active"><div class="qt-active-copy"><span class="qt-countdown" data-expiry="${qtEsc(timer.expires_at)}">${qtDuration((new Date(timer.expires_at) - Date.now()) / 1000)}</span><span class="qt-muted">${qtEsc(describeAction(timer.action))}</span><span class="qt-previous">${t('Alla scadenza torna a')} <strong>${qtEsc(describeResume(timer))}</strong></span></div>${admin ? `<button type="button" class="qt-cancel" data-cancel="${qtEsc(timer.id)}">${t('Annulla')}</button>` : ''}</div>`).join('');
     } else if (!admin) {
       body = `<p class="qt-muted">${t('Nessun timer attivo. Serve un amministratore per avviarne uno.')}</p>`;
     } else {

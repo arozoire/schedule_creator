@@ -151,6 +151,12 @@ export function stepperField(name, label, value, min, max, step, unit = '') {
   return `<div class="sc-field sc-stepper"><span class="sc-field-label" id="${name}-label">${escA(label)}</span><div class="sc-stepper-row"><button type="button" class="sc-step" data-command="stepValue" data-id="${name}:-1" aria-label="${t('Diminuisci')}">−</button><span class="sc-stepper-value"><input type="number" name="${name}" aria-labelledby="${name}-label" min="${min}" max="${max}" step="${step}" value="${v}" inputmode="decimal"><span>${escA(unit)}</span></span><button type="button" class="sc-step" data-command="stepValue" data-id="${name}:1" aria-label="${t('Aumenta')}">+</button></div><div class="sc-range-labels" aria-hidden="true"><span>${min}</span><span>${max}</span></div></div>`;
 }
 
+// What a Quick Timer hands its device back to, as Home Assistant plans it now.
+export function describeResume(timer) {
+  const resume = timer.resume;
+  if (resume?.action) return `${describeAction(resume.action)}${resume.schedule_name ? ` (${resume.schedule_name})` : ''}`;
+  return timer.previous ? describeState(timer.previous, timer.entity_id.split('.')[0]) : t('lo stato precedente');
+}
 export function describeState(state, domain) {
   if (!state) return '';
   const a = state.attributes || {};

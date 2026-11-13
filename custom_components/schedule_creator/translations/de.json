@@ -41,7 +41,7 @@
     },
     "start_timer": {
       "name": "Quick Timer starten",
-      "description": "Steuert ein Gerät für eine Weile; danach wird der vorherige Zustand wiederhergestellt.",
+      "description": "Steuert ein Gerät für eine Weile; Zeitpläne unterbrechen ihn nicht. Am Ende übernimmt das Gerät den laufenden Zeitplan, sonst das, was die Zeitpläne hinterlassen haben, sonst seinen vorherigen Zustand. Ein Timer pro Gerät.",
       "fields": {
         "entity_id": {
           "name": "Entität",
@@ -63,7 +63,7 @@
     },
     "cancel_timer": {
       "name": "Quick Timer abbrechen",
-      "description": "Beendet den laufenden Quick Timer eines Geräts und stellt den vorherigen Zustand wieder her.",
+      "description": "Beendet den laufenden Quick Timer eines Geräts sofort, genau so, als wäre seine Zeit abgelaufen.",
       "fields": {
         "entity_id": {
           "name": "Entität",
@@ -73,7 +73,7 @@
     },
     "resume": {
       "name": "Zeitplan fortsetzen",
-      "description": "Sendet den Befehl des laufenden Zeitfensters erneut an die Entitäten, etwa nach einer manuellen Änderung. Ohne laufendes Zeitfenster passiert nichts.",
+      "description": "Gibt die Entitäten sofort an ihre Zeitpläne zurück: Ein laufender Quick Timer auf ihnen endet und das laufende Zeitfenster sendet seinen Befehl erneut (zum Beispiel nach einer manuellen Änderung). Tut nichts, wenn es weder das eine noch das andere gibt.",
       "fields": {
         "entity_id": {
           "name": "Entitäten",
