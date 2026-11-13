@@ -54,7 +54,6 @@ async def test_quick_timer_hands_over_to_the_next_schedule(
     )
     await hass.config_entries.flow.async_configure(result["flow_id"], {})
     await hass.async_block_till_done()
-    entry = hass.config_entries.async_entries(DOMAIN)[0]
     client = await hass_ws_client(hass)
 
     async def request(payload):
@@ -117,6 +116,7 @@ async def test_quick_timer_hands_over_to_the_next_schedule(
     end_18 = {"domain": "climate", "action": "apply_state", "data": _heat(18)}
     await request(schedule(4, "10-12 at 22", 1, 3, 22, end_18))
     await request(schedule(5, "12-18 at 20", 3, 6, 20, None))
+    await client.close()  # the frozen clock would drop the websocket
 
     async def move(minutes, seconds=1):
         when = at(minutes) + timedelta(seconds=seconds)
@@ -127,19 +127,17 @@ async def test_quick_timer_hands_over_to_the_next_schedule(
     await move(1)  # 10:00 slot 1 starts
     assert calls == [22]
 
-    await move(2)  # 11:35 Quick Timer 24 °C, until after slot 1 has ended
-    await request(
+    await move(2)  # 11:35 Quick Timer 24 °C, as an automation starts it
+    await hass.services.async_call(
+        DOMAIN,
+        "start_timer",
         {
-            "type": "schedule_creator/quick_timer/create",
-            "expected_revision": entry.runtime_data.storage.runtime.data.revision,
             "entity_id": ENTITY,
-            "duration_seconds": 120,
-            "action": {
-                "domain": "climate",
-                "action": "apply_state",
-                "data": _heat(24),
-            },
-        }
+            "duration": {"minutes": 2},
+            "action": "apply_state",
+            "data": _heat(24),
+        },
+        blocking=True,
     )
     await hass.async_block_till_done()
     assert calls == [22, 24]
@@ -153,4 +151,3 @@ async def test_quick_timer_hands_over_to_the_next_schedule(
 
     await move(5)  # nothing late: no 22 restore, no 18 end action of slot 1
     assert calls == [22, 24, 20]
-    await client.close()
