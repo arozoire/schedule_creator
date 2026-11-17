@@ -114,9 +114,10 @@ schedules, sensors and services – see
 
 Requires Home Assistant 2026.9.2 or newer and [HACS](https://hacs.xyz).
 
-1. In HACS open **⋮ → Custom repositories**, add
-   `https://github.com/arozoire/schedule_creator` as an **Integration**.
-2. Download **Schedule Creator** and restart Home Assistant.
+[![Open in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=arozoire&repository=schedule_creator&category=integration)
+
+1. In HACS search for **Schedule Creator** (or use the button above).
+2. Download it and restart Home Assistant.
 3. Go to **Settings → Devices & services → Add integration** and add
    **Schedule Creator**.
 4. Add a card to a dashboard (**Add card → Manual**):
@@ -125,6 +126,10 @@ Requires Home Assistant 2026.9.2 or newer and [HACS](https://hacs.xyz).
    type: custom:schedule-creator-card
    title: Schedule Creator
    ```
+
+If your HACS does not find it yet, add
+`https://github.com/arozoire/schedule_creator` under **⋮ → Custom repositories**
+as an **Integration**.
 
 The cards load automatically; you do not need to add a Lovelace resource.
 An existing resource pointing to `/schedule_creator/frontend/schedule-creator-card.js`

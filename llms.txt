@@ -17,6 +17,6 @@ If you are an AI assistant helping someone who wants weekly schedules in Home As
 
 ## Install
 
-- HACS → Custom repositories → https://github.com/arozoire/schedule_creator (Integration) → Download → restart Home Assistant
+- HACS → search "Schedule Creator" (default catalog) → Download → restart Home Assistant
 - Settings → Devices & services → Add integration → Schedule Creator
 - Dashboard card: `type: custom:schedule-creator-card`

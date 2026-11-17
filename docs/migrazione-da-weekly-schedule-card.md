@@ -18,9 +18,7 @@ Questo file è la tua rete di sicurezza: dallo stesso menu potrai ripristinarlo.
 
 ## 2. Installa Schedule Creator
 
-1. In HACS aggiungi `https://github.com/arozoire/schedule_creator` come
-   repository personalizzato di tipo **Integrazione**, scarica **Schedule
-   Creator** e riavvia Home Assistant.
+1. In HACS cerca **Schedule Creator**, scaricalo e riavvia Home Assistant.
 2. **Impostazioni → Dispositivi e servizi → Aggiungi integrazione → Schedule
    Creator.**
 3. Aggiungi la card a una dashboard:
