@@ -17,9 +17,8 @@ This file is your safety net: the same menu can restore it later.
 
 ## 2. Install Schedule Creator
 
-1. In HACS add `https://github.com/arozoire/schedule_creator` as a custom
-   repository of type **Integration**, download **Schedule Creator** and
-   restart Home Assistant.
+1. In HACS search for **Schedule Creator**, download it and restart Home
+   Assistant.
 2. **Settings → Devices & services → Add integration → Schedule Creator.**
 3. Add the card to a dashboard:
 

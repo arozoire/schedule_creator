@@ -4,11 +4,12 @@
 
 Serve Home Assistant 2026.9.2 o successivo con HACS gia installato.
 
-1. In **HACS**, apri il menu **⋮ → Repository personalizzati**. Inserisci
-   `https://github.com/arozoire/schedule_creator`, scegli **Integrazione** e
-   premi **Aggiungi**. Se il repository e gia presente, salta questo passo.
-2. Cerca **Schedule Creator** in HACS e scarica la release più recente.
-   La card e inclusa nella stessa integrazione; non aggiungere un repository
+1. Cerca **Schedule Creator** in HACS (è nel catalogo predefinito) e scarica
+   la release più recente. Solo se HACS non lo trova ancora: **⋮ → Repository
+   personalizzati**, `https://github.com/arozoire/schedule_creator`, tipo
+   **Integrazione**.
+2. Non serve altro per la card:
+   è inclusa nella stessa integrazione; non aggiungere un repository
    dashboard separato. Riavvia Home Assistant dopo il download.
 3. In **Impostazioni → Dispositivi e servizi → Aggiungi integrazione**, cerca
    **Schedule Creator** e completa il modulo. Serve anche quando i file sono
