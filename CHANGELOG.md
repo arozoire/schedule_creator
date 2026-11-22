@@ -2,6 +2,13 @@
 
 After each update restart Home Assistant and reload the dashboard.
 
+## 0.6.1
+
+- **Conditional slot turning true again** (#81, thanks @Dantrej): when the
+  condition of a slot went false and then true again inside the same slot, the
+  slot showed as current but its start action was not sent the second time.
+  It is now sent every time the condition turns true again.
+
 ## 0.6.0
 
 - **Import schedules from a simple file** (Maintenance → Import schedules): a

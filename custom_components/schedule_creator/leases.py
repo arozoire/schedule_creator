@@ -57,6 +57,22 @@ def _unchanged(
     )
 
 
+def _used_generations(runtime: RuntimeStoreData) -> dict[str, int]:
+    """Highest lease generation each journalled operation was prepared for."""
+
+    used: dict[str, int] = {}
+    for operation in runtime.pending_operations:
+        lease_id = operation.payload.get("lease_id")
+        generation = operation.payload.get("lease_generation")
+        if (
+            isinstance(lease_id, str)
+            and isinstance(generation, int)
+            and not isinstance(generation, bool)
+        ):
+            used[lease_id] = max(used.get(lease_id, 0), generation)
+    return used
+
+
 async def async_reconcile_entity_leases(
     repository: RuntimeRepository, now: datetime
 ) -> RuntimeStoreData:
@@ -69,6 +85,9 @@ async def async_reconcile_entity_leases(
             (lease.entity_id, lease.controller_id): lease
             for lease in current.leases
         }
+        # A lease dropped while its condition is false and acquired again must
+        # not reuse a generation: the start action is keyed by it.
+        used = _used_generations(current)
         reconciled: list[EntityLease] = []
         for candidate, state in _desired_candidates(current, reconciled_at):
             identity = candidate.entity_id, candidate.controller_id
@@ -76,9 +95,14 @@ async def async_reconcile_entity_leases(
             if previous is not None and _unchanged(previous, candidate, state):
                 reconciled.append(previous)
                 continue
+            lease_id = _lease_id(candidate)
+            last = max(
+                0 if previous is None else previous.generation,
+                used.get(lease_id, 0),
+            )
             reconciled.append(
                 EntityLease(
-                    id=_lease_id(candidate),
+                    id=lease_id,
                     entity_id=candidate.entity_id,
                     controller_id=candidate.controller_id,
                     controller_type=candidate.controller_type,
@@ -86,7 +110,7 @@ async def async_reconcile_entity_leases(
                     effective_start=candidate.effective_start,
                     comparison_key=candidate.comparison_key,
                     acquired_at=reconciled_at,
-                    generation=1 if previous is None else previous.generation + 1,
+                    generation=last + 1,
                     state=state,
                 )
             )
