@@ -63,9 +63,7 @@ async def async_reconcile_occurrences(
     def mutation(current: RuntimeStoreData) -> RuntimeStoreData | None:
         existing_ids = {occurrence.id for occurrence in current.occurrences}
         missing = tuple(
-            occurrence
-            for occurrence in projected
-            if occurrence.id not in existing_ids
+            occurrence for occurrence in projected if occurrence.id not in existing_ids
         )
         if not missing:
             return None
@@ -89,22 +87,24 @@ async def async_reconcile_window(
 ) -> RuntimeStoreData:
     """Project one bounded window and reconcile it into the runtime Store."""
 
-    projected = plan_occurrences(
-        config, window_start_utc, window_end_utc, timezone
-    )
+    projected = plan_occurrences(config, window_start_utc, window_end_utc, timezone)
     return await async_reconcile_occurrences(repository, projected, now)
 
 
 def _protected_occurrence_ids(runtime: RuntimeStoreData) -> set[str]:
-    return {
-        lease.occurrence_id
-        for lease in runtime.leases
-        if lease.occurrence_id is not None
-    } | {
-        operation.occurrence_id
-        for operation in runtime.pending_operations
-        if operation.occurrence_id is not None
-    } | {snapshot.occurrence_id for snapshot in runtime.snapshots}
+    return (
+        {
+            lease.occurrence_id
+            for lease in runtime.leases
+            if lease.occurrence_id is not None
+        }
+        | {
+            operation.occurrence_id
+            for operation in runtime.pending_operations
+            if operation.occurrence_id is not None
+        }
+        | {snapshot.occurrence_id for snapshot in runtime.snapshots}
+    )
 
 
 def _replaceable(
@@ -253,8 +253,7 @@ async def async_replan_window(
                 )
                 for snapshot in current.snapshots
                 if snapshot.occurrence_id == occurrence.id
-                and snapshot.entity_id
-                in successor.frozen_schedule.target_entity_ids
+                and snapshot.entity_id in successor.frozen_schedule.target_entity_ids
             )
             snapshots.extend(copies)
             added.append(
@@ -265,12 +264,27 @@ async def async_replan_window(
                     snapshot_ids=tuple(item.id for item in copies),
                 )
             )
+        # A slot cancelled when its profile was switched off keeps its id; when
+        # the profile comes back during that slot, it runs again under a new id
+        # instead of being taken for the cancelled one (#83).
+        cancelled_before = {
+            occurrence.id
+            for occurrence in current.occurrences
+            if occurrence.state is OccurrenceState.CANCELLED
+        }
+        restarted: list[Occurrence] = []
+        for item in plan:
+            if item.id in cancelled_before and _running_at(item, window_start):
+                identifier = _unique_id(item.id, taken, item.frozen_schedule.revision)
+                taken.add(identifier)
+                restarted.append(replace(item, id=identifier))
+            else:
+                restarted.append(item)
+        plan = restarted
         projected_by_id = {item.id: item for item in plan}
         for occurrence in current.occurrences:
             if occurrence.id in cancelled:
-                retained.append(
-                    replace(occurrence, state=OccurrenceState.CANCELLED)
-                )
+                retained.append(replace(occurrence, state=OccurrenceState.CANCELLED))
                 retained_ids.add(occurrence.id)
                 continue
             if occurrence.id not in kept and _replaceable(
