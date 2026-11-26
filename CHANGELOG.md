@@ -2,6 +2,13 @@
 
 After each update restart Home Assistant and reload the dashboard.
 
+## 0.6.2
+
+- **Profile switched back on during a slot** (#83, thanks @jophut): turning a
+  profile off and on again while one of its slots should be running left the
+  slot stopped. It now starts again (start action, shown as running) and ends
+  normally. The same applies to a schedule disabled and enabled again mid-slot.
+
 ## 0.6.1
 
 - **Conditional slot turning true again** (#81, thanks @Dantrej): when the
